@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LedgerPro System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: #f3f4f6;
+      }
+      
+      @media print {
+        @page {
+          size: auto;
+          margin: 10mm;
+        }
+        
+        /* Reset body for print */
+        body {
+          background-color: white;
+          color: black;
+          margin: 0;
+          padding: 0;
+          overflow: visible !important;
+        }
+
+        /* Visibility Hiding Strategy */
+        /* We use visibility instead of display:none for body to ensure the React root structure exists,
+           but then we force visibility on the printable area. */
+        body * {
+          visibility: hidden;
+        }
+
+        /* Show printable area */
+        #printable-area, #printable-area * {
+          visibility: visible;
+        }
+
+        /* Position the printable area at the top-left corner of the page */
+        #printable-area {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 100%;
+          margin: 0;
+          padding: 0;
+        }
+
+        /* FORCE DISPLAY for .print-only elements inside the printable area */
+        #printable-area .print-only {
+          display: block !important;
+          visibility: visible !important;
+        }
+
+        /* Force Hide .no-print elements inside the printable area */
+        #printable-area .no-print {
+          display: none !important;
+        }
+
+        /* Remove shadows and borders from cards to look like a document */
+        .card-shadow, .shadow-sm, .shadow-lg, .border {
+          box-shadow: none !important;
+          border: none !important;
+        }
+
+        /* Force table styling for print */
+        table {
+          width: 100% !important;
+          border-collapse: collapse !important;
+          border: 1px solid #000 !important;
+        }
+
+        thead {
+            border-bottom: 2px solid #000 !important;
+        }
+
+        tfoot {
+            border-top: 2px solid #000 !important;
+        }
+        
+        th, td {
+          border: 1px solid #000 !important;
+          padding: 8px !important;
+          color: #000 !important;
+        }
+
+        /* Clean up specific elements */
+        button {
+            display: none !important;
+        }
+        
+        a {
+            text-decoration: none !important;
+            color: black !important;
+        }
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.9.6",
+    "react-dom/client": "https://aistudiocdn.com/react-dom@^19.2.0/client",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
+    "recharts": "https://aistudiocdn.com/recharts@^3.5.0"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

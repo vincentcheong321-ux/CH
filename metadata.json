@@ -1,0 +1,5 @@
+{
+  "name": "LedgerPro System",
+  "description": "A comprehensive ledger management system for company balance tracking, client-specific accounts, and printable reports.",
+  "requestFramePermissions": []
+}
