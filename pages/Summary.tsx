@@ -1,5 +1,6 @@
+
 import React, { useEffect, useState } from 'react';
-import { getClients, getAllLedgerRecords, getNetAmount } from '../services/storageService';
+import { getClients, getClientBalance } from '../services/storageService';
 import { Client } from '../types';
 
 const Summary: React.FC = () => {
@@ -7,11 +8,9 @@ const Summary: React.FC = () => {
 
   useEffect(() => {
     const clients = getClients();
-    const records = getAllLedgerRecords();
     
     const summary = clients.map(client => {
-      const clientRecords = records.filter(r => r.clientId === client.id);
-      const total = clientRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
+      const total = getClientBalance(client.id);
       return { client, total };
     });
 
@@ -63,6 +62,11 @@ const Summary: React.FC = () => {
                 </td>
               </tr>
             ))}
+            {data.length === 0 && (
+                <tr>
+                    <td colSpan={4} className="px-6 py-8 text-center text-gray-500">No clients found.</td>
+                </tr>
+            )}
           </tbody>
         </table>
       </div>

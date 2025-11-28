@@ -5,96 +5,106 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>LedgerPro System</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap" rel="stylesheet">
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+      
       body {
         font-family: 'Inter', sans-serif;
         background-color: #f3f4f6;
+      }
+
+      .font-hand {
+        font-family: 'Patrick Hand', cursive;
+      }
+
+      .whitespace-pre-wrap {
+        white-space: pre-wrap;
       }
       
       @media print {
         @page {
           size: auto;
-          margin: 10mm;
+          margin: 15mm;
         }
         
-        /* Reset body for print */
+        /* Hide scrollbars and body content */
         body {
+          visibility: hidden;
           background-color: white;
-          color: black;
           margin: 0;
           padding: 0;
           overflow: visible !important;
+          height: auto !important;
         }
 
-        /* Visibility Hiding Strategy */
-        /* We use visibility instead of display:none for body to ensure the React root structure exists,
-           but then we force visibility on the printable area. */
-        body * {
-          visibility: hidden;
-        }
-
-        /* Show printable area */
-        #printable-area, #printable-area * {
-          visibility: visible;
-        }
-
-        /* Position the printable area at the top-left corner of the page */
+        /* The Printable Area Overlay */
+        /* We use fixed positioning to ensure it takes over the viewport/page completely, ignoring parent layout constraints */
         #printable-area {
-          position: absolute;
+          visibility: visible !important;
+          display: block !important;
+          position: absolute; /* Changed to absolute to flow correctly across pages */
           left: 0;
           top: 0;
           width: 100%;
           margin: 0;
           padding: 0;
+          background: white;
+          z-index: 9999;
         }
 
-        /* FORCE DISPLAY for .print-only elements inside the printable area */
-        #printable-area .print-only {
-          display: block !important;
+        /* Ensure everything inside is visible */
+        #printable-area * {
           visibility: visible !important;
         }
 
-        /* Force Hide .no-print elements inside the printable area */
-        #printable-area .no-print {
+        /* Strict hiding for non-printable elements */
+        .no-print, .no-print * {
           display: none !important;
+          height: 0 !important;
+          width: 0 !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          visibility: hidden !important;
         }
 
-        /* Remove shadows and borders from cards to look like a document */
-        .card-shadow, .shadow-sm, .shadow-lg, .border {
-          box-shadow: none !important;
-          border: none !important;
-        }
-
-        /* Force table styling for print */
+        /* Table Styling for Print */
         table {
           width: 100% !important;
           border-collapse: collapse !important;
-          border: 1px solid #000 !important;
+          font-size: 12px;
         }
 
-        thead {
-            border-bottom: 2px solid #000 !important;
+        thead tr {
+          background-color: #f3f4f6 !important;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
         }
 
-        tfoot {
-            border-top: 2px solid #000 !important;
-        }
-        
         th, td {
-          border: 1px solid #000 !important;
-          padding: 8px !important;
-          color: #000 !important;
+          border: 1px solid #ddd !important;
+          padding: 6px 8px !important;
+          color: black !important;
         }
 
-        /* Clean up specific elements */
+        /* Typography */
+        h1, h2, h3, p, span {
+          color: black !important;
+        }
+
+        /* Hide buttons/links */
         button {
-            display: none !important;
+          display: none !important;
         }
         
         a {
             text-decoration: none !important;
             color: black !important;
+        }
+
+        /* Textarea handling in print */
+        textarea {
+            display: none !important;
         }
       }
     </style>

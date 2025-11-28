@@ -1,3 +1,4 @@
+
 export interface Client {
   id: string;
   code: string;
@@ -5,12 +6,15 @@ export interface Client {
   phone?: string;
   note?: string;
   createdAt: string;
+  // Extra info columns for the ledger view
+  column1Notes?: string;
+  column2Notes?: string;
 }
 
 export interface TransactionCategory {
   id: string;
   label: string;
-  operation: 'add' | 'subtract';
+  operation: 'add' | 'subtract' | 'none';
   color: string; // Tailwind class mostly
 }
 
@@ -23,7 +27,10 @@ export interface LedgerRecord {
   // New Dynamic Structure
   typeLabel: string; // The label at the time of transaction (e.g., "收")
   amount: number;
-  operation: 'add' | 'subtract';
+  operation: 'add' | 'subtract' | 'none';
+  
+  // Which column does this record belong to?
+  column?: 'main' | 'col1' | 'col2'; 
   
   isVisible: boolean; 
 

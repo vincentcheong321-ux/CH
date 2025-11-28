@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { 
   BarChart, 
@@ -10,7 +11,7 @@ import {
   LineChart,
   Line
 } from 'recharts';
-import { getAllLedgerRecords, getAssetRecords, getNetAmount } from '../services/storageService';
+import { getAllLedgerRecords, getAssetRecords, getNetAmount, getClients, getClientBalance } from '../services/storageService';
 import { TrendingUp, TrendingDown, DollarSign, Wallet } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
@@ -23,13 +24,13 @@ const Dashboard: React.FC = () => {
   const [chartData, setChartData] = useState<any[]>([]);
 
   useEffect(() => {
-    const ledgers = getAllLedgerRecords();
+    const clients = getClients();
     const assets = getAssetRecords();
 
-    // Calculate total money owed by clients (Company's Asset in terms of debt)
+    // Calculate total money owed by clients using specific logic (Panel 1 priority)
     let clientBalanceSum = 0;
-    ledgers.forEach(l => {
-        clientBalanceSum += getNetAmount(l);
+    clients.forEach(c => {
+        clientBalanceSum += getClientBalance(c.id);
     });
 
     // Calculate Cash Flow
@@ -48,6 +49,8 @@ const Dashboard: React.FC = () => {
     });
 
     // Prepare chart data (Last 10 transactions mock)
+    // We'll just grab last 10 records for visualization
+    const ledgers = getAllLedgerRecords();
     const data = ledgers.slice(-10).map((l, i) => ({
       name: `T-${i}`,
       amount: getNetAmount(l),
