@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { getClients, getClientDailyBalance } from '../services/storageService';
+import { getClients, getDrawBalances, saveDrawBalance } from '../services/storageService';
 import { Client } from '../types';
-import { Calendar, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Filter, Save } from 'lucide-react';
 
 const YEAR = 2025;
 
@@ -12,7 +12,6 @@ const MONTH_NAMES = [
 ];
 
 // Data Structure: [Month Index 0-11]: { type: [days] }
-// Types: W (Wed), S1 (Sat), S2 (Sun), T (Special Tue)
 const DRAW_DATES: Record<number, { w: number[], s1: number[], s2: number[], t: number[] }> = {
   0: { w: [1,8,15,22,29], s1: [4,11,18,25], s2: [5,12,19,26], t: [28] }, // JAN
   1: { w: [5,12,19,26], s1: [1,8,15,22], s2: [2,9,16,23], t: [4,11] }, // FEB
@@ -29,19 +28,18 @@ const DRAW_DATES: Record<number, { w: number[], s1: number[], s2: number[], t: n
 };
 
 const DrawReport: React.FC = () => {
-  const [currentMonth, setCurrentMonth] = useState(0); // 0 = Jan
-  const [selectedDate, setSelectedDate] = useState<string>(''); // YYYY-MM-DD
+  const [currentMonth, setCurrentMonth] = useState(0); 
+  const [selectedDate, setSelectedDate] = useState<string>(''); 
   const [clients, setClients] = useState<Client[]>([]);
-  const [clientBalances, setClientBalances] = useState<Record<string, number>>({});
+  // Use string for input values to allow empty/typing state, parse to number on save
+  const [clientBalances, setClientBalances] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     fetchClients();
-    // Default to today if it's in 2025, else Jan 1 2025
     const today = new Date();
     if (today.getFullYear() === 2025) {
         setCurrentMonth(today.getMonth());
-        // Don't auto select date unless requested, keeps view clean
     }
   }, []);
 
@@ -52,17 +50,21 @@ const DrawReport: React.FC = () => {
 
   useEffect(() => {
     if (selectedDate && clients.length > 0) {
-        calculateDailyBalances();
+        fetchDailyData();
     }
   }, [selectedDate, clients]);
 
-  const calculateDailyBalances = () => {
+  const fetchDailyData = async () => {
       setLoading(true);
-      const balances: Record<string, number> = {};
+      const data = await getDrawBalances(selectedDate);
+      const mapped: Record<string, string> = {};
+      
       clients.forEach(c => {
-          balances[c.id] = getClientDailyBalance(c.id, selectedDate);
+          // If data exists, use it. If not, default to empty string for input placeholder
+          mapped[c.id] = data[c.id] !== undefined ? data[c.id].toString() : '';
       });
-      setClientBalances(balances);
+      
+      setClientBalances(mapped);
       setLoading(false);
   };
 
@@ -72,18 +74,37 @@ const DrawReport: React.FC = () => {
       setSelectedDate(`${YEAR}-${m}-${d}`);
   };
 
+  const handleInputChange = (clientId: string, val: string) => {
+      setClientBalances(prev => ({
+          ...prev,
+          [clientId]: val
+      }));
+  };
+
+  const handleInputBlur = async (clientId: string) => {
+      const val = clientBalances[clientId];
+      // Only save if it's a valid number
+      if (val !== '' && !isNaN(Number(val))) {
+          await saveDrawBalance(selectedDate, clientId, parseFloat(val));
+      } else if (val === '') {
+          // Optional: Handle clearing? For now, we leave empty implies 0 or no record
+          await saveDrawBalance(selectedDate, clientId, 0);
+      }
+  };
+
+  const calculateTotal = () => {
+      return Object.values(clientBalances).reduce((acc, val) => {
+          const num = parseFloat(val);
+          return acc + (isNaN(num) ? 0 : num);
+      }, 0);
+  };
+
   const nextMonth = () => setCurrentMonth(prev => Math.min(11, prev + 1));
   const prevMonth = () => setCurrentMonth(prev => Math.max(0, prev - 1));
 
   const renderDateButtons = () => {
       const data = DRAW_DATES[currentMonth];
       if (!data) return null;
-
-      // Merge all dates and sort them to display in order? 
-      // Or display by category (Wed, Sat, Sun, Special)?
-      // Prompt says "follow these date by date". 
-      // Let's display grouped by type to match the prompt's layout structure, 
-      // but clickable to set the filter.
 
       const ButtonGroup = ({ days, label, color }: { days: number[], label: string, color: string }) => (
           <div className="flex flex-col gap-2 mb-4">
@@ -127,81 +148,107 @@ const DrawReport: React.FC = () => {
       );
   };
 
-  // Split clients into two columns
   const midPoint = Math.ceil(clients.length / 2);
   const leftClients = clients.slice(0, midPoint);
   const rightClients = clients.slice(midPoint);
 
-  const ClientRow = ({ client }: { client: Client }) => {
-      const balance = clientBalances[client.id] || 0;
-      // If balance is 0, visual style is lighter
-      const isZero = balance === 0;
+  const ClientInputRow = ({ client }: { client: Client }) => {
+      const val = clientBalances[client.id] || '';
+      const numVal = parseFloat(val);
+      const isPositive = !isNaN(numVal) && numVal > 0;
+      const isNegative = !isNaN(numVal) && numVal < 0;
 
       return (
-          <div className={`flex items-center justify-between p-3 border-b border-gray-100 last:border-0 ${isZero ? 'opacity-60' : ''}`}>
-              <div>
-                  <div className="font-bold text-gray-800">{client.name}</div>
+          <div className="flex items-center justify-between p-3 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+              <div className="flex-1">
+                  <div className="font-bold text-gray-800 text-sm">{client.name}</div>
                   <div className="text-xs text-gray-500 font-mono">{client.code}</div>
               </div>
-              <div className={`font-mono font-bold text-lg ${balance > 0 ? 'text-green-600' : balance < 0 ? 'text-red-600' : 'text-gray-400'}`}>
-                   {balance > 0 ? '+' : ''}{balance.toLocaleString()}
+              <div className="w-32">
+                   <input 
+                      type="number"
+                      step="any"
+                      placeholder="0.00"
+                      value={val}
+                      onChange={(e) => handleInputChange(client.id, e.target.value)}
+                      onBlur={() => handleInputBlur(client.id)}
+                      onFocus={(e) => e.target.select()}
+                      className={`
+                          w-full px-2 py-1 text-right font-mono font-bold rounded border
+                          focus:outline-none focus:ring-2 focus:ring-blue-500
+                          ${isPositive ? 'text-green-600 border-green-200 bg-green-50/50' : 
+                            isNegative ? 'text-red-600 border-red-200 bg-red-50/50' : 
+                            'text-gray-600 border-gray-200 bg-white'}
+                      `}
+                   />
               </div>
           </div>
       );
   };
 
+  const total = calculateTotal();
+
   return (
-    <div className="flex flex-col lg:flex-row gap-6 min-h-screen">
+    <div className="flex flex-col lg:flex-row gap-6 min-h-screen pb-20">
        {/* Left Sidebar: Calendar Controls */}
        <div className="lg:w-80 flex-shrink-0 no-print">
             <h1 className="text-2xl font-bold text-gray-800 mb-2 flex items-center">
                 <Calendar className="mr-2" /> Draw Reports
             </h1>
-            <p className="text-gray-500 mb-6 text-sm">Select a draw date to view daily balance.</p>
+            <p className="text-gray-500 mb-6 text-sm">Select a date to enter client balances.</p>
             {renderDateButtons()}
        </div>
 
        {/* Main Content: Report View */}
-       <div className="flex-1">
+       <div className="flex-1 flex flex-col">
             {!selectedDate ? (
                 <div className="h-full flex flex-col items-center justify-center bg-white rounded-xl border border-dashed border-gray-300 p-12 text-gray-400">
                     <Filter size={48} className="mb-4 opacity-20" />
-                    <p>Please select a draw date from the calendar to view the report.</p>
+                    <p>Please select a draw date from the calendar to view or enter data.</p>
                 </div>
             ) : (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    <div className="bg-gray-50 p-4 border-b border-gray-200 flex justify-between items-center">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col flex-1 relative">
+                    {/* Header */}
+                    <div className="bg-gray-50 p-4 border-b border-gray-200 flex justify-between items-center sticky top-0 z-10">
                         <div>
                             <h2 className="text-xl font-bold text-gray-900">Draw Date Report</h2>
-                            <p className="text-blue-600 font-medium">{new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                            <p className="text-blue-600 font-medium text-sm">
+                                {new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                            </p>
                         </div>
-                        <div className="text-right">
-                             <div className="text-xs uppercase text-gray-500 font-bold">Total Net Flow</div>
-                             <div className="text-xl font-bold text-gray-900">
-                                 ${Object.values(clientBalances).reduce((a,b)=>a+b, 0).toLocaleString()}
-                             </div>
+                        <div className="flex items-center text-xs text-gray-500 bg-yellow-50 px-3 py-1 rounded-full border border-yellow-200">
+                             <Save size={14} className="mr-1" /> Auto-saves on exit
                         </div>
                     </div>
 
                     {loading ? (
-                        <div className="p-8 text-center text-gray-500">Calculating...</div>
+                        <div className="p-8 text-center text-gray-500">Loading data...</div>
                     ) : (
-                        <div className="p-4 md:p-6">
-                             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-0">
-                                 {/* Column 1 */}
-                                 <div className="flex flex-col">
-                                     {leftClients.map(c => <ClientRow key={c.id} client={c} />)}
-                                 </div>
-                                 
-                                 {/* Column 2 */}
-                                 <div className="flex flex-col border-t md:border-t-0 border-gray-100 pt-4 md:pt-0">
-                                     {rightClients.map(c => <ClientRow key={c.id} client={c} />)}
-                                 </div>
-                             </div>
-                             
-                             {clients.length === 0 && <div className="text-center text-gray-400 py-8">No clients found.</div>}
+                        <div className="flex-1 overflow-auto">
+                            <div className="p-4 md:p-6 pb-24">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-0">
+                                    {/* Column 1 */}
+                                    <div className="flex flex-col">
+                                        {leftClients.map(c => <ClientInputRow key={c.id} client={c} />)}
+                                    </div>
+                                    
+                                    {/* Column 2 */}
+                                    <div className="flex flex-col border-t md:border-t-0 border-gray-100 pt-4 md:pt-0">
+                                        {rightClients.map(c => <ClientInputRow key={c.id} client={c} />)}
+                                    </div>
+                                </div>
+                                {clients.length === 0 && <div className="text-center text-gray-400 py-8">No clients found.</div>}
+                            </div>
                         </div>
                     )}
+                    
+                    {/* Sticky Footer Total */}
+                    <div className="sticky bottom-0 bg-gray-900 text-white p-4 shadow-lg flex justify-between items-center z-20">
+                         <div className="text-sm font-medium uppercase tracking-wider text-gray-400">Total Company Balance</div>
+                         <div className={`text-2xl font-mono font-bold ${total >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                             {total > 0 ? '+' : ''}{total.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                         </div>
+                    </div>
                 </div>
             )}
        </div>

@@ -50,6 +50,12 @@ export interface AssetRecord {
   description: string;
 }
 
+export interface DrawBalance {
+  clientId: string;
+  date: string; // YYYY-MM-DD
+  balance: number;
+}
+
 export interface User {
   username: string;
   isAuthenticated: boolean;

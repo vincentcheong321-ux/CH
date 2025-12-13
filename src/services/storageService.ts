@@ -1,11 +1,12 @@
 
-import { Client, LedgerRecord, AssetRecord, TransactionCategory } from '../types';
+import { Client, LedgerRecord, AssetRecord, TransactionCategory, DrawBalance } from '../types';
 import { supabase } from '../supabaseClient';
 
 const CLIENTS_KEY = 'ledger_clients';
 const RECORDS_KEY = 'ledger_records';
 const ASSETS_KEY = 'ledger_assets';
 const CATEGORIES_KEY = 'ledger_categories';
+const DRAW_BALANCES_KEY = 'ledger_draw_balances';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
@@ -115,7 +116,6 @@ export const getClients = async (): Promise<Client[]> => {
   if (supabase) {
     const { data, error } = await supabase.from('clients').select('*').order('created_at', { ascending: true });
     if (!error && data) {
-        // Map created_at to createdAt
         return data.map(mapSupabaseClient);
     }
     console.error('Supabase fetch error:', error);
@@ -133,7 +133,6 @@ export const saveClient = async (client: Omit<Client, 'id' | 'createdAt'>): Prom
   };
 
   if (supabase) {
-    // We let Supabase generate the ID and CreatedAt
     const { data, error } = await supabase.from('clients').insert([
         { name: client.name, code: client.code, phone: client.phone }
     ]).select();
@@ -172,13 +171,9 @@ export const deleteClient = async (id: string) => {
 };
 
 export const seedInitialClients = async () => {
-    // Check if we have clients in the DB
     const clients = await getClients();
-    
-    // Only seed if absolutely empty
     if (clients.length === 0) {
         console.log("Seeding initial clients...");
-        // Sequential insert to maintain order roughly
         for (const c of INITIAL_CLIENTS_DATA) {
             await saveClient({
                 name: c.name,
@@ -192,7 +187,6 @@ export const seedInitialClients = async () => {
 };
 
 // --- Ledger Records (Sync Local for now) ---
-// Keeps the app responsive for transactions without needing full backend sync yet.
 
 const normalizeRecord = (r: any): LedgerRecord => {
   const record = { ...r, column: r.column || 'main' };
@@ -238,31 +232,54 @@ export const getClientBalance = (clientId: string): number => {
   return mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
 };
 
-// New Helper: Get daily balance for a specific date
-export const getClientDailyBalance = (clientId: string, dateStr: string): number => {
-    // dateStr expected in YYYY-MM-DD format
-    const records = getLedgerRecords(clientId);
-    
-    // Filter records that match the local date
-    const dailyRecords = records.filter(r => {
-        if (!r.isVisible) return false;
-        
-        // Convert record ISO to YYYY-MM-DD (local approximation or explicit string match)
-        // Since input dateStr is likely YYYY-MM-DD from the UI buttons
-        const recDate = new Date(r.date);
-        // We use string manipulation for stability if timezone is tricky, 
-        // but robustly:
-        const year = recDate.getFullYear();
-        const month = String(recDate.getMonth() + 1).padStart(2, '0');
-        const day = String(recDate.getDate()).padStart(2, '0');
-        const recDateStr = `${year}-${month}-${day}`;
-        
-        return recDateStr === dateStr;
-    });
+// --- Draw Balances (New Feature) ---
 
-    // Calculate sum for this day
-    return dailyRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
+export const getDrawBalances = async (date: string): Promise<Record<string, number>> => {
+  if (supabase) {
+    const { data, error } = await supabase
+      .from('draw_balances')
+      .select('client_id, balance')
+      .eq('date', date);
+      
+    if (!error && data) {
+      const balances: Record<string, number> = {};
+      data.forEach((row: any) => {
+        balances[row.client_id] = Number(row.balance);
+      });
+      return balances;
+    }
+    console.error('Supabase fetch draw balances error:', error);
+  }
+
+  // Fallback to LocalStorage
+  const allData = JSON.parse(localStorage.getItem(DRAW_BALANCES_KEY) || '[]');
+  const balances: Record<string, number> = {};
+  allData.forEach((row: any) => {
+    if (row.date === date) {
+      balances[row.clientId] = Number(row.balance);
+    }
+  });
+  return balances;
 };
+
+export const saveDrawBalance = async (date: string, clientId: string, balance: number) => {
+  if (supabase) {
+    const { error } = await supabase
+      .from('draw_balances')
+      .upsert({ date, client_id: clientId, balance }, { onConflict: 'date, client_id' });
+      
+    if (error) console.error('Supabase save draw balance error:', error);
+  }
+
+  // Always update LocalStorage for fallback/cache
+  const allData = JSON.parse(localStorage.getItem(DRAW_BALANCES_KEY) || '[]');
+  // Remove existing entry for this date/client
+  const filtered = allData.filter((r: any) => !(r.date === date && r.clientId === clientId));
+  // Add new
+  filtered.push({ date, clientId, balance });
+  localStorage.setItem(DRAW_BALANCES_KEY, JSON.stringify(filtered));
+};
+
 
 export const saveLedgerRecord = (record: Omit<LedgerRecord, 'id'>): LedgerRecord => {
   const data = localStorage.getItem(RECORDS_KEY);
@@ -302,7 +319,4 @@ export const saveAssetRecord = (record: Omit<AssetRecord, 'id'>): AssetRecord =>
 
 export const seedData = async () => {
   getCategories();
-  // seedInitialClients is manually triggered or can be auto-triggered here
-  // But since we provided SQL, we don't strictly need auto-seeding on load anymore
-  // keeping it available for manual trigger in UI
 };
