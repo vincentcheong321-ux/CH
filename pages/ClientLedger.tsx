@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Printer, Trash2, Plus, Minus, Pencil, X, Check, AlertTriangle, ExternalLink, GripHorizontal, Hash, Zap } from 'lucide-react';
 import { 
@@ -48,6 +48,11 @@ const ClientLedger: React.FC = () => {
   // Drag State
   const [draggedCatIndex, setDraggedCatIndex] = useState<number | null>(null);
 
+  // Layout & Resizing State
+  const [colWidths, setColWidths] = useState<number[]>([33.33, 33.33, 33.34]);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const dragInfo = useRef<{ index: number; startX: number; startWidths: number[]; containerWidth: number } | null>(null);
+
   // Confirmation Modal State
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -73,6 +78,51 @@ const ClientLedger: React.FC = () => {
       const recs = getLedgerRecords(id);
       setRecords(recs);
     }
+  };
+
+  // --- Resize Handlers ---
+
+  const onMouseMove = useCallback((e: MouseEvent) => {
+    if (!dragInfo.current) return;
+    const { index, startX, startWidths, containerWidth } = dragInfo.current;
+    const diffX = e.clientX - startX;
+    const diffPercent = (diffX / containerWidth) * 100;
+
+    const newWidths = [...startWidths];
+    
+    // Safety check: Min width 10%
+    if (newWidths[index] + diffPercent < 10 || newWidths[index + 1] - diffPercent < 10) return;
+    
+    newWidths[index] += diffPercent;
+    newWidths[index + 1] -= diffPercent;
+    
+    setColWidths(newWidths);
+  }, []);
+
+  const onMouseUp = useCallback(() => {
+      dragInfo.current = null;
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+  }, [onMouseMove]);
+
+  const startResize = (index: number, e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!containerRef.current) return;
+      
+      dragInfo.current = {
+          index,
+          startX: e.clientX,
+          startWidths: [...colWidths],
+          containerWidth: containerRef.current.clientWidth
+      };
+      
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none'; // Prevent text selection
   };
 
   const handleCategorySelect = (cat: TransactionCategory) => {
@@ -331,9 +381,12 @@ const ClientLedger: React.FC = () => {
       // We show footer if at least one visible record is NOT 'none'.
       const hasCalculableRecords = data.processed.some(r => r.isVisible && r.operation !== 'none');
 
-      // Dynamic Label Logic: If Total is negative and label is '收', change to '补'
+      // Dynamic Label Logic: If Total is negative and label is '收' OR '欠', change to '补'
       const isNegative = data.finalBalance < 0;
-      const displayLabel = (footerLabel === '收' && isNegative) ? '补' : footerLabel;
+      let displayLabel = footerLabel;
+      if (isNegative && (footerLabel === '收' || footerLabel === '欠')) {
+          displayLabel = '补';
+      }
       
       return (
       <div className="flex flex-col items-center">
@@ -369,9 +422,7 @@ const ClientLedger: React.FC = () => {
                           r.operation === 'subtract' ? 'text-red-700' : 'text-gray-600'}`}>
                         {r.operation === 'none' 
                             ? r.amount.toLocaleString(undefined, {minimumFractionDigits: 2})
-                            : r.netChange < 0 
-                                ? `(${Math.abs(r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2})})`
-                                : r.netChange.toLocaleString(undefined, {minimumFractionDigits: 2})
+                            : Math.abs(r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2})
                         }
                     </div>
                 </div>
@@ -594,7 +645,7 @@ const ClientLedger: React.FC = () => {
             )}
         </div>
 
-        {/* Paper Statement View - 3 Columns */}
+        {/* Paper Statement View - 3 Columns with Resizable Layout */}
         <div id="printable-area" className="relative max-w-5xl mx-auto">
             <div className="bg-white border border-gray-200 shadow-sm min-h-[600px] relative text-lg font-serif">
                 
@@ -607,27 +658,41 @@ const ClientLedger: React.FC = () => {
                     {/* Statement Date removed as requested */}
                 </div>
 
-                {/* 3-Column Layout */}
-                <div className="grid grid-cols-3 gap-0 min-h-[400px]">
+                {/* Resizable 3-Column Layout */}
+                <div className="flex w-full min-h-[400px] relative" ref={containerRef}>
                     
                     {/* Column 1 - Independent Ledger */}
-                    <div className="p-1 md:p-2 border-r border-transparent">
+                    <div style={{ width: `${colWidths[0]}%` }} className="relative flex flex-col p-1 md:p-2 border-r border-transparent">
                         <LedgerColumnView 
                             data={col1Ledger}
                             footerLabel="收"
                         />
+                         {/* Resizer Handle 1 */}
+                        <div 
+                            className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center group no-print translate-x-1/2"
+                            onMouseDown={(e) => startResize(0, e)}
+                        >
+                            <div className="w-0.5 h-full bg-gray-200 group-hover:bg-blue-500 transition-colors" />
+                        </div>
                     </div>
 
                     {/* Column 2 - Independent Ledger */}
-                    <div className="p-1 md:p-2 border-r border-transparent">
+                    <div style={{ width: `${colWidths[1]}%` }} className="relative flex flex-col p-1 md:p-2 border-r border-transparent">
                         <LedgerColumnView 
                             data={col2Ledger} 
                             footerLabel="收"
                         />
+                         {/* Resizer Handle 2 */}
+                        <div 
+                            className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center group no-print translate-x-1/2"
+                            onMouseDown={(e) => startResize(1, e)}
+                        >
+                            <div className="w-0.5 h-full bg-gray-200 group-hover:bg-blue-500 transition-colors" />
+                        </div>
                     </div>
 
                     {/* Column 3 - Main Ledger */}
-                    <div className="p-1 md:p-2 bg-gray-50/30">
+                    <div style={{ width: `${colWidths[2]}%` }} className="relative flex flex-col p-1 md:p-2 bg-gray-50/30">
                         <LedgerColumnView 
                             data={mainLedger} 
                             footerLabel="欠"
