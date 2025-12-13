@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { getClients, getDrawBalances, saveDrawBalance, INITIAL_CLIENTS_DATA } from '../services/storageService';
 import { Client } from '../types';
 import { Calendar, ChevronLeft, ChevronRight, Filter, Save } from 'lucide-react';
@@ -27,6 +27,15 @@ const DRAW_DATES: Record<number, { w: number[], s1: number[], s2: number[], t: n
   11: { w: [3,10,17,24,31], s1: [6,13,20,27], s2: [7,14,21,28], t: [30] }, // DEC
 };
 
+// Helper to calculate ISO Week Number
+const getWeekNumber = (d: Date) => {
+    const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const dayNum = date.getUTCDay() || 7;
+    date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(date.getUTCFullYear(),0,1));
+    return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1)/7);
+};
+
 // Extracted Component to prevent re-mounting on every render
 const ClientInputRow = React.memo(({ client, value, onChange, onBlur }: { 
     client: Client, 
@@ -46,8 +55,8 @@ const ClientInputRow = React.memo(({ client, value, onChange, onBlur }: {
             </div>
             <div className="w-40">
                     <input 
-                    type="number"
-                    step="any"
+                    type="text" 
+                    inputMode="decimal"
                     placeholder="0.00"
                     value={value}
                     onChange={(e) => onChange(client.id, e.target.value)}
@@ -56,7 +65,6 @@ const ClientInputRow = React.memo(({ client, value, onChange, onBlur }: {
                     className={`
                         w-full px-2 py-1 text-right font-mono font-bold rounded border
                         focus:outline-none focus:ring-2 focus:ring-blue-500
-                        [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none
                         ${isPositive ? 'text-green-600 border-green-200 bg-green-50/50' : 
                         isNegative ? 'text-red-600 border-red-200 bg-red-50/50' : 
                         'text-gray-600 border-gray-200 bg-white'}
@@ -78,9 +86,30 @@ const DrawReport: React.FC = () => {
   useEffect(() => {
     fetchClients();
     
-    // Hardcode default selection for preview
-    setSelectedDate(`${YEAR}-01-01`);
-    setCurrentMonth(0); // Ensure Jan is shown
+    // Auto-select nearest date to "Today"
+    const now = new Date();
+    // Use current year if we are in 2025 (or future), otherwise 2025 is target
+    // Actually our dataset is hardcoded to YEAR=2025
+    let minDiff = Infinity;
+    let closestDateStr = `${YEAR}-01-01`;
+    let closestMonth = 0;
+
+    Object.entries(DRAW_DATES).forEach(([mStr, data]) => {
+        const m = parseInt(mStr);
+        const days = [...data.w, ...data.s1, ...data.s2, ...data.t];
+        days.forEach(d => {
+            const dateObj = new Date(YEAR, m, d);
+            const diff = Math.abs(dateObj.getTime() - now.getTime());
+            if (diff < minDiff) {
+                minDiff = diff;
+                closestDateStr = `${YEAR}-${String(m+1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                closestMonth = m;
+            }
+        });
+    });
+
+    setSelectedDate(closestDateStr);
+    setCurrentMonth(closestMonth);
   }, []);
 
   const fetchClients = async () => {
@@ -123,23 +152,31 @@ const DrawReport: React.FC = () => {
       setSelectedDate(`${YEAR}-${m}-${d}`);
   };
 
-  const handleInputChange = (clientId: string, val: string) => {
-      setClientBalances(prev => ({
-          ...prev,
-          [clientId]: val
-      }));
-  };
-
-  const handleInputBlur = async (clientId: string) => {
-      const val = clientBalances[clientId];
-      // Only save if it's a valid number
-      if (val !== '' && !isNaN(Number(val))) {
-          await saveDrawBalance(selectedDate, clientId, parseFloat(val));
-      } else if (val === '') {
-          // Optional: Handle clearing? For now, we leave empty implies 0 or no record
-          await saveDrawBalance(selectedDate, clientId, 0);
+  const handleInputChange = useCallback((clientId: string, val: string) => {
+      // Allow empty string, minus sign at start, numbers, and one decimal point
+      if (val === '' || /^-?\d*\.?\d*$/.test(val)) {
+        setClientBalances(prev => ({
+            ...prev,
+            [clientId]: val
+        }));
       }
-  };
+  }, []);
+
+  const handleInputBlur = useCallback(async (clientId: string) => {
+      // Access value from state when blur occurs. 
+      // Note: We need to access the LATEST clientBalances here. 
+      // Since this callback is recreated when clientBalances changes (in dependencies), it works.
+      setClientBalances(currentBalances => {
+          const val = currentBalances[clientId];
+          // Only save if it's a valid number
+          if (val !== '' && !isNaN(Number(val))) {
+              saveDrawBalance(selectedDate, clientId, parseFloat(val));
+          } else if (val === '') {
+              saveDrawBalance(selectedDate, clientId, 0);
+          }
+          return currentBalances;
+      });
+  }, [selectedDate]);
 
   const calculateTotal = () => {
       return Object.values(clientBalances).reduce((acc, val) => {
@@ -155,31 +192,20 @@ const DrawReport: React.FC = () => {
       const data = DRAW_DATES[currentMonth];
       if (!data) return null;
 
-      const ButtonGroup = ({ days, label, color }: { days: number[], label: string, color: string }) => (
-          <div className="flex flex-col gap-2 mb-4">
-              <span className={`text-xs font-bold uppercase ${color}`}>{label}</span>
-              <div className="flex flex-wrap gap-2">
-                  {days.map(d => {
-                      const dateStr = `${YEAR}-${String(currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                      const isSelected = selectedDate === dateStr;
-                      return (
-                        <button
-                            key={d}
-                            onClick={() => handleDateClick(d)}
-                            className={`
-                                w-10 h-10 rounded-lg font-bold shadow-sm transition-all
-                                ${isSelected 
-                                    ? 'bg-blue-600 text-white ring-2 ring-blue-300 transform scale-105' 
-                                    : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'}
-                            `}
-                        >
-                            {d}
-                        </button>
-                      );
-                  })}
-              </div>
-          </div>
-      );
+      // Flatten and Sort Days
+      const allDays = Array.from(new Set([...data.w, ...data.s1, ...data.s2, ...data.t])).sort((a,b) => a-b);
+      
+      // Group by Week Number
+      const weeks: Record<number, number[]> = {};
+      allDays.forEach(day => {
+          const date = new Date(YEAR, currentMonth, day);
+          const weekNum = getWeekNumber(date);
+          if (!weeks[weekNum]) weeks[weekNum] = [];
+          weeks[weekNum].push(day);
+      });
+      
+      // Sort week numbers
+      const sortedWeekNums = Object.keys(weeks).map(Number).sort((a,b) => a-b);
 
       return (
           <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
@@ -189,10 +215,33 @@ const DrawReport: React.FC = () => {
                   <button onClick={nextMonth} disabled={currentMonth === 11} className="p-2 hover:bg-gray-100 rounded-full disabled:opacity-30"><ChevronRight /></button>
               </div>
               
-              <ButtonGroup days={data.w} label="Wednesday" color="text-purple-600" />
-              <ButtonGroup days={data.s1} label="Saturday" color="text-indigo-600" />
-              <ButtonGroup days={data.s2} label="Sunday" color="text-green-600" />
-              {data.t.length > 0 && <ButtonGroup days={data.t} label="Special (Tue)" color="text-red-600" />}
+              <div className="space-y-4">
+                  {sortedWeekNums.map((weekNum, index) => (
+                      <div key={weekNum} className="flex flex-col gap-2">
+                          <span className="text-xs font-bold uppercase text-gray-400 tracking-wider">Week {index + 1}</span>
+                          <div className="flex flex-wrap gap-2">
+                              {weeks[weekNum].map(d => {
+                                  const dateStr = `${YEAR}-${String(currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                                  const isSelected = selectedDate === dateStr;
+                                  return (
+                                    <button
+                                        key={d}
+                                        onClick={() => handleDateClick(d)}
+                                        className={`
+                                            w-10 h-10 rounded-lg font-bold shadow-sm transition-all
+                                            ${isSelected 
+                                                ? 'bg-blue-600 text-white ring-2 ring-blue-300 transform scale-105' 
+                                                : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'}
+                                        `}
+                                    >
+                                        {d}
+                                    </button>
+                                  );
+                              })}
+                          </div>
+                      </div>
+                  ))}
+              </div>
           </div>
       );
   };
