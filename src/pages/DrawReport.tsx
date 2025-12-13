@@ -164,7 +164,7 @@ const DrawReport: React.FC = () => {
                   <div className="font-bold text-gray-800 text-sm">{client.name}</div>
                   <div className="text-xs text-gray-500 font-mono">{client.code}</div>
               </div>
-              <div className="w-32">
+              <div className="w-40">
                    <input 
                       type="number"
                       step="any"
@@ -176,6 +176,7 @@ const DrawReport: React.FC = () => {
                       className={`
                           w-full px-2 py-1 text-right font-mono font-bold rounded border
                           focus:outline-none focus:ring-2 focus:ring-blue-500
+                          [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none
                           ${isPositive ? 'text-green-600 border-green-200 bg-green-50/50' : 
                             isNegative ? 'text-red-600 border-red-200 bg-red-50/50' : 
                             'text-gray-600 border-gray-200 bg-white'}
