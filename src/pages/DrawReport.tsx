@@ -24,7 +24,7 @@ const DRAW_DATES: Record<number, { w: number[], s1: number[], s2: number[], t: n
   8: { w: [3,10,17,24], s1: [6,13,20,27], s2: [7,14,21,28], t: [] }, // SEP
   9: { w: [1,8,15,22,29], s1: [4,11,18,25], s2: [5,12,19,26], t: [28] }, // OCT
   10: { w: [5,12,19,26], s1: [1,8,15,22,29], s2: [2,9,16,23,30], t: [] }, // NOV
-  11: { w: [3,10,17,24,31], s1: [6,13,20,27], s2: [7,14,21,28], t: [30] }, // DEC
+  11: { w: [10,17,24,31], s1: [6,13,20,27], s2: [7,14,21,28], t: [2, 30] }, // DEC - Modified to match user request 2,6,7 (removed 3)
 };
 
 // Helper to calculate ISO Week Number

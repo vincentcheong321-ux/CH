@@ -11,7 +11,7 @@ import {
   LineChart,
   Line
 } from 'recharts';
-import { getAllLedgerRecords, getAssetRecords, getNetAmount, getClients, getClientBalance } from '../services/storageService';
+import { getAllLedgerRecords, getAssetRecords, getNetAmount, getClients, getClientBalance, getTotalDrawReceivables } from '../services/storageService';
 import { TrendingUp, TrendingDown, DollarSign, Wallet } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
@@ -27,23 +27,28 @@ const Dashboard: React.FC = () => {
     const fetchData = async () => {
         const clients = await getClients();
         const assets = getAssetRecords();
+        const drawTotal = await getTotalDrawReceivables();
 
-        let clientBalanceSum = 0;
+        // Calculate Ledger Balance (Old method)
+        let ledgerBalanceSum = 0;
         clients.forEach(c => {
-            clientBalanceSum += getClientBalance(c.id);
+            ledgerBalanceSum += getClientBalance(c.id);
         });
+
+        // Combine Ledger Balances with Draw Report Balances
+        const totalReceivables = ledgerBalanceSum + drawTotal;
 
         const assetsIn = assets.filter(a => a.type === 'IN').reduce((acc, curr) => acc + curr.amount, 0);
         const assetsOut = assets.filter(a => a.type === 'OUT').reduce((acc, curr) => acc + curr.amount, 0);
 
         const liquidCash = assetsIn - assetsOut;
-        const totalBalance = liquidCash + clientBalanceSum;
+        const totalBalance = liquidCash + totalReceivables;
 
         setStats({
         totalCompanyBalance: totalBalance,
         totalAssetsIn: assetsIn,
         totalAssetsOut: assetsOut,
-        clientDebt: clientBalanceSum
+        clientDebt: totalReceivables
         });
 
         const ledgers = getAllLedgerRecords();
@@ -95,7 +100,7 @@ const Dashboard: React.FC = () => {
           value={stats.clientDebt} 
           icon={DollarSign} 
           color="text-emerald-600"
-          subText="Total owed by all clients"
+          subText="Ledger + Draw Reports"
         />
         <Card 
           title="Total Cash In" 
