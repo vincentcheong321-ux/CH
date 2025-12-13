@@ -24,40 +24,38 @@ const Dashboard: React.FC = () => {
   const [chartData, setChartData] = useState<any[]>([]);
 
   useEffect(() => {
-    const clients = getClients();
-    const assets = getAssetRecords();
+    const fetchData = async () => {
+        const clients = await getClients();
+        const assets = getAssetRecords();
 
-    // Calculate total money owed by clients using specific logic (Panel 1 priority)
-    let clientBalanceSum = 0;
-    clients.forEach(c => {
-        clientBalanceSum += getClientBalance(c.id);
-    });
+        let clientBalanceSum = 0;
+        clients.forEach(c => {
+            clientBalanceSum += getClientBalance(c.id);
+        });
 
-    // Calculate Cash Flow
-    const assetsIn = assets.filter(a => a.type === 'IN').reduce((acc, curr) => acc + curr.amount, 0);
-    const assetsOut = assets.filter(a => a.type === 'OUT').reduce((acc, curr) => acc + curr.amount, 0);
+        const assetsIn = assets.filter(a => a.type === 'IN').reduce((acc, curr) => acc + curr.amount, 0);
+        const assetsOut = assets.filter(a => a.type === 'OUT').reduce((acc, curr) => acc + curr.amount, 0);
 
-    // Total Company Balance (Liquidity + Owed Debts)
-    const liquidCash = assetsIn - assetsOut;
-    const totalBalance = liquidCash + clientBalanceSum;
+        const liquidCash = assetsIn - assetsOut;
+        const totalBalance = liquidCash + clientBalanceSum;
 
-    setStats({
-      totalCompanyBalance: totalBalance,
-      totalAssetsIn: assetsIn,
-      totalAssetsOut: assetsOut,
-      clientDebt: clientBalanceSum
-    });
+        setStats({
+        totalCompanyBalance: totalBalance,
+        totalAssetsIn: assetsIn,
+        totalAssetsOut: assetsOut,
+        clientDebt: clientBalanceSum
+        });
 
-    // Prepare chart data (Last 10 transactions mock)
-    // We'll just grab last 10 records for visualization
-    const ledgers = getAllLedgerRecords();
-    const data = ledgers.slice(-10).map((l, i) => ({
-      name: `T-${i}`,
-      amount: getNetAmount(l),
-      volume: l.amount // Just the raw magnitude
-    }));
-    setChartData(data);
+        const ledgers = getAllLedgerRecords();
+        const data = ledgers.slice(-10).map((l, i) => ({
+        name: `T-${i}`,
+        amount: getNetAmount(l),
+        volume: l.amount 
+        }));
+        setChartData(data);
+    };
 
+    fetchData();
   }, []);
 
   const Card = ({ title, value, icon: Icon, color, subText }: any) => (

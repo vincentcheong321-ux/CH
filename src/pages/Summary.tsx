@@ -7,16 +7,19 @@ const Summary: React.FC = () => {
   const [data, setData] = useState<{client: Client, total: number}[]>([]);
 
   useEffect(() => {
-    const clients = getClients();
-    
-    const summary = clients.map(client => {
-      const total = getClientBalance(client.id);
-      return { client, total };
-    });
+    const fetchData = async () => {
+        const clients = await getClients();
+        
+        const summary = clients.map(client => {
+        const total = getClientBalance(client.id);
+        return { client, total };
+        });
 
-    // Sort by Total Descending
-    summary.sort((a, b) => b.total - a.total);
-    setData(summary);
+        // Sort by Total Descending
+        summary.sort((a, b) => b.total - a.total);
+        setData(summary);
+    }
+    fetchData();
   }, []);
 
   const totalReceivables = data.reduce((acc, curr) => acc + curr.total, 0);

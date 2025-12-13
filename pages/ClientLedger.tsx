@@ -50,8 +50,17 @@ const ClientLedger: React.FC = () => {
 
   // Layout & Resizing State
   const [colWidths, setColWidths] = useState<number[]>([33.33, 33.33, 33.34]);
+  const [verticalPadding, setVerticalPadding] = useState<{top: number, bottom: number}>({ top: 40, bottom: 40 });
   const containerRef = useRef<HTMLDivElement>(null);
-  const dragInfo = useRef<{ index: number; startX: number; startWidths: number[]; containerWidth: number } | null>(null);
+  const dragInfo = useRef<{ 
+      type: 'col' | 'top' | 'bottom';
+      index?: number; 
+      startX?: number; 
+      startY?: number;
+      startWidths?: number[]; 
+      startHeight?: number;
+      containerWidth?: number 
+  } | null>(null);
 
   // Confirmation Modal State
   const [confirmModal, setConfirmModal] = useState<{
@@ -84,19 +93,43 @@ const ClientLedger: React.FC = () => {
 
   const onMouseMove = useCallback((e: MouseEvent) => {
     if (!dragInfo.current) return;
-    const { index, startX, startWidths, containerWidth } = dragInfo.current;
-    const diffX = e.clientX - startX;
-    const diffPercent = (diffX / containerWidth) * 100;
+    
+    // Column Resizing
+    if (dragInfo.current.type === 'col' && dragInfo.current.index !== undefined && dragInfo.current.startX !== undefined && dragInfo.current.startWidths && dragInfo.current.containerWidth) {
+        const { index, startX, startWidths, containerWidth } = dragInfo.current;
+        const diffX = e.clientX - startX;
+        const diffPercent = (diffX / containerWidth) * 100;
 
-    const newWidths = [...startWidths];
-    
-    // Safety check: Min width 10%
-    if (newWidths[index] + diffPercent < 10 || newWidths[index + 1] - diffPercent < 10) return;
-    
-    newWidths[index] += diffPercent;
-    newWidths[index + 1] -= diffPercent;
-    
-    setColWidths(newWidths);
+        const newWidths = [...startWidths];
+        
+        // Safety check: Min width 10%
+        if (newWidths[index] + diffPercent < 10 || newWidths[index + 1] - diffPercent < 10) return;
+        
+        newWidths[index] += diffPercent;
+        newWidths[index + 1] -= diffPercent;
+        
+        setColWidths(newWidths);
+    } 
+    // Vertical Padding Resizing
+    else if (dragInfo.current.type === 'top' || dragInfo.current.type === 'bottom') {
+        const { startY, startHeight } = dragInfo.current;
+        if (startY === undefined || startHeight === undefined) return;
+
+        const diffY = e.clientY - startY;
+        
+        if (dragInfo.current.type === 'top') {
+            const newTop = Math.max(0, startHeight + diffY); // Min 0px
+            setVerticalPadding(prev => ({ ...prev, top: newTop }));
+        } else {
+             const newBottom = Math.max(0, startHeight - diffY); // Inverted for bottom drag handle (drag up to increase? No, usually drag down to increase bottom padding if handle is at bottom, but here handle is top of bottom spacer)
+             // Let's assume handle is at the TOP of the bottom spacer. Dragging down decreases height (pushes spacer down?), Dragging up increases height.
+             // Wait, standard resize logic: 
+             // Top Spacer: Handle at bottom. Drag down -> Increase Height.
+             // Bottom Spacer: Handle at top. Drag down -> Decrease Height (pushes content down? no). 
+             // Let's implement: Bottom Spacer Handle is at the Top of the spacer. Dragging UP increases spacer height. Dragging DOWN decreases spacer height.
+             setVerticalPadding(prev => ({ ...prev, bottom: Math.max(0, startHeight - diffY) }));
+        }
+    }
   }, []);
 
   const onMouseUp = useCallback(() => {
@@ -107,12 +140,13 @@ const ClientLedger: React.FC = () => {
       document.body.style.userSelect = '';
   }, [onMouseMove]);
 
-  const startResize = (index: number, e: React.MouseEvent) => {
+  const startResizeCol = (index: number, e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
       if (!containerRef.current) return;
       
       dragInfo.current = {
+          type: 'col',
           index,
           startX: e.clientX,
           startWidths: [...colWidths],
@@ -122,7 +156,23 @@ const ClientLedger: React.FC = () => {
       document.addEventListener('mousemove', onMouseMove);
       document.addEventListener('mouseup', onMouseUp);
       document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none'; // Prevent text selection
+      document.body.style.userSelect = 'none';
+  };
+
+  const startResizeVertical = (type: 'top' | 'bottom', e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      dragInfo.current = {
+          type,
+          startY: e.clientY,
+          startHeight: type === 'top' ? verticalPadding.top : verticalPadding.bottom
+      };
+
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+      document.body.style.cursor = 'row-resize';
+      document.body.style.userSelect = 'none';
   };
 
   const handleCategorySelect = (cat: TransactionCategory) => {
@@ -649,8 +699,18 @@ const ClientLedger: React.FC = () => {
         <div id="printable-area" className="relative max-w-5xl mx-auto">
             <div className="bg-white border border-gray-200 shadow-sm min-h-[600px] relative text-lg font-serif">
                 
+                {/* Top Padding - Adjustable */}
+                <div style={{ height: `${verticalPadding.top}px` }} className="relative group w-full no-print-bg">
+                    <div 
+                        className="absolute bottom-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print"
+                        onMouseDown={(e) => startResizeVertical('top', e)}
+                    >
+                        <div className="w-8 h-1 bg-blue-400 rounded-full"></div>
+                    </div>
+                </div>
+
                 {/* Header */}
-                <div className="p-4 md:p-8 pb-2 md:pb-4 flex justify-between items-end mb-2 md:mb-4">
+                <div className="px-4 md:px-8 pb-2 md:pb-4 flex justify-between items-end mb-2 md:mb-4">
                     <div>
                         <h2 className="text-2xl md:text-4xl font-bold text-gray-900 uppercase tracking-widest">{client.name}</h2>
                         {client.code && <p className="text-gray-600 mt-1 font-mono text-sm md:text-xl">{client.code}</p>}
@@ -662,32 +722,32 @@ const ClientLedger: React.FC = () => {
                 <div className="flex w-full min-h-[400px] relative" ref={containerRef}>
                     
                     {/* Column 1 - Independent Ledger */}
-                    <div style={{ width: `${colWidths[0]}%` }} className="relative flex flex-col p-1 md:p-2 border-r border-transparent">
+                    <div style={{ width: `${colWidths[0]}%` }} className="relative flex flex-col p-1 md:p-2 border-r border-transparent group">
                         <LedgerColumnView 
                             data={col1Ledger}
                             footerLabel="收"
                         />
-                         {/* Resizer Handle 1 */}
+                         {/* Resizer Handle 1 - Invisible unless hovered */}
                         <div 
-                            className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center group no-print translate-x-1/2"
-                            onMouseDown={(e) => startResize(0, e)}
+                            className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print"
+                            onMouseDown={(e) => startResizeCol(0, e)}
                         >
-                            <div className="w-0.5 h-full bg-gray-200 group-hover:bg-blue-500 transition-colors" />
+                            <div className="w-0.5 h-full bg-blue-400/50" />
                         </div>
                     </div>
 
                     {/* Column 2 - Independent Ledger */}
-                    <div style={{ width: `${colWidths[1]}%` }} className="relative flex flex-col p-1 md:p-2 border-r border-transparent">
+                    <div style={{ width: `${colWidths[1]}%` }} className="relative flex flex-col p-1 md:p-2 border-r border-transparent group">
                         <LedgerColumnView 
                             data={col2Ledger} 
                             footerLabel="收"
                         />
-                         {/* Resizer Handle 2 */}
+                         {/* Resizer Handle 2 - Invisible unless hovered */}
                         <div 
-                            className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center group no-print translate-x-1/2"
-                            onMouseDown={(e) => startResize(1, e)}
+                            className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print"
+                            onMouseDown={(e) => startResizeCol(1, e)}
                         >
-                            <div className="w-0.5 h-full bg-gray-200 group-hover:bg-blue-500 transition-colors" />
+                            <div className="w-0.5 h-full bg-blue-400/50" />
                         </div>
                     </div>
 
@@ -699,6 +759,17 @@ const ClientLedger: React.FC = () => {
                         />
                     </div>
                 </div>
+
+                {/* Bottom Padding - Adjustable */}
+                <div style={{ height: `${verticalPadding.bottom}px` }} className="relative group w-full mt-auto no-print-bg">
+                    <div 
+                        className="absolute top-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print"
+                        onMouseDown={(e) => startResizeVertical('bottom', e)}
+                    >
+                         <div className="w-8 h-1 bg-blue-400 rounded-full"></div>
+                    </div>
+                </div>
+
             </div>
         </div>
       </div>

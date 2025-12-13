@@ -1,5 +1,6 @@
 
 import { Client, LedgerRecord, AssetRecord, TransactionCategory } from '../types';
+import { supabase } from '../supabaseClient';
 
 const CLIENTS_KEY = 'ledger_clients';
 const RECORDS_KEY = 'ledger_records';
@@ -8,12 +9,35 @@ const CATEGORIES_KEY = 'ledger_categories';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
+// Initial Seed List
+const INITIAL_CLIENTS_DATA = [
+  { name: '林', code: 'Z05' },
+  { name: '国', code: 'PT217' },
+  { name: 'LIM', code: 'C09' },
+  { name: '林2', code: '8385' },
+  { name: '京', code: 'C15' },
+  { name: '香', code: 'Z15' },
+  { name: '莲', code: 'C08' },
+  { name: '仪', code: 'C17' },
+  { name: '彬', code: 'C19' },
+  { name: '妹', code: 'Z19' },
+  { name: '中', code: 'C13' },
+  { name: '顺', code: 'Z07' },
+  { name: '龙', code: 'C06' },
+  { name: '爱', code: 'Z20' },
+  { name: '群', code: 'C03' },
+  { name: '朱', code: 'Z03' },
+  { name: '兰', code: 'C04' },
+  { name: '印', code: '2839' },
+  { name: '伍', code: '-' },
+  { name: '张', code: '9486' },
+];
+
 // --- Categories ---
 export const getCategories = (): TransactionCategory[] => {
   const data = localStorage.getItem(CATEGORIES_KEY);
   let categories: TransactionCategory[] = data ? JSON.parse(data) : [];
 
-  // Define Defaults
   const defaults: TransactionCategory[] = [
     { id: '1', label: '收', operation: 'add', color: 'bg-green-100 text-green-800' },
     { id: '2', label: '中', operation: 'subtract', color: 'bg-red-100 text-red-800' },
@@ -24,39 +48,28 @@ export const getCategories = (): TransactionCategory[] => {
     { id: '7', label: '来', operation: 'subtract', color: 'bg-red-100 text-red-800' },
   ];
 
-  // If no categories exist, save defaults.
   if (categories.length === 0) {
     categories = defaults;
     localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories));
   } else {
-    // If categories exist, check if we need to migrate colors or add missing defaults
     let updated = false;
-    
-    // Check for '上欠'
     if (!categories.find(c => c.label === '上欠')) {
         categories.push({ id: generateId(), label: '上欠', operation: 'add', color: 'bg-green-100 text-green-800' });
         updated = true;
     }
-
-    // Check for '%'
     if (!categories.find(c => c.label === '%')) {
         categories.push({ id: generateId(), label: '%', operation: 'subtract', color: 'bg-red-100 text-red-800' });
         updated = true;
     }
-
-    // Check for '来'
     if (!categories.find(c => c.label === '来')) {
         categories.push({ id: generateId(), label: '来', operation: 'subtract', color: 'bg-red-100 text-red-800' });
         updated = true;
     }
-
-    // Update colors for 'add' operations to green if they are blue
     categories = categories.map(c => {
         if (c.operation === 'add' && c.color.includes('bg-blue-100')) {
             updated = true;
             return { ...c, color: 'bg-green-100 text-green-800' };
         }
-        // Update '出' to red if it is orange
         if (c.label === '出' && c.color.includes('bg-orange-100')) {
             updated = true;
             return { ...c, color: 'bg-red-100 text-red-800' };
@@ -68,7 +81,6 @@ export const getCategories = (): TransactionCategory[] => {
         localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories));
     }
   }
-
   return categories;
 };
 
@@ -89,64 +101,100 @@ export const deleteCategory = (id: string) => {
   localStorage.setItem(CATEGORIES_KEY, JSON.stringify(filtered));
 };
 
-// --- Clients ---
-export const getClients = (): Client[] => {
+// --- Clients (Async) ---
+// Now supports Supabase OR LocalStorage
+
+export const getClients = async (): Promise<Client[]> => {
+  if (supabase) {
+    const { data, error } = await supabase.from('clients').select('*').order('created_at', { ascending: true });
+    if (!error && data) return data as Client[];
+    console.error('Supabase fetch error:', error);
+  }
+  
+  // Fallback to LocalStorage
   const data = localStorage.getItem(CLIENTS_KEY);
   return data ? JSON.parse(data) : [];
 };
 
-export const saveClient = (client: Omit<Client, 'id' | 'createdAt'>): Client => {
-  const clients = getClients();
+export const saveClient = async (client: Omit<Client, 'id' | 'createdAt'>): Promise<Client> => {
+  const newClientPart = {
+      ...client,
+      createdAt: new Date().toISOString()
+  };
+
+  if (supabase) {
+    const { data, error } = await supabase.from('clients').insert([
+        { name: client.name, code: client.code, phone: client.phone }
+    ]).select();
+    
+    if (!error && data && data[0]) {
+        return data[0] as Client;
+    }
+    console.error('Supabase save error:', error);
+  }
+
+  // LocalStorage Fallback
+  const clients = JSON.parse(localStorage.getItem(CLIENTS_KEY) || '[]');
   const newClient: Client = {
-    ...client,
+    ...newClientPart,
     id: generateId(),
-    createdAt: new Date().toISOString(),
   };
   localStorage.setItem(CLIENTS_KEY, JSON.stringify([...clients, newClient]));
   return newClient;
 };
 
-export const updateClient = (id: string, updates: Partial<Client>) => {
-  const clients = getClients();
-  const updatedClients = clients.map(c => c.id === id ? { ...c, ...updates } : c);
-  localStorage.setItem(CLIENTS_KEY, JSON.stringify(updatedClients));
-};
+export const deleteClient = async (id: string) => {
+  if (supabase) {
+    const { error } = await supabase.from('clients').delete().eq('id', id);
+    if (error) console.error('Supabase delete error:', error);
+  }
 
-export const deleteClient = (id: string) => {
-  const clients = getClients();
-  const filtered = clients.filter(c => c.id !== id);
+  // Always sync local storage for consistency in hybrid mode
+  const clients = JSON.parse(localStorage.getItem(CLIENTS_KEY) || '[]');
+  const filtered = clients.filter((c: Client) => c.id !== id);
   localStorage.setItem(CLIENTS_KEY, JSON.stringify(filtered));
-  // Optionally clean up records associated with this client
+  
+  // Clean up ledger records (Local Only for now)
   const allRecords = getAllLedgerRecords();
   const keepRecords = allRecords.filter(r => r.clientId !== id);
   localStorage.setItem(RECORDS_KEY, JSON.stringify(keepRecords));
 };
 
-// --- Ledger Records (Core) ---
+export const seedInitialClients = async () => {
+    const clients = await getClients();
+    if (clients.length === 0) {
+        console.log("Seeding initial clients...");
+        // Sequential insert to maintain order roughly
+        for (const c of INITIAL_CLIENTS_DATA) {
+            await saveClient({
+                name: c.name,
+                code: c.code,
+                phone: ''
+            });
+        }
+        return true;
+    }
+    return false;
+};
 
-// Helper to normalize legacy records
+// --- Ledger Records (Sync Local for now) ---
+// Keeps the app responsive for transactions without needing full backend sync yet.
+
 const normalizeRecord = (r: any): LedgerRecord => {
-  // Ensure column exists, default to 'main'
   const record = { ...r, column: r.column || 'main' };
-
-  // Check if it's a valid new structure (operation exists, typeLabel exists even if empty string)
   if (record.operation && typeof record.typeLabel === 'string') {
       return record as LedgerRecord;
   }
-
-  // Migration logic for old data (pre-dynamic types)
   if ((r.shou || 0) > 0) return { ...record, typeLabel: '收', amount: r.shou, operation: 'add' };
   if ((r.zhiqian || 0) > 0) return { ...record, typeLabel: '支钱', amount: r.zhiqian, operation: 'add' };
   if ((r.zhong || 0) > 0) return { ...record, typeLabel: '中', amount: r.zhong, operation: 'subtract' };
   if ((r.dianhua || 0) > 0) return { ...record, typeLabel: '出', amount: r.dianhua, operation: 'subtract' }; 
-
-  // Fallback to entry with 0 amount
   return { ...record, typeLabel: 'Entry', amount: 0, operation: 'add' };
 };
 
 export const getNetAmount = (r: LedgerRecord): number => {
   const normalized = normalizeRecord(r);
-  if (normalized.operation === 'none') return 0; // Exclude from calculation
+  if (normalized.operation === 'none') return 0;
   return normalized.operation === 'add' ? normalized.amount : -normalized.amount;
 };
 
@@ -166,17 +214,12 @@ export const getAllLedgerRecords = (): LedgerRecord[] => {
 
 export const getClientBalance = (clientId: string): number => {
   const records = getLedgerRecords(clientId);
-  
-  // Logic: Check Panel 1 (col1) first
-  // "If Panel 1 has data, use that only, do not sum up all panel data"
   const col1Records = records.filter(r => r.column === 'col1' && r.isVisible);
   
-  // Check if Panel 1 has any 'visible' records. If so, its total is the client balance.
   if (col1Records.length > 0) {
     return col1Records.reduce((acc, r) => acc + getNetAmount(r), 0);
   }
   
-  // Fallback to Main Ledger (main)
   const mainRecords = records.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
   return mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
 };
@@ -217,9 +260,11 @@ export const saveAssetRecord = (record: Omit<AssetRecord, 'id'>): AssetRecord =>
   return newRecord;
 };
 
-export const seedData = () => {
-  // Always ensure categories are initialized
+export const seedData = async () => {
   getCategories();
-  
-  // Removed default client creation to start empty
+  // We do NOT await this in the main thread to avoid blocking UI render
+  // It will happen in the background
+  seedInitialClients().then(didSeed => {
+      if(didSeed) console.log("Seeding complete.");
+  });
 };

@@ -1,9 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Search, User, ChevronRight, Trash2, AlertTriangle } from 'lucide-react';
-import { getClients, saveClient, getClientBalance, deleteClient } from '../services/storageService';
-import { Client } from '../types';
+import { Plus, Search, User, ChevronRight, Trash2, AlertTriangle, CheckSquare, Square, Printer, ArrowLeft } from 'lucide-react';
+import { getClients, saveClient, getClientBalance, deleteClient, getLedgerRecords, getNetAmount } from '../services/storageService';
+import { Client, LedgerRecord } from '../types';
 
 const ClientList: React.FC = () => {
   const [clients, setClients] = useState<Client[]>([]);
@@ -11,6 +11,10 @@ const ClientList: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newClient, setNewClient] = useState({ code: '', name: '', phone: '' });
   const [balances, setBalances] = useState<Record<string, number>>({});
+  
+  // Selection & Bulk Print State
+  const [selectedClientIds, setSelectedClientIds] = useState<Set<string>>(new Set());
+  const [isBulkPrintMode, setIsBulkPrintMode] = useState(false);
   
   // Delete Modal State
   const [deleteConfirm, setDeleteConfirm] = useState<{isOpen: boolean, clientId: string | null}>({
@@ -56,13 +60,147 @@ const ClientList: React.FC = () => {
       deleteClient(deleteConfirm.clientId);
       loadData();
       setDeleteConfirm({ isOpen: false, clientId: null });
+      // Remove from selection if deleted
+      const newSelection = new Set(selectedClientIds);
+      newSelection.delete(deleteConfirm.clientId);
+      setSelectedClientIds(newSelection);
     }
+  };
+
+  const toggleSelectAll = () => {
+      if (selectedClientIds.size === filteredClients.length && filteredClients.length > 0) {
+          setSelectedClientIds(new Set());
+      } else {
+          setSelectedClientIds(new Set(filteredClients.map(c => c.id)));
+      }
+  };
+
+  const toggleSelectOne = (e: React.MouseEvent, id: string) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const newSet = new Set(selectedClientIds);
+      if (newSet.has(id)) {
+          newSet.delete(id);
+      } else {
+          newSet.add(id);
+      }
+      setSelectedClientIds(newSet);
   };
 
   const filteredClients = clients.filter(c => 
     c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     c.code.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // --- Bulk Print View Logic ---
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  // Helper component for bulk view (Duplicated from ClientLedger to ensure visual consistency in print mode)
+  const BulkLedgerSheet = ({ client }: { client: Client }) => {
+      const records = getLedgerRecords(client.id);
+
+      const calculateColumn = (columnKey: 'main' | 'col1' | 'col2') => {
+        const colRecords = records.filter(r => r.column === columnKey);
+        const processed = colRecords.map(r => {
+            const netChange = getNetAmount(r);
+            return { ...r, netChange };
+        });
+        const visibleProcessed = processed.filter(r => r.isVisible);
+        const finalBalance = visibleProcessed.reduce((acc, curr) => acc + curr.netChange, 0);
+        return { processed, finalBalance };
+      };
+
+      const col1Ledger = calculateColumn('col1');
+      const col2Ledger = calculateColumn('col2');
+      const mainLedger = calculateColumn('main');
+
+      const LedgerColumnView = ({ data, footerLabel = "收" }: { data: ReturnType<typeof calculateColumn>, footerLabel?: string }) => {
+        if (data.processed.length === 0) return <div className="flex-1 min-h-[50px]" />;
+        
+        const hasCalculableRecords = data.processed.some(r => r.isVisible && r.operation !== 'none');
+        const isNegative = data.finalBalance < 0;
+        let displayLabel = footerLabel;
+        if (isNegative && (footerLabel === '收' || footerLabel === '欠')) displayLabel = '补';
+        
+        return (
+            <div className="flex flex-col items-center">
+                <div className="flex flex-col space-y-0.5 w-fit items-end">
+                    {data.processed.map((r) => (
+                        <div key={r.id} className={`flex justify-end items-center py-0.5 relative gap-1 md:gap-2 ${!r.isVisible ? 'hidden' : ''}`}>
+                            <div className="text-xl font-bold uppercase tracking-wide text-gray-600">{r.typeLabel}</div>
+                            {r.description && <div className="text-sm text-gray-600 font-medium mr-2 max-w-[150px] truncate">{r.description}</div>}
+                            <div className={`text-2xl font-mono font-bold w-36 text-right ${r.operation === 'add' ? 'text-green-700' : r.operation === 'subtract' ? 'text-red-700' : 'text-gray-600'}`}>
+                                {r.operation === 'none' ? r.amount.toLocaleString(undefined, {minimumFractionDigits: 2}) : Math.abs(r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                {hasCalculableRecords && (
+                    <div className="mt-2 pt-1 flex flex-col items-end w-fit border-t-2 border-gray-900">
+                        <div className="flex items-center gap-2 justify-end">
+                            <span className="text-xl font-bold text-gray-900 uppercase">{displayLabel}</span>
+                            <span className={`text-3xl font-mono font-bold w-40 text-right ${data.finalBalance >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
+                                {data.finalBalance < 0 ? `(${Math.abs(data.finalBalance).toLocaleString(undefined, {minimumFractionDigits: 2})})` : data.finalBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}
+                            </span>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+      };
+
+      return (
+        <div className="bg-white border border-gray-200 shadow-sm min-h-[600px] relative text-lg font-serif mb-8 page-break">
+            <div style={{height: '40px'}} /> {/* Default Top Padding */}
+            <div className="px-8 pb-4 flex justify-between items-end mb-4">
+                <div>
+                    <h2 className="text-4xl font-bold text-gray-900 uppercase tracking-widest">{client.name}</h2>
+                    {client.code && <p className="text-gray-600 mt-1 font-mono text-xl">{client.code}</p>}
+                </div>
+            </div>
+            <div className="flex w-full min-h-[400px]">
+                 <div style={{ width: '33.33%' }} className="flex flex-col p-2 border-r border-transparent"><LedgerColumnView data={col1Ledger} footerLabel="收" /></div>
+                 <div style={{ width: '33.33%' }} className="flex flex-col p-2 border-r border-transparent"><LedgerColumnView data={col2Ledger} footerLabel="收" /></div>
+                 <div style={{ width: '33.34%' }} className="flex flex-col p-2 bg-gray-50/30"><LedgerColumnView data={mainLedger} footerLabel="欠" /></div>
+            </div>
+            <div style={{height: '40px'}} /> {/* Default Bottom Padding */}
+        </div>
+      );
+  };
+
+  // --- Render ---
+
+  if (isBulkPrintMode) {
+      const clientsToPrint = clients.filter(c => selectedClientIds.has(c.id));
+      return (
+          <div className="min-h-screen bg-gray-100">
+              <style>{`@media print { .page-break { page-break-after: always; margin-bottom: 0; } body { background-color: white; } }`}</style>
+              
+              {/* Print Toolbar */}
+              <div className="bg-white shadow-md p-4 sticky top-0 z-50 flex justify-between items-center no-print">
+                  <div className="flex items-center space-x-4">
+                      <button onClick={() => setIsBulkPrintMode(false)} className="flex items-center text-gray-600 hover:text-gray-900">
+                          <ArrowLeft className="mr-2" /> Back
+                      </button>
+                      <h1 className="text-xl font-bold">Print Preview ({clientsToPrint.length})</h1>
+                  </div>
+                  <button onClick={handlePrint} className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold flex items-center hover:bg-blue-700">
+                      <Printer className="mr-2" /> Print All
+                  </button>
+              </div>
+
+              {/* Print Content */}
+              <div id="printable-area" className="max-w-5xl mx-auto p-8 print:p-0 print:w-full">
+                  {clientsToPrint.map(client => (
+                      <BulkLedgerSheet key={client.id} client={client} />
+                  ))}
+              </div>
+          </div>
+      );
+  }
 
   return (
     <div>
@@ -71,18 +209,38 @@ const ClientList: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-800">Client Accounts</h1>
           <p className="text-gray-500">Manage client ledger access.</p>
         </div>
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center shadow-sm transition-colors"
-        >
-          <Plus size={20} className="mr-2" />
-          New Client
-        </button>
+        <div className="flex space-x-3">
+             {selectedClientIds.size > 0 && (
+                <button 
+                    onClick={() => setIsBulkPrintMode(true)}
+                    className="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg flex items-center shadow-sm transition-colors animate-in fade-in"
+                >
+                    <Printer size={20} className="mr-2" />
+                    Print Selected ({selectedClientIds.size})
+                </button>
+             )}
+            <button 
+            onClick={() => setIsModalOpen(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center shadow-sm transition-colors"
+            >
+            <Plus size={20} className="mr-2" />
+            New Client
+            </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="p-4 border-b border-gray-100">
-          <div className="relative">
+        <div className="p-4 border-b border-gray-100 flex items-center gap-4">
+          {/* Select All Checkbox */}
+          <button onClick={toggleSelectAll} className="p-2 text-gray-400 hover:text-gray-600">
+              {selectedClientIds.size > 0 && selectedClientIds.size === filteredClients.length ? (
+                  <CheckSquare size={20} className="text-blue-600" />
+              ) : (
+                  <Square size={20} />
+              )}
+          </button>
+          
+          <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
             <input 
               type="text" 
@@ -98,11 +256,21 @@ const ClientList: React.FC = () => {
           {filteredClients.length === 0 ? (
             <div className="p-8 text-center text-gray-500">No clients found.</div>
           ) : (
-            filteredClients.map(client => (
+            filteredClients.map(client => {
+              const isSelected = selectedClientIds.has(client.id);
+              return (
               <div 
                 key={client.id}
-                className="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors group relative"
+                className={`flex items-center justify-between p-4 hover:bg-gray-50 transition-colors group relative ${isSelected ? 'bg-blue-50/50' : ''}`}
               >
+                {/* Row Checkbox */}
+                <button 
+                    onClick={(e) => toggleSelectOne(e, client.id)} 
+                    className="p-2 mr-2 text-gray-400 hover:text-gray-600 z-10"
+                >
+                    {isSelected ? <CheckSquare size={20} className="text-blue-600" /> : <Square size={20} />}
+                </button>
+
                 <Link 
                   to={`/clients/${client.id}`}
                   className="flex-1 flex items-center justify-between"
@@ -143,7 +311,7 @@ const ClientList: React.FC = () => {
                   <Trash2 size={18} />
                 </button>
               </div>
-            ))
+            )})
           )}
         </div>
       </div>

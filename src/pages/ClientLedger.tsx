@@ -49,6 +49,7 @@ const ClientLedger: React.FC = () => {
   const [draggedCatIndex, setDraggedCatIndex] = useState<number | null>(null);
 
   // Layout & Resizing State
+  // Default padding state. In a real app, we might persist this too.
   const [colWidths, setColWidths] = useState<number[]>([33.33, 33.33, 33.34]);
   const [verticalPadding, setVerticalPadding] = useState<{top: number, bottom: number}>({ top: 40, bottom: 40 });
   const containerRef = useRef<HTMLDivElement>(null);
@@ -72,13 +73,16 @@ const ClientLedger: React.FC = () => {
   } | null>(null);
 
   useEffect(() => {
-    if (id) {
-      const clients = getClients();
-      const found = clients.find(c => c.id === id);
-      setClient(found || null);
-      loadRecords();
-      setCategories(getCategories());
+    const fetchClient = async () => {
+        if (id) {
+            const clients = await getClients();
+            const found = clients.find(c => c.id === id);
+            setClient(found || null);
+            loadRecords();
+            setCategories(getCategories());
+        }
     }
+    fetchClient();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -121,12 +125,7 @@ const ClientLedger: React.FC = () => {
             const newTop = Math.max(0, startHeight + diffY); // Min 0px
             setVerticalPadding(prev => ({ ...prev, top: newTop }));
         } else {
-             const newBottom = Math.max(0, startHeight - diffY); // Inverted for bottom drag handle (drag up to increase? No, usually drag down to increase bottom padding if handle is at bottom, but here handle is top of bottom spacer)
-             // Let's assume handle is at the TOP of the bottom spacer. Dragging down decreases height (pushes spacer down?), Dragging up increases height.
-             // Wait, standard resize logic: 
-             // Top Spacer: Handle at bottom. Drag down -> Increase Height.
-             // Bottom Spacer: Handle at top. Drag down -> Decrease Height (pushes content down? no). 
-             // Let's implement: Bottom Spacer Handle is at the Top of the spacer. Dragging UP increases spacer height. Dragging DOWN decreases spacer height.
+             const newBottom = Math.max(0, startHeight - diffY); // Inverted for bottom drag handle 
              setVerticalPadding(prev => ({ ...prev, bottom: Math.max(0, startHeight - diffY) }));
         }
     }
