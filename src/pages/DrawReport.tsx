@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { getClients, getDrawBalances, saveDrawBalance } from '../services/storageService';
+import { getClients, getDrawBalances, saveDrawBalance, INITIAL_CLIENTS_DATA } from '../services/storageService';
 import { Client } from '../types';
 import { Calendar, ChevronLeft, ChevronRight, Filter, Save } from 'lucide-react';
 
@@ -27,6 +27,46 @@ const DRAW_DATES: Record<number, { w: number[], s1: number[], s2: number[], t: n
   11: { w: [3,10,17,24,31], s1: [6,13,20,27], s2: [7,14,21,28], t: [30] }, // DEC
 };
 
+// Extracted Component to prevent re-mounting on every render
+const ClientInputRow = React.memo(({ client, value, onChange, onBlur }: { 
+    client: Client, 
+    value: string, 
+    onChange: (id: string, val: string) => void,
+    onBlur: (id: string) => void
+}) => {
+    const numVal = parseFloat(value);
+    const isPositive = !isNaN(numVal) && numVal > 0;
+    const isNegative = !isNaN(numVal) && numVal < 0;
+
+    return (
+        <div className="flex items-center justify-between p-3 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+            <div className="flex-1">
+                <div className="font-bold text-gray-800 text-sm">{client.name}</div>
+                <div className="text-xs text-gray-500 font-mono">{client.code}</div>
+            </div>
+            <div className="w-40">
+                    <input 
+                    type="number"
+                    step="any"
+                    placeholder="0.00"
+                    value={value}
+                    onChange={(e) => onChange(client.id, e.target.value)}
+                    onBlur={() => onBlur(client.id)}
+                    onFocus={(e) => e.target.select()}
+                    className={`
+                        w-full px-2 py-1 text-right font-mono font-bold rounded border
+                        focus:outline-none focus:ring-2 focus:ring-blue-500
+                        [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none
+                        ${isPositive ? 'text-green-600 border-green-200 bg-green-50/50' : 
+                        isNegative ? 'text-red-600 border-red-200 bg-red-50/50' : 
+                        'text-gray-600 border-gray-200 bg-white'}
+                    `}
+                    />
+            </div>
+        </div>
+    );
+});
+
 const DrawReport: React.FC = () => {
   const [currentMonth, setCurrentMonth] = useState(0); 
   const [selectedDate, setSelectedDate] = useState<string>(''); 
@@ -37,14 +77,23 @@ const DrawReport: React.FC = () => {
 
   useEffect(() => {
     fetchClients();
-    const today = new Date();
-    if (today.getFullYear() === 2025) {
-        setCurrentMonth(today.getMonth());
-    }
+    
+    // Hardcode default selection for preview
+    setSelectedDate(`${YEAR}-01-01`);
+    setCurrentMonth(0); // Ensure Jan is shown
   }, []);
 
   const fetchClients = async () => {
-    const list = await getClients();
+    let list = await getClients();
+    
+    // Hardcode fallback if empty for preview purposes
+    if (list.length === 0) {
+        list = INITIAL_CLIENTS_DATA.map((c, i) => ({
+            ...c,
+            id: `demo_${i}`,
+            createdAt: new Date().toISOString()
+        }));
+    }
     setClients(list);
   };
 
@@ -152,41 +201,6 @@ const DrawReport: React.FC = () => {
   const leftClients = clients.slice(0, midPoint);
   const rightClients = clients.slice(midPoint);
 
-  const ClientInputRow = ({ client }: { client: Client }) => {
-      const val = clientBalances[client.id] || '';
-      const numVal = parseFloat(val);
-      const isPositive = !isNaN(numVal) && numVal > 0;
-      const isNegative = !isNaN(numVal) && numVal < 0;
-
-      return (
-          <div className="flex items-center justify-between p-3 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
-              <div className="flex-1">
-                  <div className="font-bold text-gray-800 text-sm">{client.name}</div>
-                  <div className="text-xs text-gray-500 font-mono">{client.code}</div>
-              </div>
-              <div className="w-40">
-                   <input 
-                      type="number"
-                      step="any"
-                      placeholder="0.00"
-                      value={val}
-                      onChange={(e) => handleInputChange(client.id, e.target.value)}
-                      onBlur={() => handleInputBlur(client.id)}
-                      onFocus={(e) => e.target.select()}
-                      className={`
-                          w-full px-2 py-1 text-right font-mono font-bold rounded border
-                          focus:outline-none focus:ring-2 focus:ring-blue-500
-                          [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none
-                          ${isPositive ? 'text-green-600 border-green-200 bg-green-50/50' : 
-                            isNegative ? 'text-red-600 border-red-200 bg-red-50/50' : 
-                            'text-gray-600 border-gray-200 bg-white'}
-                      `}
-                   />
-              </div>
-          </div>
-      );
-  };
-
   const total = calculateTotal();
 
   return (
@@ -230,12 +244,28 @@ const DrawReport: React.FC = () => {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-0">
                                     {/* Column 1 */}
                                     <div className="flex flex-col">
-                                        {leftClients.map(c => <ClientInputRow key={c.id} client={c} />)}
+                                        {leftClients.map(c => (
+                                            <ClientInputRow 
+                                                key={c.id} 
+                                                client={c} 
+                                                value={clientBalances[c.id] || ''} 
+                                                onChange={handleInputChange}
+                                                onBlur={handleInputBlur}
+                                            />
+                                        ))}
                                     </div>
                                     
                                     {/* Column 2 */}
                                     <div className="flex flex-col border-t md:border-t-0 border-gray-100 pt-4 md:pt-0">
-                                        {rightClients.map(c => <ClientInputRow key={c.id} client={c} />)}
+                                        {rightClients.map(c => (
+                                            <ClientInputRow 
+                                                key={c.id} 
+                                                client={c} 
+                                                value={clientBalances[c.id] || ''} 
+                                                onChange={handleInputChange}
+                                                onBlur={handleInputBlur}
+                                            />
+                                        ))}
                                     </div>
                                 </div>
                                 {clients.length === 0 && <div className="text-center text-gray-400 py-8">No clients found.</div>}

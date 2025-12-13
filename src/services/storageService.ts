@@ -10,8 +10,8 @@ const DRAW_BALANCES_KEY = 'ledger_draw_balances';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
-// Initial Seed List (Kept for reference or local fallback)
-const INITIAL_CLIENTS_DATA = [
+// Initial Seed List (Exported for UI fallback)
+export const INITIAL_CLIENTS_DATA = [
   { name: '林', code: 'Z05' },
   { name: '国', code: 'PT217' },
   { name: 'LIM', code: 'C09' },
@@ -319,4 +319,5 @@ export const saveAssetRecord = (record: Omit<AssetRecord, 'id'>): AssetRecord =>
 
 export const seedData = async () => {
   getCategories();
+  await seedInitialClients(); // Ensure we have data
 };
