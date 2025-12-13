@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getClients, getDrawBalances, saveDrawBalance, INITIAL_CLIENTS_DATA } from '../services/storageService';
 import { Client } from '../types';
 import { Calendar, ChevronLeft, ChevronRight, Filter, Save } from 'lucide-react';
@@ -24,7 +24,7 @@ const DRAW_DATES: Record<number, { w: number[], s1: number[], s2: number[], t: n
   8: { w: [3,10,17,24], s1: [6,13,20,27], s2: [7,14,21,28], t: [] }, // SEP
   9: { w: [1,8,15,22,29], s1: [4,11,18,25], s2: [5,12,19,26], t: [28] }, // OCT
   10: { w: [5,12,19,26], s1: [1,8,15,22,29], s2: [2,9,16,23,30], t: [] }, // NOV
-  11: { w: [10,17,24,31], s1: [6,13,20,27], s2: [7,14,21,28], t: [2, 30] }, // DEC - Modified to match user request 2,6,7 (removed 3)
+  11: { w: [3,10,17,24,31], s1: [6,13,20,27], s2: [7,14,21,28], t: [30] }, // DEC - Updated to 3, 6, 7 pattern
 };
 
 // Helper to calculate ISO Week Number
@@ -88,8 +88,6 @@ const DrawReport: React.FC = () => {
     
     // Auto-select nearest date to "Today"
     const now = new Date();
-    // Use current year if we are in 2025 (or future), otherwise 2025 is target
-    // Actually our dataset is hardcoded to YEAR=2025
     let minDiff = Infinity;
     let closestDateStr = `${YEAR}-01-01`;
     let closestMonth = 0;
@@ -188,14 +186,12 @@ const DrawReport: React.FC = () => {
   const nextMonth = () => setCurrentMonth(prev => Math.min(11, prev + 1));
   const prevMonth = () => setCurrentMonth(prev => Math.max(0, prev - 1));
 
-  const renderDateButtons = () => {
-      const data = DRAW_DATES[currentMonth];
-      if (!data) return null;
-
-      // Flatten and Sort Days
-      const allDays = Array.from(new Set([...data.w, ...data.s1, ...data.s2, ...data.t])).sort((a,b) => a-b);
-      
-      // Group by Week Number
+  // --- Week Grouping Logic ---
+  
+  const currentMonthData = DRAW_DATES[currentMonth];
+  const currentMonthWeeks = useMemo(() => {
+      if (!currentMonthData) return {};
+      const allDays = Array.from(new Set([...currentMonthData.w, ...currentMonthData.s1, ...currentMonthData.s2, ...currentMonthData.t])).sort((a,b) => a-b);
       const weeks: Record<number, number[]> = {};
       allDays.forEach(day => {
           const date = new Date(YEAR, currentMonth, day);
@@ -203,9 +199,18 @@ const DrawReport: React.FC = () => {
           if (!weeks[weekNum]) weeks[weekNum] = [];
           weeks[weekNum].push(day);
       });
-      
-      // Sort week numbers
-      const sortedWeekNums = Object.keys(weeks).map(Number).sort((a,b) => a-b);
+      return weeks;
+  }, [currentMonth, currentMonthData]);
+
+  // Identify active week based on selectedDate
+  const activeDay = selectedDate ? parseInt(selectedDate.split('-')[2]) : 0;
+  const activeWeekNum = Object.keys(currentMonthWeeks).find(w => currentMonthWeeks[parseInt(w)].includes(activeDay));
+  const activeWeekDays = activeWeekNum ? currentMonthWeeks[parseInt(activeWeekNum)] : [];
+
+  const renderDateButtons = () => {
+      if (!currentMonthData) return null;
+
+      const sortedWeekNums = Object.keys(currentMonthWeeks).map(Number).sort((a,b) => a-b);
 
       return (
           <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
@@ -215,32 +220,28 @@ const DrawReport: React.FC = () => {
                   <button onClick={nextMonth} disabled={currentMonth === 11} className="p-2 hover:bg-gray-100 rounded-full disabled:opacity-30"><ChevronRight /></button>
               </div>
               
-              <div className="space-y-4">
-                  {sortedWeekNums.map((weekNum, index) => (
-                      <div key={weekNum} className="flex flex-col gap-2">
-                          <span className="text-xs font-bold uppercase text-gray-400 tracking-wider">Week {index + 1}</span>
-                          <div className="flex flex-wrap gap-2">
-                              {weeks[weekNum].map(d => {
-                                  const dateStr = `${YEAR}-${String(currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                                  const isSelected = selectedDate === dateStr;
-                                  return (
-                                    <button
-                                        key={d}
-                                        onClick={() => handleDateClick(d)}
-                                        className={`
-                                            w-10 h-10 rounded-lg font-bold shadow-sm transition-all
-                                            ${isSelected 
-                                                ? 'bg-blue-600 text-white ring-2 ring-blue-300 transform scale-105' 
-                                                : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'}
-                                        `}
-                                    >
-                                        {d}
-                                    </button>
-                                  );
-                              })}
-                          </div>
-                      </div>
-                  ))}
+              <div className="space-y-2">
+                  {sortedWeekNums.map((weekNum) => {
+                      const days = currentMonthWeeks[weekNum];
+                      const daysStr = days.join(', ');
+                      const isActiveWeek = days.includes(activeDay);
+
+                      return (
+                        <button
+                            key={weekNum}
+                            onClick={() => handleDateClick(days[0])} // Select first day of week on click
+                            className={`
+                                w-full p-3 rounded-lg font-bold text-sm transition-all flex justify-between items-center
+                                ${isActiveWeek
+                                    ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-300' 
+                                    : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'}
+                            `}
+                        >
+                            <span>Week {Object.keys(currentMonthWeeks).indexOf(String(weekNum)) + 1}</span>
+                            <span className={`text-xs ${isActiveWeek ? 'text-blue-200' : 'text-gray-400'}`}>{daysStr}</span>
+                        </button>
+                      );
+                  })}
               </div>
           </div>
       );
@@ -259,7 +260,7 @@ const DrawReport: React.FC = () => {
             <h1 className="text-2xl font-bold text-gray-800 mb-2 flex items-center">
                 <Calendar className="mr-2" /> Draw Reports
             </h1>
-            <p className="text-gray-500 mb-6 text-sm">Select a date to enter client balances.</p>
+            <p className="text-gray-500 mb-6 text-sm">Select a week to enter balances.</p>
             {renderDateButtons()}
        </div>
 
@@ -273,16 +274,42 @@ const DrawReport: React.FC = () => {
             ) : (
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col flex-1 relative">
                     {/* Header */}
-                    <div className="bg-gray-50 p-4 border-b border-gray-200 flex justify-between items-center sticky top-0 z-10">
-                        <div>
-                            <h2 className="text-xl font-bold text-gray-900">Draw Date Report</h2>
-                            <p className="text-blue-600 font-medium text-sm">
-                                {new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                            </p>
+                    <div className="bg-gray-50 p-4 border-b border-gray-200 sticky top-0 z-10">
+                        <div className="flex justify-between items-center mb-4">
+                            <div>
+                                <h2 className="text-xl font-bold text-gray-900">Draw Date Report</h2>
+                                <p className="text-blue-600 font-medium text-sm">
+                                    {new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                                </p>
+                            </div>
+                            <div className="flex items-center text-xs text-gray-500 bg-yellow-50 px-3 py-1 rounded-full border border-yellow-200">
+                                <Save size={14} className="mr-1" /> Auto-saves on exit
+                            </div>
                         </div>
-                        <div className="flex items-center text-xs text-gray-500 bg-yellow-50 px-3 py-1 rounded-full border border-yellow-200">
-                             <Save size={14} className="mr-1" /> Auto-saves on exit
-                        </div>
+
+                        {/* Date Tabs (Pills) for Active Week */}
+                        {activeWeekDays.length > 0 && (
+                            <div className="flex space-x-2">
+                                {activeWeekDays.map(day => {
+                                    const dateStr = `${YEAR}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                                    const isActive = selectedDate === dateStr;
+                                    return (
+                                        <button
+                                            key={day}
+                                            onClick={() => handleDateClick(day)}
+                                            className={`
+                                                px-4 py-1.5 rounded-full text-sm font-bold transition-all
+                                                ${isActive 
+                                                    ? 'bg-blue-600 text-white shadow-sm' 
+                                                    : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'}
+                                            `}
+                                        >
+                                            {day}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </div>
 
                     {loading ? (
