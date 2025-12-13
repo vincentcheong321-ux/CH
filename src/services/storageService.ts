@@ -9,7 +9,7 @@ const CATEGORIES_KEY = 'ledger_categories';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
-// Initial Seed List
+// Initial Seed List (Kept for reference or local fallback)
 const INITIAL_CLIENTS_DATA = [
   { name: '林', code: 'Z05' },
   { name: '国', code: 'PT217' },
@@ -32,6 +32,14 @@ const INITIAL_CLIENTS_DATA = [
   { name: '伍', code: '-' },
   { name: '张', code: '9486' },
 ];
+
+// --- Helper to map Supabase result to Client type ---
+const mapSupabaseClient = (data: any): Client => {
+  return {
+    ...data,
+    createdAt: data.created_at || data.createdAt || new Date().toISOString()
+  };
+};
 
 // --- Categories ---
 export const getCategories = (): TransactionCategory[] => {
@@ -102,12 +110,14 @@ export const deleteCategory = (id: string) => {
 };
 
 // --- Clients (Async) ---
-// Now supports Supabase OR LocalStorage
 
 export const getClients = async (): Promise<Client[]> => {
   if (supabase) {
     const { data, error } = await supabase.from('clients').select('*').order('created_at', { ascending: true });
-    if (!error && data) return data as Client[];
+    if (!error && data) {
+        // Map created_at to createdAt
+        return data.map(mapSupabaseClient);
+    }
     console.error('Supabase fetch error:', error);
   }
   
@@ -123,12 +133,13 @@ export const saveClient = async (client: Omit<Client, 'id' | 'createdAt'>): Prom
   };
 
   if (supabase) {
+    // We let Supabase generate the ID and CreatedAt
     const { data, error } = await supabase.from('clients').insert([
         { name: client.name, code: client.code, phone: client.phone }
     ]).select();
     
     if (!error && data && data[0]) {
-        return data[0] as Client;
+        return mapSupabaseClient(data[0]);
     }
     console.error('Supabase save error:', error);
   }
@@ -161,7 +172,10 @@ export const deleteClient = async (id: string) => {
 };
 
 export const seedInitialClients = async () => {
+    // Check if we have clients in the DB
     const clients = await getClients();
+    
+    // Only seed if absolutely empty
     if (clients.length === 0) {
         console.log("Seeding initial clients...");
         // Sequential insert to maintain order roughly
@@ -262,9 +276,7 @@ export const saveAssetRecord = (record: Omit<AssetRecord, 'id'>): AssetRecord =>
 
 export const seedData = async () => {
   getCategories();
-  // We do NOT await this in the main thread to avoid blocking UI render
-  // It will happen in the background
-  seedInitialClients().then(didSeed => {
-      if(didSeed) console.log("Seeding complete.");
-  });
+  // seedInitialClients is manually triggered or can be auto-triggered here
+  // But since we provided SQL, we don't strictly need auto-seeding on load anymore
+  // keeping it available for manual trigger in UI
 };
