@@ -331,9 +331,12 @@ const ClientLedger: React.FC = () => {
       // We show footer if at least one visible record is NOT 'none'.
       const hasCalculableRecords = data.processed.some(r => r.isVisible && r.operation !== 'none');
 
-      // Dynamic Label Logic: If Total is negative and label is '收', change to '补'
+      // Dynamic Label Logic: If Total is negative and label is '收' OR '欠', change to '补'
       const isNegative = data.finalBalance < 0;
-      const displayLabel = (footerLabel === '收' && isNegative) ? '补' : footerLabel;
+      let displayLabel = footerLabel;
+      if (isNegative && (footerLabel === '收' || footerLabel === '欠')) {
+          displayLabel = '补';
+      }
       
       return (
       <div className="flex flex-col items-center">
@@ -369,9 +372,7 @@ const ClientLedger: React.FC = () => {
                           r.operation === 'subtract' ? 'text-red-700' : 'text-gray-600'}`}>
                         {r.operation === 'none' 
                             ? r.amount.toLocaleString(undefined, {minimumFractionDigits: 2})
-                            : r.netChange < 0 
-                                ? `(${Math.abs(r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2})})`
-                                : r.netChange.toLocaleString(undefined, {minimumFractionDigits: 2})
+                            : Math.abs(r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2})
                         }
                     </div>
                 </div>

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
@@ -49,7 +50,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
         no-print
       `}>
         <div className="h-16 flex items-center justify-between px-6 bg-slate-800">
-          <span className="text-xl font-bold tracking-wider">LedgerPro</span>
+          <span className="text-xl font-bold tracking-wider">CH</span>
           <button 
             onClick={() => setIsSidebarOpen(false)} 
             className="lg:hidden text-gray-400 hover:text-white"
