@@ -238,6 +238,32 @@ export const getClientBalance = (clientId: string): number => {
   return mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
 };
 
+// New Helper: Get daily balance for a specific date
+export const getClientDailyBalance = (clientId: string, dateStr: string): number => {
+    // dateStr expected in YYYY-MM-DD format
+    const records = getLedgerRecords(clientId);
+    
+    // Filter records that match the local date
+    const dailyRecords = records.filter(r => {
+        if (!r.isVisible) return false;
+        
+        // Convert record ISO to YYYY-MM-DD (local approximation or explicit string match)
+        // Since input dateStr is likely YYYY-MM-DD from the UI buttons
+        const recDate = new Date(r.date);
+        // We use string manipulation for stability if timezone is tricky, 
+        // but robustly:
+        const year = recDate.getFullYear();
+        const month = String(recDate.getMonth() + 1).padStart(2, '0');
+        const day = String(recDate.getDate()).padStart(2, '0');
+        const recDateStr = `${year}-${month}-${day}`;
+        
+        return recDateStr === dateStr;
+    });
+
+    // Calculate sum for this day
+    return dailyRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
+};
+
 export const saveLedgerRecord = (record: Omit<LedgerRecord, 'id'>): LedgerRecord => {
   const data = localStorage.getItem(RECORDS_KEY);
   const allRecords: LedgerRecord[] = data ? JSON.parse(data) : [];

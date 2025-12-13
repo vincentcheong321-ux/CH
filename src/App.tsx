@@ -1,9 +1,11 @@
+
 import React, { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import ClientList from './pages/ClientList';
 import ClientLedger from './pages/ClientLedger';
+import DrawReport from './pages/DrawReport';
 import Summary from './pages/Summary';
 import CashFlow from './pages/CashFlow';
 import Login from './pages/Login';
@@ -59,6 +61,14 @@ const App: React.FC = () => {
           isAuthenticated ? (
             <Layout onLogout={handleLogout}>
               <ClientLedger />
+            </Layout>
+          ) : <Navigate to="/login" />
+        } />
+
+        <Route path="/draw-report" element={
+          isAuthenticated ? (
+            <Layout onLogout={handleLogout}>
+              <DrawReport />
             </Layout>
           ) : <Navigate to="/login" />
         } />
