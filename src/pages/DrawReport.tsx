@@ -3,38 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getClients, getDrawBalances, saveDrawBalance, INITIAL_CLIENTS_DATA } from '../services/storageService';
 import { Client } from '../types';
 import { Calendar, ChevronLeft, ChevronRight, Filter, Save, Layers } from 'lucide-react';
-
-const YEAR = 2025;
-
-const MONTH_NAMES = [
-  "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE",
-  "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"
-];
-
-// Data Structure: [Month Index 0-11]: { type: [days] }
-const DRAW_DATES: Record<number, { w: number[], s1: number[], s2: number[], t: number[] }> = {
-  0: { w: [1,8,15,22,29], s1: [4,11,18,25], s2: [5,12,19,26], t: [28] }, // JAN
-  1: { w: [5,12,19,26], s1: [1,8,15,22], s2: [2,9,16,23], t: [4,11] }, // FEB
-  2: { w: [5,12,19,26], s1: [1,8,15,22,29], s2: [2,9,16,23,30], t: [] }, // MAR
-  3: { w: [2,9,16,23,30], s1: [5,12,19,26], s2: [6,13,20,27], t: [29] }, // APR
-  4: { w: [7,14,21,28], s1: [3,10,17,24,31], s2: [4,11,18,25], t: [27] }, // MAY
-  5: { w: [4,11,18,25], s1: [7,14,21,28], s2: [1,8,15,22,29], t: [] }, // JUN
-  6: { w: [2,9,16,23,30], s1: [5,12,19,26], s2: [6,13,20,27], t: [29] }, // JUL
-  7: { w: [6,13,20,27], s1: [2,9,16,23,30], s2: [3,10,17,24,31], t: [] }, // AUG
-  8: { w: [3,10,17,24], s1: [6,13,20,27], s2: [7,14,21,28], t: [] }, // SEP
-  9: { w: [1,8,15,22,29], s1: [4,11,18,25], s2: [5,12,19,26], t: [28] }, // OCT
-  10: { w: [5,12,19,26], s1: [1,8,15,22,29], s2: [2,9,16,23,30], t: [] }, // NOV
-  11: { w: [3,10,17,24,31], s1: [6,13,20,27], s2: [7,14,21,28], t: [] }, // DEC - Fixed to 3, 6, 7 pattern
-};
-
-// Helper to calculate ISO Week Number
-const getWeekNumber = (d: Date) => {
-    const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-    const dayNum = date.getUTCDay() || 7;
-    date.setUTCDate(date.getUTCDate() + 4 - dayNum);
-    const yearStart = new Date(Date.UTC(date.getUTCFullYear(),0,1));
-    return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1)/7);
-};
+import { DRAW_DATES, MONTH_NAMES, YEAR, getWeeksForMonth } from '../utils/reportUtils';
 
 // Extracted Component to prevent re-mounting on every render
 const ClientInputRow = React.memo(({ client, value, onChange, onBlur }: { 
@@ -187,25 +156,18 @@ const DrawReport: React.FC = () => {
   const prevMonth = () => setCurrentMonth(prev => Math.max(0, prev - 1));
 
   // --- Week Grouping Logic ---
-  
   const currentMonthData = DRAW_DATES[currentMonth];
   const currentMonthWeeks = useMemo(() => {
-      if (!currentMonthData) return {};
-      const allDays = Array.from(new Set([...currentMonthData.w, ...currentMonthData.s1, ...currentMonthData.s2, ...currentMonthData.t])).sort((a,b) => a-b);
-      const weeks: Record<number, number[]> = {};
-      allDays.forEach(day => {
-          const date = new Date(YEAR, currentMonth, day);
-          const weekNum = getWeekNumber(date);
-          if (!weeks[weekNum]) weeks[weekNum] = [];
-          weeks[weekNum].push(day);
-      });
-      return weeks;
-  }, [currentMonth, currentMonthData]);
+      return getWeeksForMonth(currentMonth);
+  }, [currentMonth]);
 
   // Identify active week based on selectedDate
   const activeDay = selectedDate ? parseInt(selectedDate.split('-')[2]) : 0;
   const activeWeekNum = Object.keys(currentMonthWeeks).find(w => currentMonthWeeks[parseInt(w)].includes(activeDay));
   const activeWeekDays = activeWeekNum ? currentMonthWeeks[parseInt(activeWeekNum)] : [];
+  
+  // Calculate visual index for "Week X" label
+  const activeWeekIndex = activeWeekNum ? Object.keys(currentMonthWeeks).map(Number).sort((a,b) => a-b).indexOf(Number(activeWeekNum)) : 0;
 
   const renderDateButtons = () => {
       if (!currentMonthData) return null;
@@ -281,10 +243,12 @@ const DrawReport: React.FC = () => {
                             <div>
                                 <h2 className="text-xl font-bold text-gray-900 flex items-center">
                                     <Layers size={20} className="mr-2 text-blue-600" />
-                                    Draw Date Report
+                                    {/* Updated Header to match Sidebar Structure */}
+                                    Weekly Report - Week {activeWeekIndex + 1}
                                 </h2>
                                 <p className="text-gray-500 font-medium text-sm mt-1">
-                                    Week of {MONTH_NAMES[currentMonth]} {activeWeekDays.length > 0 ? activeWeekDays[0] : ''}, {YEAR}
+                                    {/* Explicitly list dates to match sidebar detail */}
+                                    {MONTH_NAMES[currentMonth]}: {activeWeekDays.join(', ')}
                                 </p>
                             </div>
                             <div className="flex items-center text-xs text-gray-500 bg-yellow-50 px-3 py-1 rounded-full border border-yellow-200">

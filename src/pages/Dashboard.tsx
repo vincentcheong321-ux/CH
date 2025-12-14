@@ -11,8 +11,9 @@ import {
   LineChart,
   Line
 } from 'recharts';
-import { getAllLedgerRecords, getAssetRecords, getNetAmount, getClients, getClientBalance, getTotalDrawReceivables } from '../services/storageService';
+import { getAllLedgerRecords, getAssetRecords, getNetAmount, getClients, getClientBalance, getTotalDrawReceivables, getAllDrawRecords } from '../services/storageService';
 import { TrendingUp, TrendingDown, DollarSign, Wallet } from 'lucide-react';
+import { getWeeksForMonth, YEAR, MONTH_NAMES } from '../utils/reportUtils';
 
 const Dashboard: React.FC = () => {
   const [stats, setStats] = useState({
@@ -22,12 +23,14 @@ const Dashboard: React.FC = () => {
     clientDebt: 0
   });
   const [chartData, setChartData] = useState<any[]>([]);
+  const [weeklyChartData, setWeeklyChartData] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
         const clients = await getClients();
         const assets = getAssetRecords();
         const drawTotal = await getTotalDrawReceivables();
+        const allDraws = await getAllDrawRecords();
 
         // Calculate Ledger Balance (Old method)
         let ledgerBalanceSum = 0;
@@ -51,6 +54,7 @@ const Dashboard: React.FC = () => {
         clientDebt: totalReceivables
         });
 
+        // --- Ledger Line Chart Data ---
         const ledgers = getAllLedgerRecords();
         const data = ledgers.slice(-10).map((l, i) => ({
         name: `T-${i}`,
@@ -58,6 +62,29 @@ const Dashboard: React.FC = () => {
         volume: l.amount 
         }));
         setChartData(data);
+
+        // --- Weekly Draw Chart Data ---
+        const currentMonthIndex = new Date().getMonth();
+        const weeks = getWeeksForMonth(currentMonthIndex);
+        
+        const wData = Object.keys(weeks).sort((a,b)=>Number(a)-Number(b)).map((weekNum, index) => {
+            const days = weeks[Number(weekNum)];
+            // Sum all draws that match current year, current month, and the specific days in this week
+            const weekTotal = allDraws.reduce((acc, r) => {
+                const d = new Date(r.date);
+                if (d.getFullYear() === YEAR && d.getMonth() === currentMonthIndex && days.includes(d.getDate())) {
+                    return acc + r.balance;
+                }
+                return acc;
+            }, 0);
+            
+            return {
+                name: `Week ${index + 1}`,
+                total: weekTotal,
+                label: `Week ${index + 1}`
+            };
+        });
+        setWeeklyChartData(wData);
     };
 
     fetchData();
@@ -79,6 +106,8 @@ const Dashboard: React.FC = () => {
       </div>
     </div>
   );
+
+  const currentMonthName = MONTH_NAMES[new Date().getMonth()];
 
   return (
     <div className="space-y-6">
@@ -116,6 +145,28 @@ const Dashboard: React.FC = () => {
           color="text-red-600"
           subText="Recorded expenses/withdrawals"
         />
+      </div>
+
+      {/* New Row: Weekly Report Chart */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-3 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+            <h3 className="text-lg font-bold text-gray-800 mb-2">Weekly Draw Reports</h3>
+            <p className="text-sm text-gray-500 mb-6">Total balances per week for {currentMonthName} {YEAR}</p>
+            <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={weeklyChartData}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                        <XAxis dataKey="name" axisLine={false} tickLine={false} />
+                        <YAxis axisLine={false} tickLine={false} tick={{fill: '#9ca3af'}} />
+                        <Tooltip 
+                            formatter={(value: number) => [`$${value.toLocaleString()}`, 'Total Balance']}
+                            cursor={{fill: '#f3f4f6'}}
+                        />
+                        <Bar dataKey="total" fill="#4f46e5" radius={[4, 4, 0, 0]} barSize={60} />
+                    </BarChart>
+                </ResponsiveContainer>
+            </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

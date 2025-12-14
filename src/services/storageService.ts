@@ -274,6 +274,23 @@ export const getTotalDrawReceivables = async (): Promise<number> => {
   return allData.reduce((acc: number, curr: any) => acc + (Number(curr.balance) || 0), 0);
 };
 
+export const getAllDrawRecords = async (): Promise<{ date: string, balance: number }[]> => {
+  if (supabase) {
+    const { data, error } = await supabase.from('draw_balances').select('date, balance');
+    if (!error && data) {
+      return data.map((row: any) => ({
+        date: row.date,
+        balance: Number(row.balance)
+      }));
+    }
+  }
+  const allData = JSON.parse(localStorage.getItem(DRAW_BALANCES_KEY) || '[]');
+  return allData.map((row: any) => ({
+    date: row.date,
+    balance: Number(row.balance)
+  }));
+}
+
 export const saveDrawBalance = async (date: string, clientId: string, balance: number) => {
   if (supabase) {
     const { error } = await supabase
