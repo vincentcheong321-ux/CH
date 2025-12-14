@@ -231,7 +231,7 @@ const ClientSales: React.FC = () => {
                                     <td className="border-t border-b border-l border-r-2 border-black p-2 text-right">{totalS}</td>
                                     <td className="border border-black p-2 text-right">{totalA}</td>
                                     <td className="border border-black p-2 text-right">{totalC}</td>
-                                </div>
+                                </tr>
 
                                 {/* Summary Rows below table */}
                             </tfoot>
