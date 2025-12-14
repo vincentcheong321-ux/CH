@@ -25,7 +25,7 @@ const ClientLedger: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
   const [client, setClient] = useState<Client | null>(null);
-  const [allRecords, setAllRecords] = useState<LedgerRecord[]>([]); // Store ALL records
+  const [allRecords, setAllRecords] = useState<LedgerRecord[]>([]);
   const [categories, setCategories] = useState<TransactionCategory[]>([]);
   
   // Date/Week State
@@ -118,14 +118,17 @@ const ClientLedger: React.FC = () => {
       }),
   [activeDays, currentYear, currentMonth]);
 
+  const weekStartDate = activeDateStrings.length > 0 ? activeDateStrings[0] : '';
+
   const { weekRecords, weekTotal } = useMemo(() => {
-    if (activeDateStrings.length === 0) return { weekRecords: [], openingBalance: 0, weekTotal: 0 };
-    const current = [];
-    for (const r of allRecords) {
-        if (activeDateStrings.includes(r.date)) {
-            current.push(r);
-        }
-    }
+    if (activeDateStrings.length === 0) return { weekRecords: [], weekTotal: 0 };
+    
+    // Current Week Records
+    const current = allRecords.filter(r => activeDateStrings.includes(r.date));
+    
+    // Previous Records (Opening Balance) - Global for header total approximation if needed
+    // NOTE: For specific column balances, we calculate in calculateColumn
+    
     const weekChange = current.reduce((acc, r) => acc + getNetAmount(r), 0);
     return { weekRecords: current, weekTotal: weekChange };
   }, [allRecords, activeDateStrings]);
@@ -274,15 +277,48 @@ const ClientLedger: React.FC = () => {
 
   const calculateColumn = (columnKey: LedgerColumn) => {
       const colRecords = weekRecords.filter(r => r.column === columnKey);
+      
+      // --- BALANCE FORWARD LOGIC ---
+      // Sum all records strictly BEFORE the start date of the current week
+      const startDate = weekStartDate;
+      let openingBalance = 0;
+      
+      if (startDate) {
+          const previousRecords = allRecords.filter(r => 
+              r.date < startDate && 
+              (r.column === columnKey || (!r.column && columnKey === 'main'))
+          );
+          openingBalance = previousRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
+      }
+
       const processed = colRecords.map(r => ({ ...r, netChange: getNetAmount(r) }));
+      
+      // Inject Virtual Opening Record if balance exists
+      if (openingBalance !== 0) {
+          const openingRecord = {
+              id: `opening_${columnKey}`,
+              clientId: id || '',
+              date: startDate,
+              typeLabel: 'BAL FWD',
+              description: 'Previous Balance',
+              amount: Math.abs(openingBalance),
+              operation: openingBalance >= 0 ? 'add' : 'subtract',
+              netChange: openingBalance,
+              column: columnKey,
+              isVisible: true,
+              isVirtual: true // Flag to identify and prevent editing
+          };
+          processed.unshift(openingRecord as any);
+      }
+
       const visibleProcessed = processed.filter(r => r.isVisible);
       const finalBalance = visibleProcessed.reduce((acc, curr) => acc + curr.netChange, 0);
       return { processed, finalBalance };
   };
 
-  const mainLedger = useMemo(() => calculateColumn('main'), [weekRecords]);
-  const col1Ledger = useMemo(() => calculateColumn('col1'), [weekRecords]);
-  const col2Ledger = useMemo(() => calculateColumn('col2'), [weekRecords]);
+  const mainLedger = useMemo(() => calculateColumn('main'), [weekRecords, weekStartDate]);
+  const col1Ledger = useMemo(() => calculateColumn('col1'), [weekRecords, weekStartDate]);
+  const col2Ledger = useMemo(() => calculateColumn('col2'), [weekRecords, weekStartDate]);
 
   const LedgerColumnView = ({ data, footerLabel = "收" }: { data: ReturnType<typeof calculateColumn>, footerLabel?: string }) => {
       if (data.processed.length === 0) return <div className="flex-1 min-h-[50px]" />;
@@ -296,7 +332,8 @@ const ClientLedger: React.FC = () => {
           <div className="flex flex-col w-fit items-end">
                 {data.processed.map((r) => {
                     const isReflected = r.id.startsWith('sale_') || r.id.startsWith('adv_') || r.id.startsWith('draw_');
-                    
+                    const isVirtual = (r as any).isVirtual;
+
                     // Formatting Logic: Negative numbers (including negative adds) get brackets and red color
                     const isNetNegative = r.operation !== 'none' && r.netChange < 0;
                     const absValue = Math.abs(r.operation === 'none' ? r.amount : r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2});
@@ -310,15 +347,15 @@ const ClientLedger: React.FC = () => {
                     }
 
                     return (
-                        <div key={r.id} className={`group flex justify-end items-center leading-none relative gap-1 md:gap-1.5 ${!r.isVisible ? 'opacity-30 grayscale no-print' : ''}`}>
-                            {/* Disable Edit/Delete for Reflected Records */}
-                            {!isReflected && (
+                        <div key={r.id} className={`group flex justify-end items-center leading-none relative gap-1 md:gap-1.5 ${!r.isVisible ? 'opacity-30 grayscale no-print' : ''} ${isVirtual ? 'bg-gray-50/50 py-1 rounded w-full justify-end px-1 mb-1 border-b border-dashed border-gray-200' : ''}`}>
+                            {/* Disable Edit/Delete for Reflected and Virtual Records */}
+                            {!isReflected && !isVirtual && (
                                 <div className="no-print opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1 absolute -left-16 z-10 bg-white shadow-sm rounded border border-gray-100 p-1">
                                     <button onClick={() => setEditingRecord(r)} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Pencil size={12} /></button>
                                     <button onClick={() => requestDeleteRecord(r.id)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 size={12} /></button>
                                 </div>
                             )}
-                            <div className="text-sm md:text-lg font-bold uppercase tracking-wide text-gray-700">{r.typeLabel}</div>
+                            <div className={`text-sm md:text-lg font-bold uppercase tracking-wide ${isVirtual ? 'text-gray-400 italic' : 'text-gray-700'}`}>{r.typeLabel}</div>
                             {r.description && <div className="text-xs md:text-sm text-gray-500 font-medium mr-1 md:mr-2 max-w-[80px] md:max-w-[120px] truncate">{r.description}</div>}
                             <div className={`text-base md:text-xl font-mono font-bold w-16 md:w-28 text-right ${textColor}`}>
                                 {displayValue}
@@ -370,6 +407,8 @@ const ClientLedger: React.FC = () => {
 
   if (!client) return <div className="p-8">Loading...</div>;
 
+  const totalOwed = col1Ledger.processed.length > 0 ? col1Ledger.finalBalance : mainLedger.finalBalance;
+
   return (
     <div className="bg-gray-100 min-h-screen pb-20">
       <div className="no-print bg-white sticky top-0 z-20 shadow-md">
@@ -396,7 +435,7 @@ const ClientLedger: React.FC = () => {
           <div className="flex items-center space-x-2">
              <div className="text-right mr-2 hidden md:block">
                 <p className={`text-lg font-bold leading-tight ${weekTotal >= 0 ? 'text-green-600' : 'text-red-600'}`}>${Math.abs(weekTotal).toLocaleString()}</p>
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Week Balance</p>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Week Activity</p>
              </div>
              <div className="hidden md:flex space-x-2">
                  <button onClick={handleDownloadImage} disabled={isDownloading} className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-50 shadow-sm disabled:opacity-50" title="Download Image">

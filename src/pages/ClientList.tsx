@@ -29,19 +29,29 @@ const ClientList: React.FC = () => {
     clientId: null
   });
 
-  // Calculate Week End Date
+  // Calculate Week Dates
   const weeksData = useMemo(() => getWeeksForMonth(currentYear, currentMonth), [currentYear, currentMonth]);
   
-  const selectedWeekEndDate = useMemo(() => {
+  const { selectedWeekStartDate, selectedWeekEndDate } = useMemo(() => {
       const days = weeksData[selectedWeekNum];
-      if (!days || days.length === 0) return undefined;
+      if (!days || days.length === 0) return { selectedWeekStartDate: undefined, selectedWeekEndDate: undefined };
+      
       const lastDay = days[days.length - 1];
-      const dateObj = new Date(currentYear, currentMonth, lastDay);
-      // Format YYYY-MM-DD
-      const y = dateObj.getFullYear();
-      const m = String(dateObj.getMonth() + 1).padStart(2, '0');
-      const d = String(dateObj.getDate()).padStart(2, '0');
-      return `${y}-${m}-${d}`;
+      const endDateObj = new Date(currentYear, currentMonth, lastDay);
+      const eY = endDateObj.getFullYear();
+      const eM = String(endDateObj.getMonth() + 1).padStart(2, '0');
+      const eD = String(endDateObj.getDate()).padStart(2, '0');
+
+      const firstDay = days[0];
+      const startDateObj = new Date(currentYear, currentMonth, firstDay);
+      const sY = startDateObj.getFullYear();
+      const sM = String(startDateObj.getMonth() + 1).padStart(2, '0');
+      const sD = String(startDateObj.getDate()).padStart(2, '0');
+
+      return {
+          selectedWeekStartDate: `${sY}-${sM}-${sD}`,
+          selectedWeekEndDate: `${eY}-${eM}-${eD}`
+      };
   }, [weeksData, selectedWeekNum, currentYear, currentMonth]);
 
   useEffect(() => {
@@ -148,7 +158,7 @@ const ClientList: React.FC = () => {
   const leftClients = filteredClients.slice(0, midPoint);
   const rightClients = filteredClients.slice(midPoint);
 
-  // Grid Row Component for perfect alignment
+  // Grid Row Component
   const ClientGridRow = ({ client }: { client: Client }) => {
     const isSelected = selectedClientIds.has(client.id);
     const balance = balances[client.id] || 0;
@@ -246,14 +256,13 @@ const ClientList: React.FC = () => {
   const handlePrint = () => window.print();
   
   const BulkLedgerSheet = ({ client }: { client: Client }) => {
-      const [records, setRecords] = useState<LedgerRecord[]>([]);
+      const [allRecords, setAllRecords] = useState<LedgerRecord[]>([]);
       const [isReady, setIsReady] = useState(false);
 
       useEffect(() => {
           const fetchRecords = async () => {
               const all = await getLedgerRecords(client.id);
-              const filtered = all.filter(r => !selectedWeekEndDate || r.date <= selectedWeekEndDate);
-              setRecords(filtered);
+              setAllRecords(all);
               setIsReady(true);
           };
           fetchRecords();
@@ -262,12 +271,47 @@ const ClientList: React.FC = () => {
       if (!isReady) return <div className="p-4 text-center">Loading {client.name}...</div>;
 
       const calculateColumn = (columnKey: 'main' | 'col1' | 'col2') => {
-        const colRecords = records.filter(r => r.column === columnKey);
+        // Filter for current week's records based on range
+        const colRecords = allRecords.filter(r => 
+            (!selectedWeekStartDate || r.date >= selectedWeekStartDate) && 
+            (!selectedWeekEndDate || r.date <= selectedWeekEndDate) &&
+            r.column === columnKey
+        );
+
+        // --- Balance Forward Calculation ---
+        let openingBalance = 0;
+        if (selectedWeekStartDate) {
+            const previousRecords = allRecords.filter(r => 
+                r.date < selectedWeekStartDate && 
+                (r.column === columnKey || (!r.column && columnKey === 'main'))
+            );
+            openingBalance = previousRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
+        }
+
         const processed = colRecords.map(r => ({ ...r, netChange: getNetAmount(r) }));
+        
+        // Inject Balance Forward if needed
+        if (openingBalance !== 0) {
+            processed.unshift({
+                id: `opening_${columnKey}`,
+                clientId: client.id,
+                date: selectedWeekStartDate || '',
+                typeLabel: 'BAL FWD',
+                description: 'Previous Balance',
+                amount: Math.abs(openingBalance),
+                operation: openingBalance >= 0 ? 'add' : 'subtract',
+                netChange: openingBalance,
+                column: columnKey,
+                isVisible: true,
+                isVirtual: true // Custom flag
+            } as any);
+        }
+
         const visibleProcessed = processed.filter(r => r.isVisible);
         const finalBalance = visibleProcessed.reduce((acc, curr) => acc + curr.netChange, 0);
         return { processed, finalBalance };
       };
+
       const col1Ledger = calculateColumn('col1');
       const col2Ledger = calculateColumn('col2');
       const mainLedger = calculateColumn('main');
@@ -285,6 +329,7 @@ const ClientList: React.FC = () => {
                         const isNetNegative = r.operation !== 'none' && r.netChange < 0;
                         const valStr = Math.abs(r.operation === 'none' ? r.amount : r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2});
                         const displayVal = isNetNegative ? `(${valStr})` : valStr;
+                        const isVirtual = (r as any).isVirtual;
                         
                         let textColor = 'text-gray-600';
                         if (r.operation === 'add') {
@@ -294,8 +339,8 @@ const ClientList: React.FC = () => {
                         }
 
                         return (
-                        <div key={r.id} className={`flex justify-end items-center py-0.5 relative gap-1 md:gap-2 ${!r.isVisible ? 'hidden' : ''}`}>
-                            <div className="text-xl font-bold uppercase tracking-wide text-gray-600">{r.typeLabel}</div>
+                        <div key={r.id} className={`flex justify-end items-center py-0.5 relative gap-1 md:gap-2 ${!r.isVisible ? 'hidden' : ''} ${isVirtual ? 'bg-gray-50 border-b border-dashed border-gray-300 w-full mb-1 justify-end px-1' : ''}`}>
+                            <div className={`text-xl font-bold uppercase tracking-wide ${isVirtual ? 'text-gray-400 italic' : 'text-gray-600'}`}>{r.typeLabel}</div>
                             {r.description && <div className="text-sm text-gray-600 font-medium mr-2 max-w-[150px] truncate">{r.description}</div>}
                             <div className={`text-2xl font-mono font-bold w-36 text-right ${textColor}`}>
                                 {displayVal}
@@ -324,6 +369,9 @@ const ClientList: React.FC = () => {
                 <div>
                     <h2 className="text-4xl font-bold text-gray-900 uppercase tracking-widest">{client.name}</h2>
                     {client.code && <p className="text-gray-600 mt-1 font-mono text-xl">{client.code}</p>}
+                </div>
+                <div className="text-right">
+                    <p className="text-sm text-gray-500 font-sans uppercase tracking-wider">{MONTH_NAMES[currentMonth]} {currentYear}</p>
                 </div>
             </div>
             <div className="flex w-full min-h-[400px]">
