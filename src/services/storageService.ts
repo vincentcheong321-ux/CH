@@ -35,7 +35,7 @@ export const INITIAL_CLIENTS_DATA = [
   { name: '张', code: '9486' },
 ];
 
-// Mobile Clients Seed Data
+// Mobile Clients Seed Data - REORDERED
 export const INITIAL_MOBILE_CLIENTS_DATA = [
   { name: 'z keong', code: 'g8sv8239' },
   { name: 'LAN', code: 'mrcc04' },
