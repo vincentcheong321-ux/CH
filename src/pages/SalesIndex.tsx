@@ -85,17 +85,30 @@ const DetailedMobileTableRow = React.memo(({
     client: Client, 
     record?: SaleRecord
 }) => {
-    // Determine values from FULL raw array if available
+    // Prefer the full raw data array if available
     const raw = record?.mobileRawData;
     
-    // Fallback to legacy structure or empty if no raw data
-    // Raw indices based on typical import format seen in MobileReport.tsx
-    const memBet = raw ? raw[0] : (record?.mobileRaw?.memberBet || '-');
-    const compTotal = raw ? raw[7] : (record?.mobileRaw?.companyTotal || '-');
-    const shareTotal = raw ? raw[13] : (record?.mobileRaw?.shareholderTotal || '-');
-    const agentTotal = raw ? raw[raw.length - 1] : (record?.mobileRaw?.agentTotal || '-');
+    // Legacy fallback
+    const legacy = record?.mobileRaw;
 
-    const getVal = (idx: number) => raw ? raw[idx] : '';
+    // Helper to get value safely. 
+    // If raw array exists, use index. 
+    // If not, use legacy named fields for specific columns, or '-' for others.
+    const getVal = (idx: number): string | number => {
+        if (raw && raw.length > idx) return raw[idx];
+        if (legacy) {
+            // Map known legacy fields to indices roughly
+            if (idx === 0) return legacy.memberBet;
+            if (idx === 7) return legacy.companyTotal;
+            if (idx === 13) return legacy.shareholderTotal;
+            if (idx === 18) return legacy.agentTotal; // Assuming 19 columns
+        }
+        return '';
+    };
+
+    // Calculate Agent Total Color
+    const agentTotalVal = getVal(raw ? raw.length - 1 : 18);
+    const isPositive = parseFloat(String(agentTotalVal).replace(/,/g,'')) >= 0;
 
     return (
         <tr className="hover:bg-purple-50/50 transition-colors border-b border-gray-100 last:border-0 font-mono text-[10px] md:text-xs">
@@ -105,7 +118,7 @@ const DetailedMobileTableRow = React.memo(({
                 <div className="text-[9px] text-gray-500">{client.code}</div>
             </td>
             {/* 2. Member */}
-            <td className="px-2 py-3 text-right bg-gray-50/30">{memBet}</td>
+            <td className="px-2 py-3 text-right bg-gray-50/30 font-semibold">{getVal(0)}</td>
             <td className="px-2 py-3 text-right text-gray-400">{getVal(1)}</td>
             <td className="px-2 py-3 text-right border-r border-gray-100">{getVal(2)}</td>
             {/* 3. Company */}
@@ -113,21 +126,21 @@ const DetailedMobileTableRow = React.memo(({
             <td className="px-2 py-3 text-right">{getVal(4)}</td>
             <td className="px-2 py-3 text-right">{getVal(5)}</td>
             <td className="px-2 py-3 text-right">{getVal(6)}</td>
-            <td className="px-2 py-3 text-right font-bold text-blue-700 bg-blue-50/30 border-r border-gray-200">{compTotal}</td>
+            <td className="px-2 py-3 text-right font-bold text-blue-700 bg-blue-50/30 border-r border-gray-200">{getVal(7)}</td>
             {/* 4. Shareholder */}
             <td className="px-2 py-3 text-right">{getVal(8)}</td>
             <td className="px-2 py-3 text-right">{getVal(9)}</td>
             <td className="px-2 py-3 text-right">{getVal(10)}</td>
             <td className="px-2 py-3 text-right">{getVal(11)}</td>
             <td className="px-2 py-3 text-right">{getVal(12)}</td>
-            <td className="px-2 py-3 text-right font-bold text-blue-700 bg-blue-50/30 border-r border-gray-200">{shareTotal}</td>
+            <td className="px-2 py-3 text-right font-bold text-blue-700 bg-blue-50/30 border-r border-gray-200">{getVal(13)}</td>
             {/* 5. Agent */}
             <td className="px-2 py-3 text-right">{getVal(14)}</td>
             <td className="px-2 py-3 text-right">{getVal(15)}</td>
             <td className="px-2 py-3 text-right">{getVal(16)}</td>
             <td className="px-2 py-3 text-right">{getVal(17)}</td>
-            <td className={`px-2 py-3 text-right font-extrabold bg-green-50 border-l-2 border-green-100 ${parseFloat(agentTotal?.replace(/,/g,'')) >= 0 ? 'text-green-700' : 'text-red-600'}`}>
-                {agentTotal}
+            <td className={`px-2 py-3 text-right font-extrabold bg-green-50 border-l-2 border-green-100 ${isPositive ? 'text-green-700' : 'text-red-600'}`}>
+                {agentTotalVal}
             </td>
         </tr>
     );
@@ -154,6 +167,13 @@ const ClientWeeklyCard = React.memo(({
         const name = MONTH_NAMES[mIndex] || "";
         return name.charAt(0) + name.slice(1, 3).toLowerCase();
     };
+
+    // Filter to only show relevant Paper Dates (Tue, Wed, Sat, Sun) in the Card
+    const paperDisplayDates = dateStrings.filter(dStr => {
+        const d = new Date(dStr);
+        const day = d.getDay();
+        return [0, 2, 3, 6].includes(day);
+    });
 
     return (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col h-full hover:shadow-md transition-shadow">
@@ -184,7 +204,7 @@ const ClientWeeklyCard = React.memo(({
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-sm">
-                        {dateStrings.map(dateStr => {
+                        {paperDisplayDates.map(dateStr => {
                             const [y, m, d] = dateStr.split('-').map(Number);
                             const displayDate = `${d} ${formatMonth(m-1)}`;
                             const record = salesData.find(r => r.clientId === client.id && r.date === dateStr);
@@ -263,16 +283,9 @@ const SalesIndex: React.FC = () => {
   const weeksData = useMemo(() => getWeeksForMonth(currentYear, currentMonth), [currentYear, currentMonth]);
   const activeDays = weeksData[selectedWeekNum] || [];
   
-  // Strict Filtering for 4 days: Tue(2), Wed(3), Sat(6), Sun(0)
+  // FETCH ALL DAYS for the week to ensure Mobile Reports (which might be Mon/Thu) are found
   const activeDateStrings = useMemo(() => 
-      activeDays
-        .filter(d => {
-            const dateObj = new Date(currentYear, currentMonth, d);
-            const day = dateObj.getDay();
-            // FILTER: Only Tuesday, Wednesday, Saturday, Sunday
-            return [0, 2, 3, 6].includes(day);
-        })
-        .map(d => {
+      activeDays.map(d => {
             const dateObj = new Date(currentYear, currentMonth, d);
             const y = dateObj.getFullYear();
             const m = String(dateObj.getMonth() + 1).padStart(2, '0');
