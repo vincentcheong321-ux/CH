@@ -132,7 +132,9 @@ const ClientLedger: React.FC = () => {
 
     // 3. Aggregate Sales Records if any exist
     if (salesRecords.length > 0) {
+        // Calculation logic now safely handled by `getNetAmount` which relies on `storageService` logic
         const totalSalesNet = salesRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
+        
         // Use the latest date from sales records for chronological sorting
         const latestDate = salesRecords.reduce((max, r) => r.date > max ? r.date : max, salesRecords[0].date);
 
@@ -140,7 +142,7 @@ const ClientLedger: React.FC = () => {
             id: 'agg_sale_week', // Virtual ID for display
             clientId: id!,
             date: latestDate,
-            description: '', // Empty description so only '收' shows
+            description: '', // Empty description so only '收' shows (Removed "Sales Opening")
             typeLabel: '收',
             amount: Math.abs(totalSalesNet),
             operation: totalSalesNet >= 0 ? 'add' : 'subtract',

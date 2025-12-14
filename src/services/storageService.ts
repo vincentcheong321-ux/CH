@@ -106,8 +106,23 @@ const mapJournalToLedgerRecord = (row: any): LedgerRecord => {
             // Sales Opening = 收
             baseRecord.typeLabel = '收';
             baseRecord.id = `sale_${row.id}`; // Prefix to identify system records
-            // If amount is positive (Client Lost/Owes), it's Add. If negative (Client Won), it's Subtract.
-            baseRecord.operation = row.amount >= 0 ? 'add' : 'subtract';
+            
+            // DYNAMIC CALCULATION: Recalculate sum (B+S+A+C) from raw data.
+            // This ensures that even if the DB 'amount' column is stale (old formula), 
+            // the ledger displays the correct SUM.
+            if (row.data) {
+                const b = Number(row.data.b) || 0;
+                const s = Number(row.data.s) || 0;
+                const a = Number(row.data.a) || 0;
+                const c = Number(row.data.c) || 0;
+                const total = b + s + a + c; // FORCE SUM LOGIC
+                
+                baseRecord.amount = Math.abs(total);
+                baseRecord.operation = total >= 0 ? 'add' : 'subtract';
+            } else {
+                baseRecord.operation = row.amount >= 0 ? 'add' : 'subtract';
+            }
+            
             baseRecord.column = 'main';
             break;
         
