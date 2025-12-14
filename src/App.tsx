@@ -5,6 +5,7 @@ import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import ClientList from './pages/ClientList';
 import ClientLedger from './pages/ClientLedger';
+import ClientSales from './pages/ClientSales';
 import DrawReport from './pages/DrawReport';
 import Summary from './pages/Summary';
 import CashFlow from './pages/CashFlow';
@@ -61,6 +62,14 @@ const App: React.FC = () => {
           isAuthenticated ? (
             <Layout onLogout={handleLogout}>
               <ClientLedger />
+            </Layout>
+          ) : <Navigate to="/login" />
+        } />
+
+        <Route path="/clients/:id/sales" element={
+          isAuthenticated ? (
+            <Layout onLogout={handleLogout}>
+              <ClientSales />
             </Layout>
           ) : <Navigate to="/login" />
         } />

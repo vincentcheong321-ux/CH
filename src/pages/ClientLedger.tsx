@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Printer, Trash2, Plus, Minus, Pencil, X, Check, AlertTriangle, ExternalLink, GripHorizontal, Hash, Zap } from 'lucide-react';
+import { ArrowLeft, Printer, Trash2, Plus, Minus, Pencil, X, Check, AlertTriangle, ExternalLink, GripHorizontal, Hash, Zap, FileText } from 'lucide-react';
 import { 
   getClients, 
   getLedgerRecords, 
@@ -522,6 +522,13 @@ const ClientLedger: React.FC = () => {
                 </p>
                 <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{totalOwed >= 0 ? 'OWES' : 'CREDIT'}</p>
              </div>
+             
+             {/* New Sales Sheet Button */}
+             <Link to={`/clients/${id}/sales`} className="bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 shadow-sm flex items-center" title="Sales Sheet">
+                 <FileText size={18} className="md:mr-2" />
+                 <span className="hidden md:inline">Sales</span>
+             </Link>
+
              <div className="hidden md:flex space-x-2">
                  <button onClick={openNewTab} className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-50 shadow-sm" title="Open in New Tab"><ExternalLink size={18} /></button>
                  <button onClick={handlePrint} className="bg-gray-800 text-white px-3 py-2 rounded-lg hover:bg-gray-900 shadow-sm"><Printer size={18} /></button>
@@ -530,7 +537,7 @@ const ClientLedger: React.FC = () => {
           </div>
         </div>
       </div>
-
+      {/* ... rest of the render code ... */}
       <div className="max-w-5xl mx-auto px-2 md:px-8 py-4 md:py-6">
         
         {/* Input & Panel Selection Area - No Print */}

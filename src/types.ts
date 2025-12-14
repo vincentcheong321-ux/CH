@@ -56,6 +56,16 @@ export interface DrawBalance {
   balance: number;
 }
 
+export interface SaleRecord {
+  id: string;
+  clientId: string;
+  date: string; // YYYY-MM-DD
+  b: number;
+  s: number;
+  a: number;
+  c: number;
+}
+
 export interface User {
   username: string;
   isAuthenticated: boolean;

@@ -1,5 +1,5 @@
 
-import { Client, LedgerRecord, AssetRecord, TransactionCategory, DrawBalance } from '../types';
+import { Client, LedgerRecord, AssetRecord, TransactionCategory, DrawBalance, SaleRecord } from '../types';
 import { supabase } from '../supabaseClient';
 
 const CLIENTS_KEY = 'ledger_clients';
@@ -7,6 +7,7 @@ const RECORDS_KEY = 'ledger_records';
 const ASSETS_KEY = 'ledger_assets';
 const CATEGORIES_KEY = 'ledger_categories';
 const DRAW_BALANCES_KEY = 'ledger_draw_balances';
+const SALES_KEY = 'ledger_sales';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
@@ -331,6 +332,44 @@ export const updateLedgerRecord = (id: string, updates: Partial<LedgerRecord>) =
   const updated = allRecords.map(r => r.id === id ? { ...r, ...updates } : r);
   localStorage.setItem(RECORDS_KEY, JSON.stringify(updated));
 }
+
+// --- Sale Records (New Feature) ---
+
+export const getSaleRecords = (clientId: string): SaleRecord[] => {
+  if (supabase) {
+    // Supabase implementation placeholder
+  }
+  const data = localStorage.getItem(SALES_KEY);
+  const allRecords: SaleRecord[] = data ? JSON.parse(data) : [];
+  return allRecords.filter(r => r.clientId === clientId).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+};
+
+export const saveSaleRecord = (record: Omit<SaleRecord, 'id'>): SaleRecord => {
+  const data = localStorage.getItem(SALES_KEY);
+  const allRecords: SaleRecord[] = data ? JSON.parse(data) : [];
+  
+  // Check if record exists for this date, if so, overwrite/update
+  const existingIndex = allRecords.findIndex(r => r.clientId === record.clientId && r.date === record.date);
+  
+  let newRecord: SaleRecord;
+  if (existingIndex >= 0) {
+      newRecord = { ...allRecords[existingIndex], ...record };
+      allRecords[existingIndex] = newRecord;
+  } else {
+      newRecord = { ...record, id: generateId() };
+      allRecords.push(newRecord);
+  }
+
+  localStorage.setItem(SALES_KEY, JSON.stringify(allRecords));
+  return newRecord;
+};
+
+export const deleteSaleRecord = (id: string) => {
+  const data = localStorage.getItem(SALES_KEY);
+  const allRecords: SaleRecord[] = data ? JSON.parse(data) : [];
+  const filtered = allRecords.filter(r => r.id !== id);
+  localStorage.setItem(SALES_KEY, JSON.stringify(filtered));
+};
 
 // --- Company Assets ---
 export const getAssetRecords = (): AssetRecord[] => {
