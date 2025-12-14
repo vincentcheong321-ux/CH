@@ -65,6 +65,12 @@ export interface SaleRecord {
   s: number;
   a: number;
   c: number;
+  mobileRaw?: {
+      memberBet: string;
+      companyTotal: string;
+      shareholderTotal: string;
+      agentTotal: string;
+  };
 }
 
 export interface CashAdvanceRecord {

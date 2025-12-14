@@ -203,7 +203,8 @@ export const getSaleRecords = async (clientId: string): Promise<SaleRecord[]> =>
             b: row.data?.b || 0,
             s: row.data?.s || 0,
             a: row.data?.a || 0,
-            c: row.data?.c || 0
+            c: row.data?.c || 0,
+            mobileRaw: row.data?.mobileRaw
         }));
     }
     return [];
@@ -224,7 +225,8 @@ export const getSalesForDates = async (dates: string[]): Promise<SaleRecord[]> =
             b: row.data?.b || 0,
             s: row.data?.s || 0,
             a: row.data?.a || 0,
-            c: row.data?.c || 0
+            c: row.data?.c || 0,
+            mobileRaw: row.data?.mobileRaw
         }));
     }
     return [];
@@ -234,16 +236,25 @@ export const saveSaleRecord = async (record: Omit<SaleRecord, 'id'>) => {
     if (supabase) {
         const netAmount = (record.b + record.s) - (record.a + record.c);
         const { data: existing } = await supabase.from('financial_journal')
-            .select('id')
+            .select('id, data')
             .eq('client_id', record.clientId)
             .eq('entry_date', record.date)
             .eq('entry_type', 'SALE')
             .maybeSingle();
 
         if (existing) {
+             const newData = { 
+                 ...existing.data, // Preserve existing data 
+                 b: record.b, s: record.s, a: record.a, c: record.c 
+             };
+             // Only update mobileRaw if provided (not undefined)
+             if (record.mobileRaw !== undefined) {
+                 newData.mobileRaw = record.mobileRaw;
+             }
+
              await supabase.from('financial_journal').update({
                 amount: netAmount,
-                data: { b: record.b, s: record.s, a: record.a, c: record.c }
+                data: newData
              }).eq('id', existing.id);
         } else {
              await supabase.from('financial_journal').insert({
@@ -251,7 +262,10 @@ export const saveSaleRecord = async (record: Omit<SaleRecord, 'id'>) => {
                 entry_date: record.date,
                 entry_type: 'SALE',
                 amount: netAmount,
-                data: { b: record.b, s: record.s, a: record.a, c: record.c }
+                data: { 
+                    b: record.b, s: record.s, a: record.a, c: record.c,
+                    mobileRaw: record.mobileRaw
+                }
              });
         }
     }

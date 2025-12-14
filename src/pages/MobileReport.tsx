@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { ArrowLeft, RefreshCw, Save, CheckCircle, AlertCircle, History, FileText } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Save, CheckCircle, AlertCircle, History, FileText, Loader2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getClients, saveSaleRecord, saveMobileReportHistory, getMobileReportHistory } from '../services/storageService';
 import { Client } from '../types';
@@ -16,6 +16,7 @@ const MobileReport: React.FC = () => {
   const [saveStatus, setSaveStatus] = useState<{ type: 'success' | 'error' | null, message: string }>({ type: null, message: '' });
   const [history, setHistory] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'import' | 'history'>('import');
+  const [isSaving, setIsSaving] = useState(false);
   
   // Date Selection State for Saving
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -96,11 +97,13 @@ const MobileReport: React.FC = () => {
 
   const handleSaveToSystem = async () => {
       if (parsedData.length === 0) return;
+      setIsSaving(true);
 
       const weeks = getWeeksForMonth(selectedYear, selectedMonth);
       const days = weeks[selectedWeekNum];
       if (!days || days.length === 0) {
           setSaveStatus({ type: 'error', message: 'Invalid week selection.' });
+          setIsSaving(false);
           return;
       }
       const lastDay = days[days.length - 1];
@@ -118,12 +121,21 @@ const MobileReport: React.FC = () => {
               const lastValStr = row.values[row.values.length - 1];
               const val = parseFloat(lastValStr.replace(/,/g, ''));
 
+              // Extract extra details
+              const mobileRaw = {
+                  memberBet: row.values[0] || '0',
+                  companyTotal: row.values[7] || '0',
+                  shareholderTotal: row.values[13] || '0',
+                  agentTotal: row.values[row.values.length - 1] || '0'
+              };
+
               if (!isNaN(val)) {
                   await saveSaleRecord({
                       clientId: client.id,
                       date: targetDate,
                       b: val, 
-                      s: 0, a: 0, c: 0
+                      s: 0, a: 0, c: 0,
+                      mobileRaw // Save detailed data
                   });
                   matchedCount++;
               }
@@ -134,11 +146,12 @@ const MobileReport: React.FC = () => {
 
       try {
         await saveMobileReportHistory(targetDate, parsedData);
-        loadHistory(); // Reload history
+        loadHistory(); 
       } catch (e) {
           console.error("Failed to save history", e);
       }
 
+      setIsSaving(false);
       if (matchedCount > 0) {
           setSaveStatus({ type: 'success', message: `Updated ${matchedCount} clients & saved history for ${targetDate}.` });
       } else {
@@ -213,8 +226,13 @@ const MobileReport: React.FC = () => {
                             <RefreshCw size={16} className="mr-2" /> Parse
                         </button>
                         {parsedData.length > 0 && (
-                            <button onClick={handleSaveToSystem} className="px-4 py-2 text-sm font-bold text-white bg-green-600 hover:bg-green-700 rounded-lg flex items-center shadow-md animate-in fade-in">
-                                <Save size={16} className="mr-2" /> Save to System
+                            <button 
+                                onClick={handleSaveToSystem} 
+                                disabled={isSaving}
+                                className="px-4 py-2 text-sm font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded-lg flex items-center shadow-md animate-in fade-in"
+                            >
+                                {isSaving ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Save size={16} className="mr-2" />}
+                                {isSaving ? 'Saving...' : 'Save to System'}
                             </button>
                         )}
                     </div>

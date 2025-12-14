@@ -77,60 +77,36 @@ const CompositeInput = React.memo(({
     );
 });
 
-// --- Mobile List Row Component ---
-const MobileClientRow = React.memo(({ 
+// --- Mobile Table Row Component ---
+const MobileTableRow = React.memo(({ 
     client, 
-    total, 
-    onUpdate 
+    record,
+    total 
 }: { 
     client: Client, 
-    total: number, 
-    onUpdate: (clientId: string, val: number) => void 
+    record?: SaleRecord,
+    total: number 
 }) => {
-    const [localVal, setLocalVal] = useState(total > 0 ? total.toString() : '');
-
-    useEffect(() => {
-        setLocalVal(total > 0 ? total.toString() : '');
-    }, [total]);
-
-    const handleBlur = () => {
-        const val = parseFloat(localVal) || 0;
-        // Only update if value changed substantially
-        if (val !== total) {
-            onUpdate(client.id, val);
-        }
-    };
+    // Determine detailed values (Use Raw if available, otherwise 0/empty)
+    const memBet = record?.mobileRaw?.memberBet || '-';
+    const compTotal = record?.mobileRaw?.companyTotal || '-';
+    const shareTotal = record?.mobileRaw?.shareholderTotal || '-';
+    // Use the calculated 'total' for the Net column which maps to Agent Total usually
+    const agentTotal = total !== 0 ? total.toLocaleString(undefined, {minimumFractionDigits: 2}) : '-';
 
     return (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 flex items-center justify-between hover:shadow-md transition-shadow">
-            <div className="flex items-center space-x-4">
-                <div className="bg-purple-50 h-10 w-10 rounded-full flex items-center justify-center text-purple-600">
-                    <Smartphone size={20} />
-                </div>
-                <div>
-                    <h3 className="font-bold text-gray-900 leading-tight text-lg">{client.name}</h3>
-                    <p className="text-xs text-gray-500 font-mono">{client.code}</p>
-                </div>
-            </div>
-            <div className="w-40">
-                <div className="relative">
-                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 font-bold">$</span>
-                    <input 
-                        type="number"
-                        inputMode="decimal"
-                        value={localVal}
-                        onChange={(e) => setLocalVal(e.target.value)}
-                        onBlur={handleBlur}
-                        onKeyDown={(e) => {
-                             if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                        }}
-                        onFocus={(e) => e.target.select()}
-                        className={`w-full pl-8 pr-4 py-3 text-right font-mono font-bold text-xl border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all ${localVal && parseFloat(localVal) > 0 ? 'text-purple-700 bg-purple-50 border-purple-200 shadow-inner' : 'text-gray-900 border-gray-300'}`}
-                        placeholder="0.00"
-                    />
-                </div>
-            </div>
-        </div>
+        <tr className="hover:bg-purple-50/50 transition-colors border-b border-gray-100 last:border-0">
+            <td className="px-4 py-3">
+                <div className="font-bold text-gray-900">{client.name}</div>
+                <div className="text-xs text-gray-500 font-mono">{client.code}</div>
+            </td>
+            <td className="px-2 py-3 text-right text-gray-600 font-mono text-xs">{memBet}</td>
+            <td className="px-2 py-3 text-right text-blue-600 font-mono text-xs font-bold">{compTotal}</td>
+            <td className="px-2 py-3 text-right text-blue-600 font-mono text-xs font-bold">{shareTotal}</td>
+            <td className={`px-4 py-3 text-right font-mono font-bold ${total >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {agentTotal}
+            </td>
+        </tr>
     );
 });
 
@@ -344,35 +320,6 @@ const SalesIndex: React.FC = () => {
 
   }, [salesData]);
 
-  // Handle updates for Mobile Clients (Weekly Total)
-  const handleMobileUpdate = useCallback(async (clientId: string, val: number) => {
-      const lastDateStr = activeDateStrings[activeDateStrings.length - 1];
-      if (!lastDateStr) return;
-
-      const clientRecords = salesData.filter(r => r.clientId === clientId);
-      const otherDaysSum = clientRecords
-          .filter(r => r.date !== lastDateStr)
-          .reduce((acc, r) => acc + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
-      
-      const newLastDayVal = Math.max(0, val - otherDaysSum); 
-
-      setSalesData(prev => {
-          const others = prev.filter(r => !(r.clientId === clientId && r.date === lastDateStr));
-          return [...others, { 
-              id: 'temp', clientId, date: lastDateStr, 
-              b: newLastDayVal, s: 0, a: 0, c: 0 
-          }];
-      });
-
-      await saveSaleRecord({
-          clientId,
-          date: lastDateStr,
-          b: newLastDayVal,
-          s: 0, a: 0, c: 0
-      });
-
-  }, [salesData, activeDateStrings]);
-
   const handlePrevMonth = () => {
       if (currentMonth === 0) {
           if (currentYear > 2025) {
@@ -404,7 +351,6 @@ const SalesIndex: React.FC = () => {
       const zList = paperClients.filter(c => PAPER_Z_CODES.includes(c.code.toUpperCase()));
       const cList = paperClients.filter(c => PAPER_C_CODES.includes(c.code.toUpperCase()));
       
-      // Sort based on code index in the constant array to maintain specific order if needed
       zList.sort((a,b) => PAPER_Z_CODES.indexOf(a.code.toUpperCase()) - PAPER_Z_CODES.indexOf(b.code.toUpperCase()));
       cList.sort((a,b) => PAPER_C_CODES.indexOf(a.code.toUpperCase()) - PAPER_C_CODES.indexOf(b.code.toUpperCase()));
 
@@ -588,21 +534,47 @@ const SalesIndex: React.FC = () => {
                         </div>
                     </div>
                 ) : (
-                    // Mobile View: List of Rows
-                    <div className="space-y-4 max-w-4xl mx-auto">
-                        {filteredMobileClients.map(client => {
-                            const clientRecords = salesData.filter(r => r.clientId === client.id);
-                            const total = clientRecords.reduce((acc, r) => acc + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
-                            return (
-                                <MobileClientRow
-                                    key={client.id}
-                                    client={client}
-                                    total={total}
-                                    onUpdate={handleMobileUpdate}
-                                />
-                            );
-                        })}
-                        {filteredMobileClients.length === 0 && <p className="text-gray-400 text-center py-8">No mobile clients found.</p>}
+                    // Mobile View: Detailed Table
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead className="bg-gray-100 text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-200">
+                                    <tr>
+                                        <th className="px-4 py-3">Client</th>
+                                        <th className="px-2 py-3 text-right">Member Bet</th>
+                                        <th className="px-2 py-3 text-right">Company Total</th>
+                                        <th className="px-2 py-3 text-right">Shareholder Total</th>
+                                        <th className="px-4 py-3 text-right">Agent (Net) Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100 text-sm">
+                                    {filteredMobileClients.map(client => {
+                                        const clientRecords = salesData.filter(r => r.clientId === client.id);
+                                        // Usually only one record per week for mobile, but if multiple, we take the latest or sum if logic dictates. 
+                                        // Assuming one main record per week for mobile report import.
+                                        // If there are multiple, 'total' sums them, but detailed columns need a single source of truth or careful summing.
+                                        // For now, let's take the LAST record of the week which likely holds the report data.
+                                        const record = clientRecords[clientRecords.length - 1]; 
+                                        
+                                        const total = clientRecords.reduce((acc, r) => acc + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
+                                        
+                                        return (
+                                            <MobileTableRow
+                                                key={client.id}
+                                                client={client}
+                                                record={record}
+                                                total={total}
+                                            />
+                                        );
+                                    })}
+                                    {filteredMobileClients.length === 0 && (
+                                        <tr>
+                                            <td colSpan={5} className="text-center py-8 text-gray-400">No mobile clients found.</td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 )}
             </div>
