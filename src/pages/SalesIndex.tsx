@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, ChevronLeft, ChevronRight, Loader2, Calendar } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Loader2, Calendar, Smartphone, FileText } from 'lucide-react';
 import { getClients, getSalesForDates, saveSaleRecord } from '../services/storageService';
 import { Client, SaleRecord } from '../types';
 import { MONTH_NAMES, getWeeksForMonth } from '../utils/reportUtils';
@@ -177,6 +177,9 @@ const SalesIndex: React.FC = () => {
   const [selectedWeekNum, setSelectedWeekNum] = useState<number>(1);
   const [salesData, setSalesData] = useState<SaleRecord[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Tab state for categories
+  const [activeTab, setActiveTab] = useState<'paper' | 'mobile'>('paper');
 
   // Initial Load: Set to "Today"
   useEffect(() => {
@@ -196,11 +199,6 @@ const SalesIndex: React.FC = () => {
       const weeks = getWeeksForMonth(y, m);
       const foundWeek = Object.keys(weeks).find(wKey => {
           const days = weeks[parseInt(wKey)];
-          // Simple check: does this set of days contain today's day number?
-          // Note: This matches "virtual days" (e.g. 32) if we are in that overlap period
-          // But strict matching is better handled by date construction if needed.
-          // For now, simpler: check if 'd' is in 'days' (exact match)
-          // or if d is small (1, 2) and we are looking at prev month's overflow...
           return days.includes(d);
       });
 
@@ -311,10 +309,15 @@ const SalesIndex: React.FC = () => {
       }
   };
 
-  const filteredClients = clients.filter(c => 
-    c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    c.code.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Logic: First filter by category (tab), then filter by search term
+  const filteredClients = clients.filter(c => {
+      // If client has no category, assume 'paper' for backward compatibility
+      const category = c.category || 'paper';
+      const matchTab = category === activeTab;
+      const matchSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          c.code.toLowerCase().includes(searchTerm.toLowerCase());
+      return matchTab && matchSearch;
+  });
 
   const sortedWeekKeys = Object.keys(weeksData).map(Number).sort((a,b) => a-b);
   
@@ -327,40 +330,62 @@ const SalesIndex: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-gray-50">
-      {/* Top Bar */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-3 flex-shrink-0 z-20 shadow-sm">
-        <div className="flex items-center space-x-4 overflow-x-auto w-full md:w-auto">
-            <div className="flex items-center bg-gray-100 rounded-lg p-1 flex-shrink-0">
-                <button onClick={handlePrevMonth} disabled={currentYear === 2025 && currentMonth === 0} className="p-1 hover:bg-white rounded shadow-sm disabled:opacity-30"><ChevronLeft size={18}/></button>
-                <span className="w-28 text-center font-bold text-gray-800 text-sm">{MONTH_NAMES[currentMonth]} {currentYear}</span>
-                <button onClick={handleNextMonth} disabled={currentYear === 2026 && currentMonth === 11} className="p-1 hover:bg-white rounded shadow-sm disabled:opacity-30"><ChevronRight size={18}/></button>
-            </div>
+      {/* Top Bar with Navigation and Tabs */}
+      <div className="bg-white border-b border-gray-200 z-20 shadow-sm flex-shrink-0">
+          
+          {/* Row 1: Search and Tab Switcher */}
+          <div className="px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-3">
+             <div className="flex bg-gray-100 p-1 rounded-lg">
+                <button 
+                    onClick={() => setActiveTab('paper')}
+                    className={`flex items-center px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'paper' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                >
+                    <FileText size={16} className="mr-2" />
+                    Paper List
+                </button>
+                <button 
+                    onClick={() => setActiveTab('mobile')}
+                    className={`flex items-center px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'mobile' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                >
+                    <Smartphone size={16} className="mr-2" />
+                    Mobile List
+                </button>
+             </div>
 
-            <div className="flex space-x-1">
-                {sortedWeekKeys.map(wk => (
-                    <button
-                        key={wk}
-                        onClick={() => setSelectedWeekNum(wk)}
-                        className={`px-3 py-1.5 rounded-md text-xs font-bold transition-colors whitespace-nowrap
-                            ${selectedWeekNum === wk ? 'bg-blue-600 text-white shadow' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}
-                        `}
-                    >
-                        Week {Object.keys(weeksData).indexOf(String(wk)) + 1}
-                    </button>
-                ))}
+             <div className="relative w-full md:w-64">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+                <input 
+                type="text" 
+                placeholder={`Search ${activeTab} clients...`}
+                className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                />
             </div>
-        </div>
+          </div>
 
-        <div className="relative w-full md:w-64">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-            <input 
-              type="text" 
-              placeholder="Search clients..."
-              className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-        </div>
+          {/* Row 2: Date Navigation */}
+          <div className="border-t border-gray-100 px-4 py-2 flex items-center gap-3 overflow-x-auto">
+                <div className="flex items-center bg-gray-100 rounded-lg p-1 flex-shrink-0">
+                    <button onClick={handlePrevMonth} disabled={currentYear === 2025 && currentMonth === 0} className="p-1 hover:bg-white rounded shadow-sm disabled:opacity-30"><ChevronLeft size={18}/></button>
+                    <span className="w-28 text-center font-bold text-gray-800 text-xs md:text-sm">{MONTH_NAMES[currentMonth]} {currentYear}</span>
+                    <button onClick={handleNextMonth} disabled={currentYear === 2026 && currentMonth === 11} className="p-1 hover:bg-white rounded shadow-sm disabled:opacity-30"><ChevronRight size={18}/></button>
+                </div>
+
+                <div className="flex space-x-1">
+                    {sortedWeekKeys.map(wk => (
+                        <button
+                            key={wk}
+                            onClick={() => setSelectedWeekNum(wk)}
+                            className={`px-3 py-1.5 rounded-md text-xs font-bold transition-colors whitespace-nowrap
+                                ${selectedWeekNum === wk ? 'bg-blue-600 text-white shadow' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}
+                            `}
+                        >
+                            Week {Object.keys(weeksData).indexOf(String(wk)) + 1}
+                        </button>
+                    ))}
+                </div>
+          </div>
       </div>
 
       {/* Main Content */}
@@ -384,8 +409,10 @@ const SalesIndex: React.FC = () => {
                 
                 {filteredClients.length === 0 && (
                     <div className="text-center text-gray-400 py-12">
-                        <Calendar size={48} className="mx-auto mb-4 opacity-20" />
-                        <p>No clients match your search.</p>
+                        <div className={`mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-4 ${activeTab === 'mobile' ? 'bg-purple-100 text-purple-400' : 'bg-blue-100 text-blue-400'}`}>
+                            {activeTab === 'mobile' ? <Smartphone size={32} /> : <FileText size={32} />}
+                        </div>
+                        <p>No {activeTab} clients found.</p>
                     </div>
                 )}
             </div>

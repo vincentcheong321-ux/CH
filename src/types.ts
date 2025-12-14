@@ -6,6 +6,7 @@ export interface Client {
   phone?: string;
   note?: string;
   createdAt: string;
+  category?: 'paper' | 'mobile'; // New field
   // Extra info columns for the ledger view
   column1Notes?: string;
   column2Notes?: string;

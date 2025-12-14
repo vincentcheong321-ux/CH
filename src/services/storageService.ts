@@ -11,7 +11,7 @@ const SALES_KEY = 'ledger_sales';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
-// Initial Seed List (Exported for UI fallback)
+// Initial Seed List (Paper Clients)
 export const INITIAL_CLIENTS_DATA = [
   { name: '林', code: 'Z05' },
   { name: '国', code: 'PT217' },
@@ -35,11 +35,31 @@ export const INITIAL_CLIENTS_DATA = [
   { name: '张', code: '9486' },
 ];
 
+// Mobile Clients Seed Data
+export const INITIAL_MOBILE_CLIENTS_DATA = [
+  { name: 'z keong', code: 'g8sv8239' },
+  { name: 'LAN', code: 'mrcc04' },
+  { name: 'Kok', code: 'pt217' },
+  { name: 'Fung', code: 'sk0922' },
+  { name: 'ZHONG', code: 'sk3619' },
+  { name: 'WAHZAI', code: 'sk3715' },
+  { name: 'MOOI', code: 'sk3818' },
+  { name: 'SINGER', code: 'sk3964' },
+  { name: 'LIM', code: 'sk5611' },
+  { name: 'BIN', code: 'sk8264' },
+  { name: 'Voon', code: 'sk8385' },
+  { name: 'YEE', code: 'sk8959' },
+  { name: 'LIANG BHR', code: 'skc009' },
+  { name: 'BOTON', code: 'skc15' },
+  { name: 'vincent', code: 'vc9486' },
+];
+
 // --- Helper to map Supabase result to Client type ---
 const mapSupabaseClient = (data: any): Client => {
   return {
     ...data,
-    createdAt: data.created_at || data.createdAt || new Date().toISOString()
+    createdAt: data.created_at || data.createdAt || new Date().toISOString(),
+    category: data.category || 'paper' // Default to paper if null
   };
 };
 
@@ -130,12 +150,18 @@ export const getClients = async (): Promise<Client[]> => {
 export const saveClient = async (client: Omit<Client, 'id' | 'createdAt'>): Promise<Client> => {
   const newClientPart = {
       ...client,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      category: client.category || 'paper'
   };
 
   if (supabase) {
     const { data, error } = await supabase.from('clients').insert([
-        { name: client.name, code: client.code, phone: client.phone }
+        { 
+            name: client.name, 
+            code: client.code, 
+            phone: client.phone,
+            category: client.category || 'paper'
+        }
     ]).select();
     
     if (!error && data && data[0]) {
@@ -173,13 +199,25 @@ export const deleteClient = async (id: string) => {
 
 export const seedInitialClients = async () => {
     const clients = await getClients();
+    // Only seed if empty
     if (clients.length === 0) {
         console.log("Seeding initial clients...");
+        // Seed Paper
         for (const c of INITIAL_CLIENTS_DATA) {
             await saveClient({
                 name: c.name,
                 code: c.code,
-                phone: ''
+                phone: '',
+                category: 'paper'
+            });
+        }
+        // Seed Mobile
+        for (const c of INITIAL_MOBILE_CLIENTS_DATA) {
+            await saveClient({
+                name: c.name,
+                code: c.code,
+                phone: '',
+                category: 'mobile'
             });
         }
         return true;
@@ -471,5 +509,7 @@ export const saveAssetRecord = (record: Omit<AssetRecord, 'id'>): AssetRecord =>
 
 export const seedData = async () => {
   getCategories();
-  await seedInitialClients(); // Ensure we have data
+  // We don't force seed clients every refresh anymore to rely on Supabase,
+  // but call this if you need to re-init local data
+  // await seedInitialClients(); 
 };
