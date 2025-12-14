@@ -32,9 +32,6 @@ const ClientSales: React.FC = () => {
   const loadRecords = async () => {
     if (id) {
       const recs = await getSaleRecords(id);
-      // Sort by date ascending for the table view like the image usually implies (chronological), 
-      // though the image shows Nov 12, 15, 16. So Ascending.
-      // But usually latest at bottom? Let's stick to Ascending for the "report" feel.
       setRecords(recs.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
     }
   };
@@ -89,6 +86,18 @@ const ClientSales: React.FC = () => {
 
   return (
     <div className="bg-gray-100 min-h-screen pb-20 font-sans">
+        <style>{`
+          /* Hide Spinners */
+          input[type=number]::-webkit-inner-spin-button, 
+          input[type=number]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+          }
+          input[type=number] {
+            -moz-appearance: textfield;
+          }
+        `}</style>
+
         {/* Header - No Print */}
         <div className="bg-white sticky top-0 z-20 shadow-sm no-print">
             <div className="flex items-center justify-between p-4 max-w-5xl mx-auto">
@@ -131,26 +140,36 @@ const ClientSales: React.FC = () => {
                             
                             <div className="grid grid-cols-2 gap-3">
                                 {/* Group B/S */}
-                                <div className="bg-blue-50/50 p-2 rounded border border-blue-100 space-y-2">
-                                    <div>
-                                        <label className="block text-xs font-bold text-blue-800 text-center mb-1">B (Big)</label>
-                                        <input type="number" step="0.01" value={b} onChange={e => setB(e.target.value)} className="w-full px-2 py-1.5 border border-blue-200 rounded text-right font-mono text-sm" placeholder="0" />
+                                <div className="bg-blue-50/50 p-2 rounded border border-blue-100">
+                                    <div className="text-center border-b border-blue-200 pb-1 mb-2">
+                                        <span className="text-xs font-bold text-blue-900 uppercase">B / S</span>
                                     </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-blue-800 text-center mb-1">S (Small)</label>
-                                        <input type="number" step="0.01" value={s} onChange={e => setS(e.target.value)} className="w-full px-2 py-1.5 border border-blue-200 rounded text-right font-mono text-sm" placeholder="0" />
+                                    <div className="flex space-x-2">
+                                        <div className="flex-1">
+                                            <label className="block text-[10px] font-bold text-blue-800 text-center mb-1">B</label>
+                                            <input type="number" step="0.01" value={b} onChange={e => setB(e.target.value)} className="w-full px-1 py-1.5 border border-blue-200 rounded text-center font-mono text-sm" placeholder="0" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <label className="block text-[10px] font-bold text-blue-800 text-center mb-1">S</label>
+                                            <input type="number" step="0.01" value={s} onChange={e => setS(e.target.value)} className="w-full px-1 py-1.5 border border-blue-200 rounded text-center font-mono text-sm" placeholder="0" />
+                                        </div>
                                     </div>
                                 </div>
 
                                 {/* Group A/C */}
-                                <div className="bg-red-50/50 p-2 rounded border border-red-100 space-y-2">
-                                    <div>
-                                        <label className="block text-xs font-bold text-red-800 text-center mb-1">A</label>
-                                        <input type="number" step="0.01" value={a} onChange={e => setA(e.target.value)} className="w-full px-2 py-1.5 border border-red-200 rounded text-right font-mono text-sm" placeholder="0" />
+                                <div className="bg-red-50/50 p-2 rounded border border-red-100">
+                                    <div className="text-center border-b border-red-200 pb-1 mb-2">
+                                        <span className="text-xs font-bold text-red-900 uppercase">A / C</span>
                                     </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-red-800 text-center mb-1">C</label>
-                                        <input type="number" step="0.01" value={c} onChange={e => setC(e.target.value)} className="w-full px-2 py-1.5 border border-red-200 rounded text-right font-mono text-sm" placeholder="0" />
+                                    <div className="flex space-x-2">
+                                        <div className="flex-1">
+                                            <label className="block text-[10px] font-bold text-red-800 text-center mb-1">A</label>
+                                            <input type="number" step="0.01" value={a} onChange={e => setA(e.target.value)} className="w-full px-1 py-1.5 border border-red-200 rounded text-center font-mono text-sm" placeholder="0" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <label className="block text-[10px] font-bold text-red-800 text-center mb-1">C</label>
+                                            <input type="number" step="0.01" value={c} onChange={e => setC(e.target.value)} className="w-full px-1 py-1.5 border border-red-200 rounded text-center font-mono text-sm" placeholder="0" />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -232,8 +251,6 @@ const ClientSales: React.FC = () => {
                                     <td className="border border-black p-2 text-right">{totalA}</td>
                                     <td className="border border-black p-2 text-right">{totalC}</td>
                                 </tr>
-
-                                {/* Summary Rows below table */}
                             </tfoot>
                         </table>
 
