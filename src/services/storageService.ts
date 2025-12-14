@@ -246,18 +246,66 @@ export const getNetAmount = (r: LedgerRecord): number => {
   return normalized.operation === 'add' ? normalized.amount : -normalized.amount;
 };
 
+// Internal Helper to get sales records synchronously from localStorage
+// Used for merging sales into ledger records for display logic
+const getLocalSaleRecords = (): SaleRecord[] => {
+    const data = localStorage.getItem(SALES_KEY);
+    return data ? JSON.parse(data) : [];
+};
+
 export const getLedgerRecords = (clientId: string): LedgerRecord[] => {
   const data = localStorage.getItem(RECORDS_KEY);
   const allRecords: any[] = data ? JSON.parse(data) : [];
-  return allRecords
+  const manualRecords = allRecords
     .filter(r => r.clientId === clientId)
     .map(normalizeRecord);
+
+  // Merge Sales Records as Read-Only Ledger Entries
+  const sales = getLocalSaleRecords().filter(s => s.clientId === clientId);
+  const salesAsLedger: LedgerRecord[] = sales.map(s => {
+      const total = (s.b || 0) + (s.s || 0) + (s.a || 0) + (s.c || 0);
+      if (total === 0) return null;
+      return {
+          id: `sale_${s.id || s.date}`, // Unique ID for display
+          clientId: s.clientId,
+          date: s.date,
+          description: 'Sales Opening',
+          typeLabel: 'Sales', // "收" in English context of app but functions as "Sales"
+          amount: total,
+          operation: 'add', // Green / Receive
+          column: 'col1', // Panel 1
+          isVisible: true,
+          // Add a flag if we want to prevent deletion in UI (needs type update or just handle by prefix)
+      } as LedgerRecord;
+  }).filter((r): r is LedgerRecord => r !== null);
+
+  return [...manualRecords, ...salesAsLedger];
 };
 
 export const getAllLedgerRecords = (): LedgerRecord[] => {
   const data = localStorage.getItem(RECORDS_KEY);
   const allRecords: any[] = data ? JSON.parse(data) : [];
-  return allRecords.map(normalizeRecord);
+  const manualRecords = allRecords.map(normalizeRecord);
+
+  // Merge all sales
+  const sales = getLocalSaleRecords();
+  const salesAsLedger: LedgerRecord[] = sales.map(s => {
+      const total = (s.b || 0) + (s.s || 0) + (s.a || 0) + (s.c || 0);
+      if (total === 0) return null;
+      return {
+          id: `sale_${s.id || s.date}`,
+          clientId: s.clientId,
+          date: s.date,
+          description: 'Sales Opening',
+          typeLabel: 'Sales',
+          amount: total,
+          operation: 'add',
+          column: 'col1',
+          isVisible: true
+      } as LedgerRecord;
+  }).filter((r): r is LedgerRecord => r !== null);
+
+  return [...manualRecords, ...salesAsLedger];
 };
 
 // Updated: Supports optional 'untilDate' (inclusive)

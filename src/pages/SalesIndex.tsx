@@ -335,33 +335,24 @@ const SalesIndex: React.FC = () => {
   const handleMobileUpdate = useCallback(async (clientId: string, val: number) => {
       // Logic: Mobile clients enter a single weekly amount.
       // We will store this entire amount in the 'b' column of the LAST DAY of the week.
-      // We must first zero out other days so the sum is correct.
-      
       const lastDateStr = activeDateStrings[activeDateStrings.length - 1];
-      // Safety check if no dates
       if (!lastDateStr) return;
 
-      // 1. Calculate what is currently stored for OTHER days (should be 0 for pure mobile, but handled safely)
       const clientRecords = salesData.filter(r => r.clientId === clientId);
       const otherDaysSum = clientRecords
           .filter(r => r.date !== lastDateStr)
           .reduce((acc, r) => acc + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
       
-      // 2. The new value for the last day needs to be (Desired Total - Other Days Sum)
-      //    Mobile users usually only have 1 entry per week, so otherDaysSum is likely 0.
       const newLastDayVal = Math.max(0, val - otherDaysSum); 
 
-      // Optimistic update
       setSalesData(prev => {
-          // Remove old record for last day if exists, replace with new
           const others = prev.filter(r => !(r.clientId === clientId && r.date === lastDateStr));
           return [...others, { 
               id: 'temp', clientId, date: lastDateStr, 
-              b: newLastDayVal, s: 0, a: 0, c: 0 // Reset other cols to 0
+              b: newLastDayVal, s: 0, a: 0, c: 0 
           }];
       });
 
-      // Save to DB
       await saveSaleRecord({
           clientId,
           date: lastDateStr,
@@ -393,6 +384,9 @@ const SalesIndex: React.FC = () => {
       }
   };
 
+  const paperClients = useMemo(() => clients.filter(c => (c.category || 'paper') === 'paper'), [clients]);
+  const mobileClients = useMemo(() => clients.filter(c => c.category === 'mobile'), [clients]);
+
   const filteredClients = clients.filter(c => {
       const category = c.category || 'paper';
       const matchTab = category === activeTab;
@@ -401,16 +395,11 @@ const SalesIndex: React.FC = () => {
       return matchTab && matchSearch;
   });
 
-  // --- Calculations for Header Totals ---
-  // Paper Total
-  const paperClients = clients.filter(c => (c.category || 'paper') === 'paper');
   const totalPaper = paperClients.reduce((acc, client) => {
       const clientRecs = salesData.filter(r => r.clientId === client.id);
       return acc + clientRecs.reduce((sum, r) => sum + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
   }, 0);
 
-  // Mobile Total
-  const mobileClients = clients.filter(c => c.category === 'mobile');
   const totalMobile = mobileClients.reduce((acc, client) => {
       const clientRecs = salesData.filter(r => r.clientId === client.id);
       return acc + clientRecs.reduce((sum, r) => sum + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
@@ -423,6 +412,18 @@ const SalesIndex: React.FC = () => {
          setSelectedWeekNum(sortedWeekKeys[0]);
      }
   }, [sortedWeekKeys, selectedWeekNum]);
+
+  // Helper to get formatted week date range
+  const getWeekRangeLabel = (weekNum: number) => {
+      const days = weeksData[weekNum];
+      if (!days || days.length === 0) return '';
+      
+      const firstDay = new Date(currentYear, currentMonth, days[0]);
+      const lastDay = new Date(currentYear, currentMonth, days[days.length - 1]);
+      
+      const formatDate = (d: Date) => `${String(d.getDate()).padStart(2, '0')} ${MONTH_NAMES[d.getMonth()].slice(0,3)}`;
+      return `${formatDate(firstDay)} - ${formatDate(lastDay)}`;
+  };
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-gray-50">
@@ -482,16 +483,21 @@ const SalesIndex: React.FC = () => {
                     <button onClick={handleNextMonth} disabled={currentYear === 2026 && currentMonth === 11} className="p-1 hover:bg-white rounded shadow-sm disabled:opacity-30"><ChevronRight size={18}/></button>
                 </div>
 
-                <div className="flex space-x-1">
+                <div className="flex space-x-2">
                     {sortedWeekKeys.map(wk => (
                         <button
                             key={wk}
                             onClick={() => setSelectedWeekNum(wk)}
-                            className={`px-3 py-1.5 rounded-md text-xs font-bold transition-colors whitespace-nowrap
-                                ${selectedWeekNum === wk ? 'bg-blue-600 text-white shadow' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}
+                            className={`px-3 py-1 rounded-md transition-colors whitespace-nowrap flex flex-col items-center justify-center min-w-[100px] border
+                                ${selectedWeekNum === wk 
+                                    ? 'bg-blue-600 text-white shadow border-blue-600' 
+                                    : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}
                             `}
                         >
-                            Week {Object.keys(weeksData).indexOf(String(wk)) + 1}
+                            <span className="text-xs font-bold uppercase tracking-wider">Week {Object.keys(weeksData).indexOf(String(wk)) + 1}</span>
+                            <span className={`text-[10px] mt-0.5 ${selectedWeekNum === wk ? 'text-blue-100' : 'text-gray-400'}`}>
+                                {getWeekRangeLabel(wk)}
+                            </span>
                         </button>
                     ))}
                 </div>
