@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, ChevronLeft, ChevronRight, Loader2, Calendar, Smartphone, FileText, DollarSign } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Loader2, Calendar, Smartphone, FileText, DollarSign, RefreshCw } from 'lucide-react';
 import { getClients, getSalesForDates, saveSaleRecord } from '../services/storageService';
 import { Client, SaleRecord } from '../types';
 import { MONTH_NAMES, getWeeksForMonth } from '../utils/reportUtils';
@@ -91,6 +91,7 @@ const MobileClientRow = React.memo(({
 
     const handleBlur = () => {
         const val = parseFloat(localVal) || 0;
+        // Only update if value changed substantially
         if (val !== total) {
             onUpdate(client.id, val);
         }
@@ -98,27 +99,30 @@ const MobileClientRow = React.memo(({
 
     return (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 flex items-center justify-between hover:shadow-md transition-shadow">
-            <div className="flex items-center space-x-3">
-                <div className="bg-purple-50 p-2 rounded-full text-purple-600">
+            <div className="flex items-center space-x-4">
+                <div className="bg-purple-50 h-10 w-10 rounded-full flex items-center justify-center text-purple-600">
                     <Smartphone size={20} />
                 </div>
                 <div>
-                    <h3 className="font-bold text-gray-900 leading-tight">{client.name}</h3>
+                    <h3 className="font-bold text-gray-900 leading-tight text-lg">{client.name}</h3>
                     <p className="text-xs text-gray-500 font-mono">{client.code}</p>
                 </div>
             </div>
-            <div className="w-32">
+            <div className="w-40">
                 <div className="relative">
-                    <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 font-bold">$</span>
+                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 font-bold">$</span>
                     <input 
                         type="number"
                         inputMode="decimal"
                         value={localVal}
                         onChange={(e) => setLocalVal(e.target.value)}
                         onBlur={handleBlur}
+                        onKeyDown={(e) => {
+                             if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                        }}
                         onFocus={(e) => e.target.select()}
-                        className={`w-full pl-6 pr-3 py-2 text-right font-mono font-bold text-lg border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${localVal ? 'text-purple-700 bg-purple-50 border-purple-200' : 'text-gray-900 border-gray-300'}`}
-                        placeholder="0"
+                        className={`w-full pl-8 pr-4 py-3 text-right font-mono font-bold text-xl border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all ${localVal && parseFloat(localVal) > 0 ? 'text-purple-700 bg-purple-50 border-purple-200 shadow-inner' : 'text-gray-900 border-gray-300'}`}
+                        placeholder="0.00"
                     />
                 </div>
             </div>
@@ -223,7 +227,7 @@ const SalesIndex: React.FC = () => {
   const [salesData, setSalesData] = useState<SaleRecord[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Tab state for categories
+  // Tab state
   const [activeTab, setActiveTab] = useState<'paper' | 'mobile'>('paper');
 
   // Initial Load: Set to "Today"
@@ -329,43 +333,35 @@ const SalesIndex: React.FC = () => {
 
   // Handle updates for Mobile Clients (Weekly Total)
   const handleMobileUpdate = useCallback(async (clientId: string, val: number) => {
-      // 1. Calculate current sum of other days in this week for this client
-      // 2. We will treat the input as the NEW TOTAL.
-      // 3. To keep it simple, we update the LAST day of the week to ensure the sum matches.
-      // 4. Actually, simpler: Mobile view treats daily granularity as irrelevant. 
-      //    We will fetch existing total, find difference, and apply difference to the last day.
-      //    Or better: Just set the last day to (Val - SumOfOtherDays).
+      // Logic: Mobile clients enter a single weekly amount.
+      // We will store this entire amount in the 'b' column of the LAST DAY of the week.
+      // We must first zero out other days so the sum is correct.
       
       const lastDateStr = activeDateStrings[activeDateStrings.length - 1];
+      // Safety check if no dates
       if (!lastDateStr) return;
 
+      // 1. Calculate what is currently stored for OTHER days (should be 0 for pure mobile, but handled safely)
       const clientRecords = salesData.filter(r => r.clientId === clientId);
-      
-      // Calculate sum of all OTHER days
       const otherDaysSum = clientRecords
           .filter(r => r.date !== lastDateStr)
           .reduce((acc, r) => acc + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
-
-      // New value for last day = Desired Total - Other Days
-      // Use 'b' field as the bucket for mobile sales
+      
+      // 2. The new value for the last day needs to be (Desired Total - Other Days Sum)
+      //    Mobile users usually only have 1 entry per week, so otherDaysSum is likely 0.
       const newLastDayVal = Math.max(0, val - otherDaysSum); 
 
       // Optimistic update
       setSalesData(prev => {
-          const idx = prev.findIndex(r => r.clientId === clientId && r.date === lastDateStr);
-          if (idx >= 0) {
-              const updated = [...prev];
-              updated[idx] = { ...updated[idx], b: newLastDayVal, s:0, a:0, c:0 }; // Reset others to 0 on the update target for cleanliness
-              return updated;
-          } else {
-               return [...prev, { 
-                  id: 'temp', clientId, date: lastDateStr, 
-                  b: newLastDayVal, s: 0, a: 0, c: 0 
-              }];
-          }
+          // Remove old record for last day if exists, replace with new
+          const others = prev.filter(r => !(r.clientId === clientId && r.date === lastDateStr));
+          return [...others, { 
+              id: 'temp', clientId, date: lastDateStr, 
+              b: newLastDayVal, s: 0, a: 0, c: 0 // Reset other cols to 0
+          }];
       });
 
-      // Save
+      // Save to DB
       await saveSaleRecord({
           clientId,
           date: lastDateStr,
@@ -453,19 +449,15 @@ const SalesIndex: React.FC = () => {
                     </button>
                  </div>
                  
-                 {/* Weekly Total Display */}
-                 <div className="hidden lg:flex items-center space-x-4 ml-4 pl-4 border-l border-gray-200">
-                    <div>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Paper Total</p>
-                        <p className="font-mono font-bold text-gray-800">${totalPaper.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                 {/* Distinct Total Displays based on Tab */}
+                 <div className="hidden lg:flex items-center space-x-6 ml-6 pl-6 border-l border-gray-200">
+                    <div className={`transition-opacity duration-300 ${activeTab === 'paper' ? 'opacity-100' : 'opacity-40'}`}>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Paper Week Total</p>
+                        <p className="font-mono font-bold text-gray-800 text-lg">${totalPaper.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
                     </div>
-                    <div>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Mobile Total</p>
-                        <p className="font-mono font-bold text-purple-600">${totalMobile.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
-                    </div>
-                    <div>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Grand Total</p>
-                        <p className="font-mono font-bold text-green-600 text-lg">${(totalPaper + totalMobile).toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                    <div className={`transition-opacity duration-300 ${activeTab === 'mobile' ? 'opacity-100' : 'opacity-40'}`}>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Mobile Week Total</p>
+                        <p className="font-mono font-bold text-purple-600 text-lg">${totalMobile.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
                     </div>
                  </div>
              </div>
@@ -503,6 +495,11 @@ const SalesIndex: React.FC = () => {
                         </button>
                     ))}
                 </div>
+                
+                {/* Refresh Button */}
+                <button onClick={loadData} className="ml-auto p-2 text-gray-400 hover:text-blue-600 hover:bg-gray-100 rounded-full" title="Refresh Data">
+                    <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+                </button>
           </div>
       </div>
 
@@ -528,19 +525,7 @@ const SalesIndex: React.FC = () => {
                     </div>
                 ) : (
                     // Mobile View: List of Rows
-                    <div className="space-y-2 max-w-4xl mx-auto">
-                        {/* Totals Card for Mobile View Specific */}
-                        <div className="bg-purple-600 text-white rounded-xl p-6 mb-6 shadow-md flex justify-between items-center">
-                             <div>
-                                 <h2 className="text-xl font-bold">Mobile Sales Summary</h2>
-                                 <p className="opacity-80 text-sm">Week {Object.keys(weeksData).indexOf(String(selectedWeekNum)) + 1} - {MONTH_NAMES[currentMonth]} {currentYear}</p>
-                             </div>
-                             <div className="text-right">
-                                 <p className="text-xs uppercase opacity-80 font-bold tracking-wider">Week Total</p>
-                                 <p className="text-3xl font-mono font-bold">${totalMobile.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
-                             </div>
-                        </div>
-
+                    <div className="space-y-4 max-w-4xl mx-auto">
                         {filteredClients.map(client => {
                             const clientRecords = salesData.filter(r => r.clientId === client.id);
                             const total = clientRecords.reduce((acc, r) => acc + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
@@ -567,6 +552,17 @@ const SalesIndex: React.FC = () => {
             </div>
         )}
       </div>
+
+      {/* Sticky Mobile Footer Total (Visible only on Mobile Tab) */}
+      {activeTab === 'mobile' && (
+        <div className="bg-purple-900 text-white p-4 sticky bottom-0 z-30 shadow-lg flex justify-between items-center lg:hidden">
+            <div>
+                <p className="text-xs text-purple-300 font-bold uppercase tracking-wider">Mobile Week Total</p>
+                <p className="text-xs text-purple-400 opacity-75">{MONTH_NAMES[currentMonth]} W{Object.keys(weeksData).indexOf(String(selectedWeekNum)) + 1}</p>
+            </div>
+            <p className="font-mono font-bold text-2xl">${totalMobile.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+        </div>
+      )}
     </div>
   );
 };
