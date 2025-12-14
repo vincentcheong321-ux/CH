@@ -259,8 +259,15 @@ export const getAllLedgerRecords = (): LedgerRecord[] => {
   return allRecords.map(normalizeRecord);
 };
 
-export const getClientBalance = (clientId: string): number => {
-  const records = getLedgerRecords(clientId);
+// Updated: Supports optional 'untilDate' (inclusive)
+export const getClientBalance = (clientId: string, untilDate?: string): number => {
+  let records = getLedgerRecords(clientId);
+  
+  // Filter by date if provided
+  if (untilDate) {
+      records = records.filter(r => r.date <= untilDate);
+  }
+
   const col1Records = records.filter(r => r.column === 'col1' && r.isVisible);
   
   if (col1Records.length > 0) {
