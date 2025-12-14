@@ -140,7 +140,7 @@ const ClientLedger: React.FC = () => {
             id: 'agg_sale_week', // Virtual ID for display
             clientId: id!,
             date: latestDate,
-            description: 'Sales Opening',
+            description: '', // Empty description so only '收' shows
             typeLabel: '收',
             amount: Math.abs(totalSalesNet),
             operation: totalSalesNet >= 0 ? 'add' : 'subtract',
@@ -516,9 +516,6 @@ const ClientLedger: React.FC = () => {
                     <div>
                         <h2 className="text-2xl md:text-4xl font-bold text-gray-900 uppercase tracking-widest">{client.name}</h2>
                         {client.code && <p className="text-gray-600 mt-1 font-mono text-sm md:text-xl">{client.code}</p>}
-                    </div>
-                    <div className="text-right">
-                        <p className="text-sm text-gray-500 font-sans uppercase tracking-wider">{MONTH_NAMES[currentMonth]} {currentYear}</p>
                     </div>
                 </div>
 
