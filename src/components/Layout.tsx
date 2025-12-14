@@ -28,10 +28,10 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
   const menuItems = [
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/clients', label: 'Client Accounts', icon: Users },
-    { path: '/sales', label: 'Sales Opening', icon: FileText },
-    { path: '/cash-advance', label: 'Cash Advance', icon: Banknote },
-    { path: '/cash-credit', label: 'Cash Credit', icon: CreditCard },
-    { path: '/draw-report', label: 'Draw Reports', icon: Calendar },
+    { path: '/sales', label: 'Sales Opening', icon: FileText, chineseChar: '收' },
+    { path: '/cash-advance', label: 'Cash Advance', icon: Banknote, chineseChar: '支' },
+    { path: '/cash-credit', label: 'Cash Credit', icon: CreditCard, chineseChar: '来' },
+    { path: '/draw-report', label: 'Draw Reports', icon: Calendar, chineseChar: '上欠' },
     { path: '/cashflow', label: 'Company Cash Flow', icon: ArrowRightLeft },
     { path: '/summary', label: 'Total Balance Summary', icon: PieChart },
   ];
@@ -77,13 +77,25 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
                 to={item.path}
                 onClick={() => setIsSidebarOpen(false)}
                 className={`
-                  flex items-center px-4 py-3 rounded-lg transition-colors
+                  flex items-center px-4 py-3 rounded-lg transition-colors group
                   ${isActive 
                     ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50' 
                     : 'text-gray-400 hover:bg-slate-800 hover:text-white'}
                 `}
               >
-                <Icon size={20} className="mr-3" />
+                {/* If chineseChar exists, render it as a badge/icon replacement */}
+                {item.chineseChar ? (
+                    <div className={`
+                        mr-3 flex items-center justify-center w-5 h-5 
+                        font-bold leading-none transition-colors
+                        ${item.chineseChar.length > 1 ? 'text-[10px]' : 'text-lg'}
+                        ${isActive ? 'text-white' : 'text-gray-400 group-hover:text-white'}
+                    `}>
+                        {item.chineseChar}
+                    </div>
+                ) : (
+                    <Icon size={20} className="mr-3" />
+                )}
                 <span className="font-medium">{item.label}</span>
               </Link>
             );
