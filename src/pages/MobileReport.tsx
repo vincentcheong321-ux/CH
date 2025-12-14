@@ -11,7 +11,7 @@ const MobileReport: React.FC = () => {
   const [inputText, setInputText] = useState('');
   const [parsedData, setParsedData] = useState<any[]>([]);
   
-  // State for matching and saving
+  // State for matchin and saving
   const [clients, setClients] = useState<Client[]>([]);
   const [saveStatus, setSaveStatus] = useState<{ type: 'success' | 'error' | null, message: string }>({ type: null, message: '' });
   const [history, setHistory] = useState<any[]>([]);
@@ -57,20 +57,37 @@ const MobileReport: React.FC = () => {
     const rows = inputText.trim().split('\n');
     const data: any[] = [];
 
-    // Heuristic to skip header rows if they exist
-    let startIndex = 0;
-    if (rows[0].includes('登陆帐号')) startIndex = 1;
-    if (rows[1] && (rows[1].includes('营业额') || rows[1].includes('Total'))) startIndex = 2; 
-
-    for (let i = startIndex; i < rows.length; i++) {
+    // Heuristic: Skip header rows if they don't look like data
+    // We look for a row that starts with alphanumeric ID and has multiple numbers
+    
+    for (let i = 0; i < rows.length; i++) {
         const line = rows[i].trim();
         if (!line) continue;
 
-        const parts = line.split(/[\t\s]+/);
-        if (parts.length < 5) continue;
+        // Try splitting by Tab first (Preferred for Excel/Table copy)
+        let parts = line.split('\t');
+        
+        // If no tabs, fallback to loose whitespace split (riskier for names with spaces)
+        if (parts.length < 2) {
+            parts = line.split(/[\t\s]+/);
+        }
 
+        // Filter out empty parts
+        parts = parts.map(p => p.trim()).filter(p => p !== '');
+
+        if (parts.length < 5) continue; // Skip lines that are too short to be data
+
+        // Identify if this is a data row:
+        // 1. First column looks like an ID (alphanumeric)
+        // 2. We can find a sequence of numbers further down
+        
         const isNumberLike = (s: string) => /^-?[\d,]+\.?\d*$/.test(s);
+        
+        // Find the index where the numeric data starts
+        // Usually index 2 (after ID and Name)
         let firstStatIndex = -1;
+        
+        // Scan for the first recognizable number that is followed by another number
         for (let j = 1; j < parts.length; j++) {
             if (isNumberLike(parts[j]) && (j+1 >= parts.length || isNumberLike(parts[j+1]))) {
                 firstStatIndex = j;
@@ -78,11 +95,20 @@ const MobileReport: React.FC = () => {
             }
         }
 
-        if (firstStatIndex > -1) {
+        // Only process if we found a valid data structure
+        if (firstStatIndex > 0) {
             const id = parts[0];
+            
+            // Name is everything between ID and First Stat
             const name = parts.slice(1, firstStatIndex).join(' ');
+            
+            // Values are everything from First Stat onwards
             const values = parts.slice(firstStatIndex);
-            data.push({ id, name, values });
+            
+            // Ensure we have enough data columns (expecting ~17 columns based on user sample)
+            if (values.length >= 10) {
+                data.push({ id, name, values });
+            }
         }
     }
     setParsedData(data);
@@ -121,11 +147,13 @@ const MobileReport: React.FC = () => {
               const lastValStr = row.values[row.values.length - 1];
               const val = parseFloat(String(lastValStr).replace(/,/g, ''));
 
-              // Extract extra details (Keep legacy for now)
+              // Create legacy object for backward compatibility, although we prefer raw array now
+              // Mapping based on 17-column structure: 
+              // 0:Bet, 7:CoTotal, 11:ShTotal, 16:AgTotal
               const mobileRaw = {
                   memberBet: row.values[0] || '0',
                   companyTotal: row.values[7] || '0',
-                  shareholderTotal: row.values[13] || '0',
+                  shareholderTotal: row.values[11] || '0', // Adjusted index for Shareholder Total
                   agentTotal: row.values[row.values.length - 1] || '0'
               };
 
@@ -135,7 +163,7 @@ const MobileReport: React.FC = () => {
                       date: targetDate,
                       b: val, 
                       s: 0, a: 0, c: 0,
-                      mobileRaw, // Save detailed legacy data
+                      mobileRaw, 
                       mobileRawData: row.values // Save FULL raw data array
                   });
                   matchedCount++;
@@ -254,8 +282,8 @@ const MobileReport: React.FC = () => {
                                 <h3 className="text-sm font-bold text-gray-800 mb-2 uppercase tracking-wide">Paste Report Text</h3>
                                 <p className="text-xs text-gray-400 mb-4">Copy the table from your spreadsheet or report and paste it here.</p>
                                 <textarea 
-                                    className="flex-1 w-full p-4 border border-gray-300 rounded-lg font-mono text-xs focus:ring-2 focus:ring-purple-500 focus:outline-none bg-gray-50 resize-none"
-                                    placeholder="Paste excel/text content here..."
+                                    className="flex-1 w-full p-4 border border-gray-300 rounded-lg font-mono text-xs focus:ring-2 focus:ring-purple-500 focus:outline-none bg-gray-50 resize-none whitespace-pre"
+                                    placeholder="Paste excel content here..."
                                     value={inputText}
                                     onChange={(e) => setInputText(e.target.value)}
                                     style={{ minHeight: '300px' }}
@@ -269,20 +297,25 @@ const MobileReport: React.FC = () => {
                                     <thead className="bg-gray-100 text-gray-700 font-bold">
                                         <tr>
                                             <th className="px-4 py-3 text-left sticky left-0 bg-gray-100 z-10 border-r border-gray-200">登陆帐号 / 名字</th>
+                                            {/* Columns 0-2 */}
                                             <th className="px-2 py-3 bg-gray-50">会员总投注</th>
                                             <th className="px-2 py-3 bg-gray-50">会员总数</th>
                                             <th className="px-2 py-3 bg-gray-50">tgmts</th>
+                                            
+                                            {/* Company 3-7 */}
                                             <th className="px-2 py-3 border-l border-gray-200">公司 营业额</th>
                                             <th className="px-2 py-3">公司 佣金</th>
                                             <th className="px-2 py-3">公司 赔出</th>
                                             <th className="px-2 py-3">公司 补费用</th>
                                             <th className="px-2 py-3 font-extrabold bg-blue-50 text-blue-800">公司 总额</th>
+                                            
+                                            {/* Shareholder 8-11 */}
                                             <th className="px-2 py-3 border-l border-gray-200">股东 营业额</th>
                                             <th className="px-2 py-3">股东 佣金</th>
                                             <th className="px-2 py-3">股东 赔出</th>
-                                            <th className="px-2 py-3">股东 赢彩</th>
-                                            <th className="px-2 py-3">股东 补费用</th>
                                             <th className="px-2 py-3 font-extrabold bg-blue-50 text-blue-800">股东 总额</th>
+                                            
+                                            {/* Agent 12-16 */}
                                             <th className="px-2 py-3 border-l border-gray-200">总代理 营业额</th>
                                             <th className="px-2 py-3">总代理 佣金</th>
                                             <th className="px-2 py-3">总代理 赔出</th>
@@ -303,7 +336,11 @@ const MobileReport: React.FC = () => {
                                                     </div>
                                                 </td>
                                                 {row.values.map((v: any, i: number) => (
-                                                    <td key={i} className={`px-2 py-2 ${i===7||i===13?'font-bold bg-blue-50/30':''} ${i===3||i===8||i===14?'border-l border-gray-100':''} ${i===row.values.length-1 ? (parseFloat(String(v).replace(/,/g,'')) >= 0 ? 'text-green-700 bg-green-50 font-extrabold border-l-2 border-green-100' : 'text-red-600 bg-green-50 font-extrabold border-l-2 border-green-100') : ''}`}>
+                                                    <td key={i} className={`px-2 py-2 
+                                                        ${i===7||i===11?'font-bold bg-blue-50/30':''} 
+                                                        ${i===3||i===8||i===12?'border-l border-gray-100':''} 
+                                                        ${i===row.values.length-1 ? (parseFloat(String(v).replace(/,/g,'')) >= 0 ? 'text-green-700 bg-green-50 font-extrabold border-l-2 border-green-100' : 'text-red-600 bg-green-50 font-extrabold border-l-2 border-green-100') : ''}
+                                                    `}>
                                                         {v}
                                                     </td>
                                                 ))}

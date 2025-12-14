@@ -92,22 +92,19 @@ const DetailedMobileTableRow = React.memo(({
     const legacy = record?.mobileRaw;
 
     // Helper to get value safely. 
-    // If raw array exists, use index. 
-    // If not, use legacy named fields for specific columns, or '-' for others.
     const getVal = (idx: number): string | number => {
         if (raw && raw.length > idx) return raw[idx];
         if (legacy) {
-            // Map known legacy fields to indices roughly
             if (idx === 0) return legacy.memberBet;
             if (idx === 7) return legacy.companyTotal;
-            if (idx === 13) return legacy.shareholderTotal;
-            if (idx === 18) return legacy.agentTotal; // Assuming 19 columns
+            if (idx === 11) return legacy.shareholderTotal; // Updated Index
+            if (idx === 16) return legacy.agentTotal; // Updated Index
         }
         return '';
     };
 
-    // Calculate Agent Total Color
-    const agentTotalVal = getVal(raw ? raw.length - 1 : 18);
+    // Calculate Agent Total Color (Last index 16)
+    const agentTotalVal = getVal(raw ? raw.length - 1 : 16);
     const isPositive = parseFloat(String(agentTotalVal).replace(/,/g,'')) >= 0;
 
     return (
@@ -117,28 +114,29 @@ const DetailedMobileTableRow = React.memo(({
                 <div className="font-bold text-gray-900">{client.name}</div>
                 <div className="text-[9px] text-gray-500">{client.code}</div>
             </td>
-            {/* 2. Member */}
+            {/* 2. Member (3 cols) */}
             <td className="px-2 py-3 text-right bg-gray-50/30 font-semibold">{getVal(0)}</td>
             <td className="px-2 py-3 text-right text-gray-400">{getVal(1)}</td>
             <td className="px-2 py-3 text-right border-r border-gray-100">{getVal(2)}</td>
-            {/* 3. Company */}
+            
+            {/* 3. Company (5 cols) */}
             <td className="px-2 py-3 text-right">{getVal(3)}</td>
             <td className="px-2 py-3 text-right">{getVal(4)}</td>
             <td className="px-2 py-3 text-right">{getVal(5)}</td>
             <td className="px-2 py-3 text-right">{getVal(6)}</td>
             <td className="px-2 py-3 text-right font-bold text-blue-700 bg-blue-50/30 border-r border-gray-200">{getVal(7)}</td>
-            {/* 4. Shareholder */}
+            
+            {/* 4. Shareholder (4 cols - Adjusted) */}
             <td className="px-2 py-3 text-right">{getVal(8)}</td>
             <td className="px-2 py-3 text-right">{getVal(9)}</td>
             <td className="px-2 py-3 text-right">{getVal(10)}</td>
-            <td className="px-2 py-3 text-right">{getVal(11)}</td>
+            <td className="px-2 py-3 text-right font-bold text-blue-700 bg-blue-50/30 border-r border-gray-200">{getVal(11)}</td>
+            
+            {/* 5. Agent (5 cols) */}
             <td className="px-2 py-3 text-right">{getVal(12)}</td>
-            <td className="px-2 py-3 text-right font-bold text-blue-700 bg-blue-50/30 border-r border-gray-200">{getVal(13)}</td>
-            {/* 5. Agent */}
+            <td className="px-2 py-3 text-right">{getVal(13)}</td>
             <td className="px-2 py-3 text-right">{getVal(14)}</td>
             <td className="px-2 py-3 text-right">{getVal(15)}</td>
-            <td className="px-2 py-3 text-right">{getVal(16)}</td>
-            <td className="px-2 py-3 text-right">{getVal(17)}</td>
             <td className={`px-2 py-3 text-right font-extrabold bg-green-50 border-l-2 border-green-100 ${isPositive ? 'text-green-700' : 'text-red-600'}`}>
                 {agentTotalVal}
             </td>
@@ -564,20 +562,26 @@ const SalesIndex: React.FC = () => {
                                 <thead className="bg-gray-100 font-bold text-gray-700">
                                     <tr>
                                         <th className="px-2 py-3 sticky left-0 bg-gray-100 z-10 border-r border-gray-200">登陆帐号 / 名字</th>
+                                        {/* Member 3 Cols */}
                                         <th className="px-2 py-3 bg-gray-50/50">会员总投注</th>
                                         <th className="px-2 py-3 bg-gray-50/50">会员总数</th>
                                         <th className="px-2 py-3 bg-gray-50/50 border-r border-gray-200">tgmts</th>
+                                        
+                                        {/* Company 5 Cols */}
                                         <th className="px-2 py-3">公司 营业额</th>
                                         <th className="px-2 py-3">公司 佣金</th>
                                         <th className="px-2 py-3">公司 赔出</th>
                                         <th className="px-2 py-3">公司 补费用</th>
                                         <th className="px-2 py-3 font-extrabold bg-blue-50 text-blue-800 border-r border-gray-200">公司 总额</th>
+                                        
+                                        {/* Shareholder 4 Cols (Adjusted) */}
                                         <th className="px-2 py-3">股东 营业额</th>
                                         <th className="px-2 py-3">股东 佣金</th>
                                         <th className="px-2 py-3">股东 赔出</th>
-                                        <th className="px-2 py-3">股东 赢彩</th>
-                                        <th className="px-2 py-3">股东 补费用</th>
+                                        {/* Removed: 股东 赢彩 & 股东 补费用 to match data stream */}
                                         <th className="px-2 py-3 font-extrabold bg-blue-50 text-blue-800 border-r border-gray-200">股东 总额</th>
+                                        
+                                        {/* Agent 5 Cols */}
                                         <th className="px-2 py-3">总代理 营业额</th>
                                         <th className="px-2 py-3">总代理 佣金</th>
                                         <th className="px-2 py-3">总代理 赔出</th>
