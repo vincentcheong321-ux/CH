@@ -159,7 +159,10 @@ const ClientWeeklyCard = React.memo(({
     
     // Calculate Client Totals for the Week
     const clientRecords = salesData.filter(r => r.clientId === client.id);
-    const totalWeek = clientRecords.reduce((acc, r) => acc + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
+    const rawTotal = clientRecords.reduce((acc, r) => acc + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
+    
+    // ADJUSTMENT: Apply -14% to the calculated total (Multiply by 0.86)
+    const totalWeek = rawTotal * 0.86;
 
     const formatMonth = (mIndex: number) => {
         const name = MONTH_NAMES[mIndex] || "";
@@ -184,9 +187,9 @@ const ClientWeeklyCard = React.memo(({
                     </div>
                 </Link>
                 <div className="text-right">
-                    <div className="text-[9px] text-gray-400 uppercase tracking-wider font-semibold">Week Total</div>
+                    <div className="text-[9px] text-gray-400 uppercase tracking-wider font-semibold">Week Total (-14%)</div>
                     <span className={`font-mono font-bold text-sm ${totalWeek > 0 ? 'text-blue-600' : 'text-gray-900'}`}>
-                        {totalWeek > 0 ? totalWeek.toLocaleString(undefined, {minimumFractionDigits: 2}) : '-'}
+                        {totalWeek !== 0 ? totalWeek.toLocaleString(undefined, {minimumFractionDigits: 2}) : '-'}
                     </span>
                 </div>
             </div>
@@ -393,7 +396,9 @@ const SalesIndex: React.FC = () => {
 
   const totalPaper = [...zClients, ...cClients].reduce((acc, client) => {
       const clientRecs = salesData.filter(r => r.clientId === client.id);
-      return acc + clientRecs.reduce((sum, r) => sum + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
+      const rawSum = clientRecs.reduce((sum, r) => sum + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
+      // ADJUSTMENT: Apply -14% to the global paper total as well
+      return acc + (rawSum * 0.86);
   }, 0);
 
   const totalMobile = mobileClients.reduce((acc, client) => {
@@ -445,7 +450,7 @@ const SalesIndex: React.FC = () => {
                  
                  <div className="hidden lg:flex items-center space-x-6 ml-6 pl-6 border-l border-gray-200">
                     <div className={`transition-opacity duration-300 ${activeTab === 'paper' ? 'opacity-100' : 'opacity-40'}`}>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Paper Week Total</p>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Paper Week Total (Less 14%)</p>
                         <p className="font-mono font-bold text-gray-800 text-lg">${totalPaper.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
                     </div>
                     <div className={`transition-opacity duration-300 ${activeTab === 'mobile' ? 'opacity-100' : 'opacity-40'}`}>
@@ -562,26 +567,18 @@ const SalesIndex: React.FC = () => {
                                 <thead className="bg-gray-100 font-bold text-gray-700">
                                     <tr>
                                         <th className="px-2 py-3 sticky left-0 bg-gray-100 z-10 border-r border-gray-200">登陆帐号 / 名字</th>
-                                        {/* Member 3 Cols */}
                                         <th className="px-2 py-3 bg-gray-50/50">会员总投注</th>
                                         <th className="px-2 py-3 bg-gray-50/50">会员总数</th>
                                         <th className="px-2 py-3 bg-gray-50/50 border-r border-gray-200">tgmts</th>
-                                        
-                                        {/* Company 5 Cols */}
                                         <th className="px-2 py-3">公司 营业额</th>
                                         <th className="px-2 py-3">公司 佣金</th>
                                         <th className="px-2 py-3">公司 赔出</th>
                                         <th className="px-2 py-3">公司 补费用</th>
                                         <th className="px-2 py-3 font-extrabold bg-blue-50 text-blue-800 border-r border-gray-200">公司 总额</th>
-                                        
-                                        {/* Shareholder 4 Cols (Adjusted) */}
                                         <th className="px-2 py-3">股东 营业额</th>
                                         <th className="px-2 py-3">股东 佣金</th>
                                         <th className="px-2 py-3">股东 赔出</th>
-                                        {/* Removed: 股东 赢彩 & 股东 补费用 to match data stream */}
                                         <th className="px-2 py-3 font-extrabold bg-blue-50 text-blue-800 border-r border-gray-200">股东 总额</th>
-                                        
-                                        {/* Agent 5 Cols */}
                                         <th className="px-2 py-3">总代理 营业额</th>
                                         <th className="px-2 py-3">总代理 佣金</th>
                                         <th className="px-2 py-3">总代理 赔出</th>

@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getClients, getDrawBalances, saveDrawBalance, getClientBalancesPriorToDate } from '../services/storageService';
 import { Client } from '../types';
-import { Calendar, ChevronLeft, ChevronRight, Filter, Save, Layers, RefreshCw, Loader2 } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Filter, Save, Layers, RefreshCw, Loader2, CheckCircle2 } from 'lucide-react';
 import { MONTH_NAMES, getWeeksForMonth, getWeekRangeString } from '../utils/reportUtils';
 
 // Extracted Component to prevent re-mounting on every render
@@ -160,6 +160,11 @@ const DrawReport: React.FC = () => {
           }
           
           setClientBalances(newBalances);
+          
+          // Allow spinner to show for at least 800ms so user sees it
+          await new Promise(r => setTimeout(r, 800));
+          
+          window.alert("Balances generated successfully!");
       } catch (e) {
           console.error("Failed to generate balances", e);
           alert("Error generating balances. Please try again.");
@@ -312,7 +317,7 @@ const DrawReport: React.FC = () => {
                                 disabled={generating}
                                 className="flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-sm text-sm font-bold disabled:opacity-50 transition-colors"
                             >
-                                {generating ? <Loader2 size={16} className="animate-spin mr-2"/> : <RefreshCw size={16} className="mr-2" />}
+                                <RefreshCw size={16} className={`mr-2 ${generating ? 'animate-spin' : ''}`} />
                                 Generate Last Week Balance
                             </button>
                             <div className="hidden md:flex items-center text-xs text-gray-500 bg-yellow-50 px-3 py-1 rounded-full border border-yellow-200">
@@ -368,6 +373,27 @@ const DrawReport: React.FC = () => {
                 </div>
             )}
        </div>
+
+       {/* Full Screen Loading Overlay for Generation */}
+       {generating && (
+           <div className="fixed inset-0 bg-black/60 z-[9999] flex flex-col items-center justify-center backdrop-blur-sm animate-in fade-in duration-200">
+               <div className="bg-white p-8 rounded-2xl shadow-2xl flex flex-col items-center max-w-sm w-full mx-4">
+                   <div className="relative mb-6">
+                        <Loader2 className="animate-spin text-indigo-600 w-16 h-16" strokeWidth={1.5} />
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="w-8 h-8 bg-indigo-50 rounded-full animate-pulse"></div>
+                        </div>
+                   </div>
+                   <h3 className="text-xl font-bold text-gray-900 mb-2">Generating Balances</h3>
+                   <p className="text-gray-500 text-center text-sm mb-6">
+                       Retrieving last week's final amounts for all clients...
+                   </p>
+                   <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                       <div className="bg-indigo-600 h-1.5 rounded-full w-full animate-progress-indeterminate"></div>
+                   </div>
+               </div>
+           </div>
+       )}
     </div>
   );
 };
