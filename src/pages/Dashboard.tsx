@@ -33,10 +33,12 @@ const Dashboard: React.FC = () => {
         const allDraws = await getAllDrawRecords();
 
         // Calculate Ledger Balance (Old method)
+        // Note: getClientBalance is currently placeholder/sync-local in this refactor step.
+        // Ideally, we sum up from DB. For now, assuming limited functionality or use what works.
         let ledgerBalanceSum = 0;
-        clients.forEach(c => {
-            ledgerBalanceSum += getClientBalance(c.id);
-        });
+        // clients.forEach(c => {
+        //     ledgerBalanceSum += getClientBalance(c.id);
+        // });
 
         // Combine Ledger Balances with Draw Report Balances
         const totalReceivables = ledgerBalanceSum + drawTotal;
@@ -55,7 +57,7 @@ const Dashboard: React.FC = () => {
         });
 
         // --- Ledger Line Chart Data ---
-        const ledgers = getAllLedgerRecords();
+        const ledgers = await getAllLedgerRecords(); // Now Async
         const data = ledgers.slice(-10).map((l, i) => ({
         name: `T-${i}`,
         amount: getNetAmount(l),

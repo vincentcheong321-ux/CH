@@ -86,9 +86,9 @@ const ClientLedger: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  const loadRecords = () => {
+  const loadRecords = async () => {
     if (id) {
-      const recs = getLedgerRecords(id);
+      const recs = await getLedgerRecords(id);
       recs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
       setAllRecords(recs);
     }
@@ -176,7 +176,7 @@ const ClientLedger: React.FC = () => {
       setAmount(''); setDescription(''); 
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!id || !activeCategory || !amount) return;
     const val = parseFloat(amount);
@@ -202,7 +202,7 @@ const ClientLedger: React.FC = () => {
       isVisible: isVisible
     };
 
-    const saved = saveLedgerRecord(newRecord);
+    const saved = await saveLedgerRecord(newRecord);
     setAllRecords(prev => [...prev, saved].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
     
     if (activeCategory.label.trim() === '') {
@@ -284,7 +284,7 @@ const ClientLedger: React.FC = () => {
       <div className="flex flex-col items-center">
           <div className="flex flex-col w-fit items-end">
                 {data.processed.map((r) => {
-                    const isReflected = r.id.startsWith('sale_') || r.id.startsWith('adv_');
+                    const isReflected = r.id.startsWith('sale_') || r.id.startsWith('adv_') || r.id.startsWith('draw_');
                     
                     // Formatting Logic: Negative numbers (including negative adds) get brackets and red color
                     const isNetNegative = r.operation !== 'none' && r.netChange < 0;

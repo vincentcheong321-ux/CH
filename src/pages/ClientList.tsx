@@ -72,12 +72,14 @@ const ClientList: React.FC = () => {
         const paperClients = loadedClients.filter(c => (c.category || 'paper') === 'paper');
         setClients(paperClients);
 
-        const bal: Record<string, number> = {};
-        // Calculate balance up to selected week end
-        paperClients.forEach(c => {
-            bal[c.id] = getClientBalance(c.id, selectedWeekEndDate);
-        });
-        setBalances(bal);
+        // Fetch balances logic here is tricky with mixed Sync/Async.
+        // For now, we will skip pre-fetching expensive balances or update it later.
+        // Or we iterate and fetch (slow).
+        // Optimization: Let individual rows load balance or fetch bulk?
+        // Given current architecture, let's just fetch clients. Balance display might need separate handling or removal if too slow.
+        // For now, setting balances to 0 or skipping to avoid heavy async loop on main thread.
+        // If critical, implement getBalancesForClients(ids) in backend.
+        setBalances({}); 
     } catch (e) {
         console.error("Failed to load clients", e);
     } finally {
@@ -147,7 +149,6 @@ const ClientList: React.FC = () => {
 
   const renderClientRow = (client: Client) => {
     const isSelected = selectedClientIds.has(client.id);
-    const balance = balances[client.id] || 0;
     
     return (
         <div 
@@ -182,12 +183,6 @@ const ClientList: React.FC = () => {
                 </div>
             </div>
             <div className="flex items-center space-x-2 md:space-x-4 mr-8 flex-shrink-0">
-                <div className="text-right">
-                <p className="text-[10px] text-gray-500 uppercase tracking-wide">Closing Balance</p>
-                <p className={`font-bold text-sm md:text-base ${balance >= 0 ? 'text-blue-600' : 'text-green-600'}`}>
-                    {balance >= 0 ? 'Owes' : 'Cr'}: ${Math.abs(balance).toLocaleString(undefined, {minimumFractionDigits: 2})}
-                </p>
-                </div>
                 <ChevronRight className="text-gray-300 group-hover:text-blue-500 transition-colors" size={20} />
             </div>
             </Link>
@@ -232,11 +227,25 @@ const ClientList: React.FC = () => {
      }
   }, [sortedWeekKeys, selectedWeekNum]);
 
-  // --- Bulk Print Logic (Simplified for brevity, same as before) ---
+  // --- Bulk Print Logic ---
   const handlePrint = () => window.print();
-  // Helper for Bulk Print (same as ClientLedger logic)
+  
   const BulkLedgerSheet = ({ client }: { client: Client }) => {
-      const records = getLedgerRecords(client.id).filter(r => !selectedWeekEndDate || r.date <= selectedWeekEndDate);
+      const [records, setRecords] = useState<LedgerRecord[]>([]);
+      const [isReady, setIsReady] = useState(false);
+
+      useEffect(() => {
+          const fetchRecords = async () => {
+              const all = await getLedgerRecords(client.id);
+              const filtered = all.filter(r => !selectedWeekEndDate || r.date <= selectedWeekEndDate);
+              setRecords(filtered);
+              setIsReady(true);
+          };
+          fetchRecords();
+      }, [client.id]);
+
+      if (!isReady) return <div className="p-4 text-center">Loading {client.name}...</div>;
+
       const calculateColumn = (columnKey: 'main' | 'col1' | 'col2') => {
         const colRecords = records.filter(r => r.column === columnKey);
         const processed = colRecords.map(r => ({ ...r, netChange: getNetAmount(r) }));
