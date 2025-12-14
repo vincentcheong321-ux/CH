@@ -8,6 +8,8 @@ import ClientLedger from './pages/ClientLedger';
 import DrawReport from './pages/DrawReport';
 import Summary from './pages/Summary';
 import CashFlow from './pages/CashFlow';
+import SalesIndex from './pages/SalesIndex';
+import ClientSales from './pages/ClientSales';
 import Login from './pages/Login';
 import { seedData } from './services/storageService';
 
@@ -61,6 +63,22 @@ const App: React.FC = () => {
           isAuthenticated ? (
             <Layout onLogout={handleLogout}>
               <ClientLedger />
+            </Layout>
+          ) : <Navigate to="/login" />
+        } />
+
+        <Route path="/sales" element={
+          isAuthenticated ? (
+            <Layout onLogout={handleLogout}>
+              <SalesIndex />
+            </Layout>
+          ) : <Navigate to="/login" />
+        } />
+
+        <Route path="/clients/:id/sales" element={
+          isAuthenticated ? (
+            <Layout onLogout={handleLogout}>
+              <ClientSales />
             </Layout>
           ) : <Navigate to="/login" />
         } />

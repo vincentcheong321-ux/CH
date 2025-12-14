@@ -1,7 +1,8 @@
-
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Printer, Trash2, Plus, Minus, Pencil, X, Check, AlertTriangle, ExternalLink, GripHorizontal, Hash, Zap } from 'lucide-react';
+import { ArrowLeft, Printer, Trash2, Plus, Minus, Pencil, X, Check, AlertTriangle, ExternalLink, GripHorizontal, Hash, Zap, Download } from 'lucide-react';
+// @ts-ignore
+import html2canvas from 'html2canvas';
 import { 
   getClients, 
   getLedgerRecords, 
@@ -71,17 +72,19 @@ const ClientLedger: React.FC = () => {
     message: string;
   } | null>(null);
 
+  const [isDownloading, setIsDownloading] = useState(false);
+
   useEffect(() => {
-    const fetchClient = async () => {
-        if (id) {
-            const clients = await getClients();
-            const found = clients.find(c => c.id === id);
-            setClient(found || null);
-            loadRecords();
-            setCategories(getCategories());
-        }
-    }
-    fetchClient();
+    const fetchData = async () => {
+      if (id) {
+        const clients = await getClients();
+        const found = clients.find(c => c.id === id);
+        setClient(found || null);
+        loadRecords();
+        setCategories(getCategories());
+      }
+    };
+    fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -124,7 +127,7 @@ const ClientLedger: React.FC = () => {
             const newTop = Math.max(0, startHeight + diffY); // Min 0px
             setVerticalPadding(prev => ({ ...prev, top: newTop }));
         } else {
-             const newBottom = Math.max(0, startHeight - diffY); // Inverted for bottom drag handle 
+             const newBottom = Math.max(0, startHeight - diffY);
              setVerticalPadding(prev => ({ ...prev, bottom: Math.max(0, startHeight - diffY) }));
         }
     }
@@ -175,31 +178,28 @@ const ClientLedger: React.FC = () => {
 
   const handleCategorySelect = (cat: TransactionCategory) => {
     setActiveCategory(cat);
-    // Initialize current operation from category default
     setCurrentOperation(cat.operation);
     setAmount('');
-    setDescription(''); // Ensure note starts empty (removed auto-date)
+    setDescription(''); 
   };
 
   const handleQuickEntry = () => {
-      // Create a dummy category for Quick Entry
       const quickCat: TransactionCategory = {
           id: 'quick_entry',
           label: '',
           operation: 'add',
-          color: 'bg-blue-600 text-white' // Highlight color for active state
+          color: 'bg-blue-600 text-white' 
       };
       setActiveCategory(quickCat);
       
-      // Panel 1 Rule: Quick Entry defaults to 'none' (Note)
       if (activeColumn === 'col1') {
           setCurrentOperation('none');
       } else {
-          setCurrentOperation('add'); // Default to add for others
+          setCurrentOperation('add'); 
       }
       
       setAmount('');
-      setDescription(''); // Default empty for quick entry
+      setDescription(''); 
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -209,10 +209,8 @@ const ClientLedger: React.FC = () => {
     const val = parseFloat(amount);
     if (isNaN(val)) return;
 
-    // Determine Operation
     let op = activeCategory.label === '' ? currentOperation : activeCategory.operation;
 
-    // FORCE RULE: Panel 1 Unnamed/Quick Entry MUST NOT calculate.
     if (activeColumn === 'col1' && activeCategory.label === '') {
         op = 'none';
     }
@@ -221,7 +219,7 @@ const ClientLedger: React.FC = () => {
       clientId: id,
       date: new Date().toISOString(),
       description: description,
-      typeLabel: activeCategory.label, // Will be empty string for Quick Entry
+      typeLabel: activeCategory.label, 
       amount: val,
       operation: op,
       column: activeColumn,
@@ -229,25 +227,19 @@ const ClientLedger: React.FC = () => {
     };
 
     const saved = saveLedgerRecord(newRecord);
-    // Optimistic Update
     setRecords(prev => [...prev, saved]);
     
-    // Logic for Continuous Entry (Button without name)
     const isUnnamedButton = activeCategory.label.trim() === '';
 
     if (isUnnamedButton) {
-        // Continuous Entry Mode
         setAmount('');
-        setDescription(''); // Clear description for next entry
-        
-        // Refocus amount input for next entry immediately
+        setDescription(''); 
         setTimeout(() => {
             if (amountInputRef.current) {
                 amountInputRef.current.focus();
             }
         }, 10);
     } else {
-        // Standard Mode
         setAmount('');
         setDescription('');
         setActiveCategory(null);
@@ -271,7 +263,6 @@ const ClientLedger: React.FC = () => {
     setNewCatLabel('');
   };
 
-  // --- Drag and Drop Handlers ---
   const handleDragStart = (e: React.DragEvent, index: number) => {
       setDraggedCatIndex(index);
       e.dataTransfer.effectAllowed = "move";
@@ -295,8 +286,6 @@ const ClientLedger: React.FC = () => {
       setDraggedCatIndex(null);
       saveCategoriesOrder(categories);
   };
-
-  // --- Delete Handlers ---
 
   const requestDeleteCategory = (e: React.MouseEvent, catId: string) => {
     e.stopPropagation();
@@ -333,8 +322,6 @@ const ClientLedger: React.FC = () => {
       setConfirmModal(null);
   };
 
-  // --- Print Handler ---
-
   const openNewTab = () => {
     window.open(window.location.href, '_blank');
   };
@@ -363,7 +350,32 @@ const ClientLedger: React.FC = () => {
     }
   };
 
-  // --- Edit Handlers ---
+  const handleDownloadImage = async () => {
+      setIsDownloading(true);
+      try {
+          const element = document.getElementById('printable-area');
+          if (!element) return;
+          
+          // Use html2canvas
+          const canvas = await html2canvas(element, {
+              scale: 2, // Higher resolution
+              useCORS: true,
+              logging: false,
+              backgroundColor: '#ffffff'
+          });
+          
+          const image = canvas.toDataURL("image/png");
+          const link = document.createElement("a");
+          link.href = image;
+          link.download = `${client?.name || 'ledger'}_statement.png`;
+          link.click();
+      } catch (err) {
+          console.error("Download failed", err);
+          alert("Failed to download image.");
+      } finally {
+          setIsDownloading(false);
+      }
+  };
 
   const handleEditClick = (record: LedgerRecord) => {
     setEditingRecord(record);
@@ -385,19 +397,17 @@ const ClientLedger: React.FC = () => {
     }
   };
 
-  // Process records for each column
   const calculateColumn = (columnKey: LedgerColumn) => {
       const colRecords = records.filter(r => r.column === columnKey);
       const processed = colRecords.map(r => {
           const netChange = getNetAmount(r);
           return { ...r, netChange };
       });
-      // Filter out invisible for total calculation
       const visibleProcessed = processed.filter(r => r.isVisible);
       const finalBalance = visibleProcessed.reduce((acc, curr) => acc + curr.netChange, 0);
 
       return { 
-          processed, // Keep all for list
+          processed, 
           finalBalance
       };
   };
@@ -406,12 +416,10 @@ const ClientLedger: React.FC = () => {
   const col1Ledger = useMemo(() => calculateColumn('col1'), [records]);
   const col2Ledger = useMemo(() => calculateColumn('col2'), [records]);
 
-  // Total Priority: If Panel 1 (col1) has data, use that total. Otherwise fallback to Main Ledger.
   const totalOwed = col1Ledger.processed.length > 0 
       ? col1Ledger.finalBalance 
       : mainLedger.finalBalance;
 
-  // Helper Component for Rendering a Ledger Column
   const LedgerColumnView = ({ 
       data,
       footerLabel = "收"
@@ -419,17 +427,10 @@ const ClientLedger: React.FC = () => {
       data: ReturnType<typeof calculateColumn>,
       footerLabel?: string
   }) => {
-      // If empty, return just an empty spacer (no footer, no total)
       if (data.processed.length === 0) {
           return <div className="flex-1 min-h-[50px]" />;
       }
-
-      // Check if we should show the footer.
-      // If ALL visible records are 'none' (gray notes), DO NOT show the footer.
-      // We show footer if at least one visible record is NOT 'none'.
       const hasCalculableRecords = data.processed.some(r => r.isVisible && r.operation !== 'none');
-
-      // Dynamic Label Logic: If Total is negative and label is '收' OR '欠', change to '补'
       const isNegative = data.finalBalance < 0;
       let displayLabel = footerLabel;
       if (isNegative && (footerLabel === '收' || footerLabel === '欠')) {
@@ -447,7 +448,6 @@ const ClientLedger: React.FC = () => {
                         ${!r.isVisible ? 'opacity-30 grayscale no-print' : ''}
                     `}
                 >
-                    {/* Action buttons - Absolute Left */}
                     <div className="no-print opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1 absolute -left-16 z-10 bg-white shadow-sm rounded border border-gray-100 p-1">
                         <button onClick={() => handleEditClick(r)} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Pencil size={12} /></button>
                         <button onClick={() => requestDeleteRecord(r.id)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 size={12} /></button>
@@ -457,14 +457,12 @@ const ClientLedger: React.FC = () => {
                         {r.typeLabel}
                     </div>
 
-                    {/* Description/Note displayed next to amount in LARGER font */}
                     {r.description && (
                         <div className="text-xs md:text-sm text-gray-600 font-medium mr-1 md:mr-2 max-w-[100px] md:max-w-[150px] truncate">
                             {r.description}
                         </div>
                     )}
 
-                    {/* Amount Coloring: Green for Add, Red for Subtract, Dark Gray for None */}
                     <div className={`text-base md:text-2xl font-mono font-bold w-20 md:w-36 text-right 
                         ${r.operation === 'add' ? 'text-green-700' : 
                           r.operation === 'subtract' ? 'text-red-700' : 'text-gray-600'}`}>
@@ -476,9 +474,6 @@ const ClientLedger: React.FC = () => {
                 </div>
             ))}
           </div>
-
-          {/* Column Footer Total with LINING restored and Strict Alignment */}
-          {/* Only show if there are calculable records */}
           {hasCalculableRecords && (
             <div className="mt-2 pt-1 flex flex-col items-end w-fit border-t-2 border-gray-900">
                 <div className="flex items-center gap-1 md:gap-2 justify-end">
@@ -523,6 +518,14 @@ const ClientLedger: React.FC = () => {
              </div>
              
              <div className="hidden md:flex space-x-2">
+                 <button 
+                    onClick={handleDownloadImage}
+                    disabled={isDownloading}
+                    className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-50 shadow-sm disabled:opacity-50" 
+                    title="Download Image"
+                >
+                    {isDownloading ? <span className="animate-spin">⌛</span> : <Download size={18} />}
+                 </button>
                  <button onClick={openNewTab} className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-50 shadow-sm" title="Open in New Tab"><ExternalLink size={18} /></button>
                  <button onClick={handlePrint} className="bg-gray-800 text-white px-3 py-2 rounded-lg hover:bg-gray-900 shadow-sm"><Printer size={18} /></button>
              </div>
@@ -531,7 +534,6 @@ const ClientLedger: React.FC = () => {
         </div>
       </div>
       
-      {/* ... rest of the render code ... */}
       <div className="max-w-5xl mx-auto px-2 md:px-8 py-4 md:py-6">
         
         {/* Input & Panel Selection Area - No Print */}
@@ -564,7 +566,6 @@ const ClientLedger: React.FC = () => {
             {/* Category Grid */}
             {!activeCategory ? (
             <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 md:gap-3">
-                {/* 1. Standard Named Categories (Filter out empty labels) */}
                 {categories.filter(c => c.label !== '').map((cat, index) => (
                 <div 
                     key={cat.id} 
@@ -715,7 +716,6 @@ const ClientLedger: React.FC = () => {
                         <h2 className="text-2xl md:text-4xl font-bold text-gray-900 uppercase tracking-widest">{client.name}</h2>
                         {client.code && <p className="text-gray-600 mt-1 font-mono text-sm md:text-xl">{client.code}</p>}
                     </div>
-                    {/* Statement Date removed as requested */}
                 </div>
 
                 {/* Resizable 3-Column Layout */}
