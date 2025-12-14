@@ -41,6 +41,7 @@ export const INITIAL_MOBILE_CLIENTS_DATA = [
   { name: 'LAN', code: 'mrcc04' },
   { name: 'Kok', code: 'pt217' },
   { name: 'Fung', code: 'sk0922' },
+  { name: 'manu', code: 'sk2839' },
   { name: 'ZHONG', code: 'sk3619' },
   { name: 'WAHZAI', code: 'sk3715' },
   { name: 'MOOI', code: 'sk3818' },
