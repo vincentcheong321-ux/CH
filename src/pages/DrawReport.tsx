@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getClients, getDrawBalances, saveDrawBalance, INITIAL_CLIENTS_DATA } from '../services/storageService';
 import { Client } from '../types';
-import { Calendar, ChevronLeft, ChevronRight, Filter, Save } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Filter, Save, Layers } from 'lucide-react';
 
 const YEAR = 2025;
 
@@ -24,7 +24,7 @@ const DRAW_DATES: Record<number, { w: number[], s1: number[], s2: number[], t: n
   8: { w: [3,10,17,24], s1: [6,13,20,27], s2: [7,14,21,28], t: [] }, // SEP
   9: { w: [1,8,15,22,29], s1: [4,11,18,25], s2: [5,12,19,26], t: [28] }, // OCT
   10: { w: [5,12,19,26], s1: [1,8,15,22,29], s2: [2,9,16,23,30], t: [] }, // NOV
-  11: { w: [3,10,17,24,31], s1: [6,13,20,27], s2: [7,14,21,28], t: [30] }, // DEC - Updated to 3, 6, 7 pattern
+  11: { w: [3,10,17,24,31], s1: [6,13,20,27], s2: [7,14,21,28], t: [] }, // DEC - Fixed to 3, 6, 7 pattern
 };
 
 // Helper to calculate ISO Week Number
@@ -221,7 +221,7 @@ const DrawReport: React.FC = () => {
               </div>
               
               <div className="space-y-2">
-                  {sortedWeekNums.map((weekNum) => {
+                  {sortedWeekNums.map((weekNum, idx) => {
                       const days = currentMonthWeeks[weekNum];
                       const daysStr = days.join(', ');
                       const isActiveWeek = days.includes(activeDay);
@@ -231,14 +231,16 @@ const DrawReport: React.FC = () => {
                             key={weekNum}
                             onClick={() => handleDateClick(days[0])} // Select first day of week on click
                             className={`
-                                w-full p-3 rounded-lg font-bold text-sm transition-all flex justify-between items-center
+                                w-full p-3 rounded-lg font-bold transition-all flex flex-col items-center justify-center text-center
                                 ${isActiveWeek
                                     ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-300' 
                                     : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'}
                             `}
                         >
-                            <span>Week {Object.keys(currentMonthWeeks).indexOf(String(weekNum)) + 1}</span>
-                            <span className={`text-xs ${isActiveWeek ? 'text-blue-200' : 'text-gray-400'}`}>{daysStr}</span>
+                            <span className={`text-xs uppercase tracking-wider opacity-70 ${isActiveWeek ? 'text-blue-100' : 'text-gray-400'}`}>
+                                Week {idx + 1}
+                            </span>
+                            <span className="text-xl font-mono mt-1">{daysStr}</span>
                         </button>
                       );
                   })}
@@ -269,7 +271,7 @@ const DrawReport: React.FC = () => {
             {!selectedDate ? (
                 <div className="h-full flex flex-col items-center justify-center bg-white rounded-xl border border-dashed border-gray-300 p-12 text-gray-400">
                     <Filter size={48} className="mb-4 opacity-20" />
-                    <p>Please select a draw date from the calendar to view or enter data.</p>
+                    <p>Please select a draw week from the sidebar.</p>
                 </div>
             ) : (
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col flex-1 relative">
@@ -277,9 +279,12 @@ const DrawReport: React.FC = () => {
                     <div className="bg-gray-50 p-4 border-b border-gray-200 sticky top-0 z-10">
                         <div className="flex justify-between items-center mb-4">
                             <div>
-                                <h2 className="text-xl font-bold text-gray-900">Draw Date Report</h2>
-                                <p className="text-blue-600 font-medium text-sm">
-                                    {new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                                <h2 className="text-xl font-bold text-gray-900 flex items-center">
+                                    <Layers size={20} className="mr-2 text-blue-600" />
+                                    Draw Date Report
+                                </h2>
+                                <p className="text-gray-500 font-medium text-sm mt-1">
+                                    Week of {MONTH_NAMES[currentMonth]} {activeWeekDays.length > 0 ? activeWeekDays[0] : ''}, {YEAR}
                                 </p>
                             </div>
                             <div className="flex items-center text-xs text-gray-500 bg-yellow-50 px-3 py-1 rounded-full border border-yellow-200">
@@ -289,7 +294,7 @@ const DrawReport: React.FC = () => {
 
                         {/* Date Tabs (Pills) for Active Week */}
                         {activeWeekDays.length > 0 && (
-                            <div className="flex space-x-2">
+                            <div className="flex space-x-2 bg-gray-200 p-1 rounded-lg w-fit">
                                 {activeWeekDays.map(day => {
                                     const dateStr = `${YEAR}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                                     const isActive = selectedDate === dateStr;
@@ -298,13 +303,13 @@ const DrawReport: React.FC = () => {
                                             key={day}
                                             onClick={() => handleDateClick(day)}
                                             className={`
-                                                px-4 py-1.5 rounded-full text-sm font-bold transition-all
+                                                px-6 py-1.5 rounded-md text-sm font-bold transition-all
                                                 ${isActive 
-                                                    ? 'bg-blue-600 text-white shadow-sm' 
-                                                    : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'}
+                                                    ? 'bg-white text-blue-600 shadow-sm' 
+                                                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}
                                             `}
                                         >
-                                            {day}
+                                            Day {day}
                                         </button>
                                     );
                                 })}
