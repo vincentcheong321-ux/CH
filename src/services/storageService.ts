@@ -85,10 +85,10 @@ export const seedData = () => {
 // --- 3. Unified Financial Journal Adapters ---
 
 // A. Helper to map DB row to LedgerRecord
+// Updated to handle ALL types and map them to requested labels
 const mapJournalToLedgerRecord = (row: any): LedgerRecord => {
     const isAdd = row.amount >= 0; 
-    
-    return {
+    let baseRecord = {
         id: row.id,
         clientId: row.client_id,
         date: row.entry_date,
@@ -99,15 +99,58 @@ const mapJournalToLedgerRecord = (row: any): LedgerRecord => {
         column: row.data?.column || 'main',
         isVisible: true
     };
+
+    // Override logic based on Entry Type to fulfill user request
+    switch (row.entry_type) {
+        case 'SALE':
+            // Sales Opening = 收
+            baseRecord.typeLabel = '收';
+            baseRecord.id = `sale_${row.id}`; // Prefix to prevent ID collision if any
+            // If amount is positive (Client Lost), it's Add (Debt). If negative (Client Won), it's Subtract.
+            baseRecord.operation = row.amount >= 0 ? 'add' : 'subtract';
+            break;
+        
+        case 'ADVANCE':
+            // Cash Advance = 支 (Usually means payout to client, increasing their debt)
+            baseRecord.typeLabel = '支';
+            baseRecord.id = `adv_${row.id}`;
+            baseRecord.operation = 'add';
+            baseRecord.column = 'col1'; // Force advances to Panel 1 usually
+            break;
+
+        case 'CREDIT':
+            // Cash Credit = 来 (Income from client, reducing their debt)
+            baseRecord.typeLabel = '来';
+            baseRecord.id = `cred_${row.id}`;
+            baseRecord.operation = 'subtract';
+            baseRecord.column = 'col1'; // Force credits to Panel 1 usually
+            break;
+
+        case 'DRAW':
+            // Draw Report = 上欠 (Previous Balance brought forward)
+            baseRecord.typeLabel = '上欠';
+            baseRecord.id = `draw_${row.id}`;
+            // Draws are usually absolute balances, so we treat positive as debt (Add)
+            baseRecord.operation = row.amount >= 0 ? 'add' : 'subtract'; 
+            baseRecord.column = 'main'; // Usually main ledger
+            break;
+            
+        case 'MANUAL':
+        default:
+            // Keep existing manual data
+            break;
+    }
+
+    return baseRecord;
 };
 
 export const getLedgerRecords = async (clientId: string): Promise<LedgerRecord[]> => {
     if (supabase) {
+        // Fetch ALL types for this client
         const { data } = await supabase
             .from('financial_journal')
             .select('*')
-            .eq('client_id', clientId)
-            .eq('entry_type', 'MANUAL'); 
+            .eq('client_id', clientId);
             
         if (data) return data.map(mapJournalToLedgerRecord);
     }
@@ -118,8 +161,7 @@ export const getAllLedgerRecords = async (): Promise<LedgerRecord[]> => {
     if (supabase) {
         const { data } = await supabase
             .from('financial_journal')
-            .select('*')
-            .eq('entry_type', 'MANUAL');
+            .select('*');
         if (data) return data.map(mapJournalToLedgerRecord);
     }
     return [];
@@ -152,6 +194,13 @@ export const saveLedgerRecord = async (record: Omit<LedgerRecord, 'id'>): Promis
 
 export const updateLedgerRecord = async (id: string, updates: Partial<LedgerRecord>) => {
     if (supabase) {
+        // Only allow updating MANUAL records via this method generally
+        // Check if ID is prefixed (system record)
+        if (id.startsWith('sale_') || id.startsWith('adv_') || id.startsWith('draw_') || id.startsWith('cred_')) {
+            console.warn("Cannot update system record via generic ledger update");
+            return;
+        }
+
         const payload: any = { data: {} };
         
         if (updates.amount !== undefined || updates.operation !== undefined) {
@@ -183,7 +232,14 @@ export const updateLedgerRecord = async (id: string, updates: Partial<LedgerReco
 };
 
 export const deleteLedgerRecord = async (id: string) => {
-    if (supabase) await supabase.from('financial_journal').delete().eq('id', id);
+    if (supabase) {
+        // Prevent deleting system records via ledger view
+        if (id.startsWith('sale_') || id.startsWith('adv_') || id.startsWith('draw_') || id.startsWith('cred_')) {
+             console.warn("Cannot delete system record via generic ledger delete");
+             return;
+        }
+        await supabase.from('financial_journal').delete().eq('id', id);
+    }
 };
 
 // --- B. Sales Adapters (Mapped to 'SALE' type) ---
@@ -465,10 +521,10 @@ export const fetchClientTotalBalance = async (clientId: string): Promise<number>
 
 export const getTotalDrawReceivables = async (): Promise<number> => {
     if (supabase) {
+        // Logic updated: fetches all financial impact on the company from all types
         const { data } = await supabase
             .from('financial_journal')
-            .select('amount')
-            .in('entry_type', ['DRAW', 'MANUAL', 'SALE', 'ADVANCE', 'CREDIT']);
+            .select('amount');
             
         return data?.reduce((acc, r) => acc + r.amount, 0) || 0;
     }
