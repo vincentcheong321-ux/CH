@@ -97,10 +97,21 @@ const DetailedMobileTableRow = React.memo(({
         if (legacy) {
             if (idx === 0) return legacy.memberBet;
             if (idx === 7) return legacy.companyTotal;
-            if (idx === 11) return legacy.shareholderTotal; // Updated Index
-            if (idx === 16) return legacy.agentTotal; // Updated Index
+            if (idx === 11) return legacy.shareholderTotal;
+            if (idx === 16) return legacy.agentTotal;
         }
         return '';
+    };
+
+    // Special Helper for Agent Total (Index 16)
+    // If raw data is short, fallback to last element if plausible
+    const getAgentTotal = (): string | number => {
+        if (raw) {
+            if (raw.length > 16) return raw[16];
+            // Fallback: if raw length is close to expected (e.g. 16 or 17), assume last is total
+            if (raw.length >= 15) return raw[raw.length - 1];
+        }
+        return getVal(16);
     };
 
     // Helper to format currency/number
@@ -151,8 +162,8 @@ const DetailedMobileTableRow = React.memo(({
             <td className="px-2 py-3 text-right">{fmt(getVal(13))}</td>
             <td className="px-2 py-3 text-right">{fmt(getVal(14))}</td>
             <td className="px-2 py-3 text-right">{fmt(getVal(15))}</td>
-            <td className={`px-2 py-3 text-right font-extrabold bg-green-50/50 border-l border-green-100 ${getColorClass(getVal(16))}`}>
-                {fmt(getVal(16))}
+            <td className={`px-2 py-3 text-right font-extrabold bg-green-50/50 border-l border-green-100 ${getColorClass(getAgentTotal())}`}>
+                {fmt(getAgentTotal())}
             </td>
         </tr>
     );
@@ -365,6 +376,7 @@ const SalesIndex: React.FC = () => {
             [f1]: v1, [f2]: v2 
         };
       
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { id, ...savePayload } = payload; 
       await saveSaleRecord(savePayload);
 
@@ -601,7 +613,7 @@ const SalesIndex: React.FC = () => {
                                     </tr>
                                     {/* Header Row 2: Columns */}
                                     <tr className="bg-gray-100 border-b border-gray-200">
-                                        <th className="px-2 py-3 sticky left-0 bg-gray-100 z-10 border-r border-gray-200 shadow-sm">登陆帐号 / 名字</th>
+                                        <th className="px-2 py-3 sticky left-0 bg-gray-100 z-10 border-r border-gray-200 shadow-sm text-left">登陆帐号 / 名字</th>
                                         {/* Member */}
                                         <th className="px-2 py-3 text-right text-gray-500">投注</th>
                                         <th className="px-2 py-3 text-right text-gray-500">总数</th>
