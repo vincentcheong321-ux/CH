@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { ArrowLeft, RefreshCw, Save, CheckCircle, AlertCircle, History, FileText, Loader2 } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Save, CheckCircle, AlertCircle, History, FileText, Loader2, Image as ImageIcon, Upload } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getClients, saveSaleRecord, saveMobileReportHistory, getMobileReportHistory } from '../services/storageService';
 import { Client } from '../types';
 import { getWeeksForMonth, MONTH_NAMES } from '../utils/reportUtils';
+import { GoogleGenAI } from "@google/genai";
 
 const MobileReport: React.FC = () => {
   const navigate = useNavigate();
@@ -17,6 +18,7 @@ const MobileReport: React.FC = () => {
   const [history, setHistory] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'import' | 'history'>('import');
   const [isSaving, setIsSaving] = useState(false);
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
   
   // Date Selection State for Saving
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -89,6 +91,67 @@ const MobileReport: React.FC = () => {
     setSaveStatus({ type: null, message: '' });
   };
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (!e.target.files || e.target.files.length === 0) return;
+      
+      const file = e.target.files[0];
+      setIsProcessingImage(true);
+      setSaveStatus({ type: null, message: '' });
+
+      try {
+          // Convert to Base64
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onload = async () => {
+              const base64String = (reader.result as string).split(',')[1];
+              
+              const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+              const prompt = `
+                Analyze this image of a financial report table.
+                Extract all data rows into a strictly valid JSON array of objects.
+                Each object must have:
+                - "id": The client code found in the first column (e.g. "2839").
+                - "name": The client name found in the first column (e.g. "印").
+                - "values": An array of strings containing all the numerical values in the row, in exact order from left to right (Member stats, Company stats, Shareholder stats, Agent stats). Preserve commas and formatting.
+                
+                Exclude header rows. Return ONLY the JSON.
+              `;
+
+              const response = await ai.models.generateContent({
+                  model: 'gemini-2.5-flash',
+                  contents: {
+                      parts: [
+                          { inlineData: { mimeType: file.type, data: base64String } },
+                          { text: prompt }
+                      ]
+                  }
+              });
+
+              let jsonText = response.text || '';
+              // Clean up markdown code blocks if present
+              jsonText = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
+              
+              try {
+                  const jsonData = JSON.parse(jsonText);
+                  if (Array.isArray(jsonData)) {
+                      setParsedData(jsonData);
+                      setSaveStatus({ type: 'success', message: `Successfully extracted ${jsonData.length} rows from image.` });
+                  } else {
+                      throw new Error("Response is not an array");
+                  }
+              } catch (parseError) {
+                  console.error("JSON Parse Error:", parseError, jsonText);
+                  setSaveStatus({ type: 'error', message: 'Failed to parse AI response. Please try again or use text paste.' });
+              }
+              setIsProcessingImage(false);
+          };
+      } catch (error) {
+          console.error("AI Error:", error);
+          setSaveStatus({ type: 'error', message: 'Image processing failed.' });
+          setIsProcessingImage(false);
+      }
+  };
+
   const handleClear = () => {
       setInputText('');
       setParsedData([]);
@@ -119,7 +182,7 @@ const MobileReport: React.FC = () => {
           
           if (client) {
               const lastValStr = row.values[row.values.length - 1];
-              const val = parseFloat(lastValStr.replace(/,/g, ''));
+              const val = parseFloat(String(lastValStr).replace(/,/g, ''));
 
               // Extract extra details (Keep legacy for now)
               const mobileRaw = {
@@ -178,7 +241,7 @@ const MobileReport: React.FC = () => {
                     </Link>
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900">Mobile Report Importer</h1>
-                        <p className="text-gray-500 text-sm">Import and sync external report data.</p>
+                        <p className="text-gray-500 text-sm">Import via Copy-Paste or Image Analysis.</p>
                     </div>
                 </div>
                 
@@ -223,14 +286,24 @@ const MobileReport: React.FC = () => {
                         <button onClick={handleClear} className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg">
                             Clear
                         </button>
-                        <button onClick={handleParse} className="px-4 py-2 text-sm font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-lg flex items-center">
-                            <RefreshCw size={16} className="mr-2" /> Parse
+                        
+                        {/* Text Parse Button */}
+                        <button onClick={handleParse} className="px-4 py-2 text-sm font-bold text-white bg-gray-600 hover:bg-gray-700 rounded-lg flex items-center">
+                            <RefreshCw size={16} className="mr-2" /> Text Parse
                         </button>
+
+                        {/* Image Upload Button */}
+                        <label className={`px-4 py-2 text-sm font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-lg flex items-center cursor-pointer transition-all ${isProcessingImage ? 'opacity-70 pointer-events-none' : ''}`}>
+                            {isProcessingImage ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Upload size={16} className="mr-2" />}
+                            {isProcessingImage ? 'Analyzing...' : 'Upload Image'}
+                            <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                        </label>
+
                         {parsedData.length > 0 && (
                             <button 
                                 onClick={handleSaveToSystem} 
                                 disabled={isSaving}
-                                className="px-4 py-2 text-sm font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded-lg flex items-center shadow-md animate-in fade-in"
+                                className="px-4 py-2 text-sm font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded-lg flex items-center shadow-md animate-in fade-in ml-auto"
                             >
                                 {isSaving ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Save size={16} className="mr-2" />}
                                 {isSaving ? 'Saving...' : 'Save to System'}
@@ -246,23 +319,31 @@ const MobileReport: React.FC = () => {
                     )}
 
                     {parsedData.length === 0 ? (
-                        <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200 text-center">
-                            <div className="mb-4">
-                                <div className="w-16 h-16 bg-purple-50 rounded-full flex items-center justify-center mx-auto text-purple-600 mb-4">
-                                    <Save size={32} />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200 text-center flex flex-col items-center justify-center">
+                                <div className="w-16 h-16 bg-purple-50 rounded-full flex items-center justify-center text-purple-600 mb-4">
+                                    <ImageIcon size={32} />
                                 </div>
-                                <h3 className="text-lg font-bold text-gray-800">Paste Report Data</h3>
-                                <p className="text-gray-500 text-sm max-w-md mx-auto mt-2">
-                                    Copy the full table content from your external report (including headers or just data) and paste it below. 
-                                    The system will automatically extract totals.
+                                <h3 className="text-lg font-bold text-gray-800">Upload Screenshot</h3>
+                                <p className="text-gray-500 text-sm max-w-xs mx-auto mt-2 mb-4">
+                                    Take a screenshot of the report table and upload it. AI will automatically extract the data for you.
                                 </p>
+                                <label className="px-6 py-3 bg-purple-100 text-purple-700 font-bold rounded-lg cursor-pointer hover:bg-purple-200 transition-colors">
+                                    Choose Image
+                                    <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+                                </label>
                             </div>
-                            <textarea 
-                                className="w-full h-96 p-4 border border-gray-300 rounded-lg font-mono text-xs focus:ring-2 focus:ring-purple-500 focus:outline-none bg-gray-50"
-                                placeholder="Paste excel/text content here..."
-                                value={inputText}
-                                onChange={(e) => setInputText(e.target.value)}
-                            />
+
+                            <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200 flex flex-col">
+                                <h3 className="text-sm font-bold text-gray-800 mb-2 uppercase tracking-wide">Or Paste Text</h3>
+                                <textarea 
+                                    className="flex-1 w-full p-4 border border-gray-300 rounded-lg font-mono text-xs focus:ring-2 focus:ring-purple-500 focus:outline-none bg-gray-50 resize-none"
+                                    placeholder="Paste excel/text content here..."
+                                    value={inputText}
+                                    onChange={(e) => setInputText(e.target.value)}
+                                    style={{ minHeight: '200px' }}
+                                />
+                            </div>
                         </div>
                     ) : (
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -304,27 +385,11 @@ const MobileReport: React.FC = () => {
                                                         {!isMatched && <span className="text-[9px] text-red-500 font-bold px-1 border border-red-200 rounded">No Match</span>}
                                                     </div>
                                                 </td>
-                                                <td className="px-2 py-2">{row.values[0]}</td>
-                                                <td className="px-2 py-2 text-gray-400">{row.values[1]}</td>
-                                                <td className="px-2 py-2">{row.values[2]}</td>
-                                                <td className="px-2 py-2 border-l border-gray-100">{row.values[3]}</td>
-                                                <td className="px-2 py-2">{row.values[4]}</td>
-                                                <td className="px-2 py-2">{row.values[5]}</td>
-                                                <td className="px-2 py-2">{row.values[6]}</td>
-                                                <td className="px-2 py-2 font-bold bg-blue-50/30">{row.values[7]}</td>
-                                                <td className="px-2 py-2 border-l border-gray-100">{row.values[8]}</td>
-                                                <td className="px-2 py-2">{row.values[9]}</td>
-                                                <td className="px-2 py-2">{row.values[10]}</td>
-                                                <td className="px-2 py-2">{row.values[11]}</td>
-                                                <td className="px-2 py-2">{row.values[12]}</td>
-                                                <td className="px-2 py-2 font-bold bg-blue-50/30">{row.values[13]}</td>
-                                                <td className="px-2 py-2 border-l border-gray-100">{row.values[14]}</td>
-                                                <td className="px-2 py-2">{row.values[15]}</td>
-                                                <td className="px-2 py-2">{row.values[16]}</td>
-                                                <td className="px-2 py-2">{row.values[17]}</td>
-                                                <td className={`px-2 py-2 font-extrabold bg-green-50 border-l-2 border-green-100 ${parseFloat(row.values[row.values.length-1]?.replace(/,/g,'')) >= 0 ? 'text-green-700' : 'text-red-600'}`}>
-                                                    {row.values[row.values.length - 1]}
-                                                </td>
+                                                {row.values.map((v: any, i: number) => (
+                                                    <td key={i} className={`px-2 py-2 ${i===7||i===13?'font-bold bg-blue-50/30':''} ${i===3||i===8||i===14?'border-l border-gray-100':''} ${i===row.values.length-1 ? (parseFloat(String(v).replace(/,/g,'')) >= 0 ? 'text-green-700 bg-green-50 font-extrabold border-l-2 border-green-100' : 'text-red-600 bg-green-50 font-extrabold border-l-2 border-green-100') : ''}`}>
+                                                        {v}
+                                                    </td>
+                                                ))}
                                             </tr>
                                         )})}
                                     </tbody>

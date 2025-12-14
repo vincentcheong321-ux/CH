@@ -1,3 +1,4 @@
+
 {
   "name": "ledger-pro-system",
   "private": true,
@@ -10,6 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@google/genai": "^0.1.1",
     "@supabase/supabase-js": "^2.39.7",
     "html2canvas": "^1.4.1",
     "lucide-react": "^0.454.0",

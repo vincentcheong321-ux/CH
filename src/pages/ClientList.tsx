@@ -103,6 +103,7 @@ const ClientList: React.FC = () => {
 
   const requestDelete = (e: React.MouseEvent, id: string) => {
     e.preventDefault(); 
+    e.stopPropagation();
     setDeleteConfirm({ isOpen: true, clientId: id });
   };
 
@@ -154,55 +155,59 @@ const ClientList: React.FC = () => {
     return (
         <div 
             key={client.id}
-            className={`flex items-center justify-between p-4 hover:bg-gray-50 transition-colors group relative ${isSelected ? 'bg-blue-50/50' : ''}`}
+            className={`
+                group relative border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors
+                ${isSelected ? 'bg-blue-50/50' : ''}
+            `}
         >
-            <button 
-                onClick={(e) => toggleSelectOne(e, client.id)} 
-                className="p-2 mr-2 text-gray-400 hover:text-gray-600 z-10"
-            >
-                {isSelected ? <CheckSquare size={20} className="text-blue-600" /> : <Square size={20} />}
-            </button>
-
             <Link 
-            to={`/clients/${client.id}`}
-            className="flex-1 flex items-center justify-between min-w-0" 
+                to={`/clients/${client.id}`}
+                className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-4 p-4"
             >
-            <div className="flex items-center space-x-3 min-w-0">
-                <div className="flex-shrink-0 h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600">
-                <User size={20} />
+                {/* 1. Selection Checkbox */}
+                <div onClick={(e) => toggleSelectOne(e, client.id)} className="cursor-pointer text-gray-400 hover:text-gray-600">
+                    {isSelected ? <CheckSquare size={20} className="text-blue-600" /> : <Square size={20} />}
                 </div>
-                <div className="min-w-0">
-                <div className="flex items-center space-x-2">
-                    <h3 className="font-semibold text-gray-900 truncate">{client.name}</h3>
-                    {client.code && (
-                    <span className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600 font-mono flex-shrink-0">
-                        {client.code}
+
+                {/* 2. Name & Avatar */}
+                <div className="flex items-center space-x-3 overflow-hidden">
+                    <div className="flex-shrink-0 h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-bold text-sm">
+                        {client.name.substring(0,2).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                        <div className="flex items-center space-x-2">
+                            <h3 className="font-bold text-gray-900 truncate text-base">{client.name}</h3>
+                            {client.code && (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] bg-gray-100 text-gray-500 font-mono tracking-tighter">
+                                    {client.code}
+                                </span>
+                            )}
+                        </div>
+                        {client.phone && <p className="text-xs text-gray-400 truncate">{client.phone}</p>}
+                    </div>
+                </div>
+                
+                {/* 3. Balance (Fixed alignment area) */}
+                <div className="text-right flex items-center justify-end min-w-[120px]">
+                    <span className={`font-mono font-bold text-lg tracking-tight ${balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {balance > 0 ? '+' : ''}{balance.toLocaleString(undefined, {minimumFractionDigits: 2})}
                     </span>
-                    )}
                 </div>
-                {client.phone && <p className="text-sm text-gray-500 truncate">{client.phone}</p>}
+                
+                {/* 4. Actions / Chevron */}
+                <div className="flex items-center justify-end w-8">
+                    <div className="hidden group-hover:block absolute right-2 bg-white shadow-sm rounded-full p-1 border border-gray-100 animate-in fade-in zoom-in duration-200">
+                         <button 
+                            onClick={(e) => requestDelete(e, client.id)}
+                            className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                            title="Delete Client"
+                        >
+                            <Trash2 size={16} />
+                        </button>
+                    </div>
+                    <ChevronRight className="text-gray-300 group-hover:invisible" size={20} />
                 </div>
-            </div>
-            
-            {/* Balance: Green if positive, Red if negative. Aligned vertically with name via items-center */}
-            <div className="flex items-center mr-4 md:mr-8">
-                <span className={`font-mono font-bold text-base md:text-lg ${balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {balance > 0 ? '+' : ''}{balance.toLocaleString(undefined, {minimumFractionDigits: 2})}
-                </span>
-            </div>
-            
-            <div className="flex items-center space-x-2 md:space-x-4 flex-shrink-0">
-                <ChevronRight className="text-gray-300 group-hover:text-blue-500 transition-colors" size={20} />
-            </div>
             </Link>
-            
-            <button 
-            onClick={(e) => requestDelete(e, client.id)}
-            className="absolute right-2 p-2 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-full transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
-            title="Delete Client"
-            >
-            <Trash2 size={18} />
-            </button>
         </div>
     );
   };
@@ -433,20 +438,20 @@ const ClientList: React.FC = () => {
         {loading ? (
              <div className="p-8 text-center text-gray-500">Loading clients...</div>
         ) : (
-            <>
+            <div className="bg-white">
                 {filteredClients.length === 0 ? (
                     <div className="p-8 text-center text-gray-500">No paper clients found.</div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-0">
-                        <div className="flex flex-col divide-y divide-gray-100">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-0 md:gap-x-8">
+                        <div className="flex flex-col border-r-0 md:border-r border-gray-100">
                             {leftClients.map(renderClientRow)}
                         </div>
-                        <div className="flex flex-col divide-y divide-gray-100 border-t md:border-t-0 border-gray-100 pt-4 md:pt-0">
+                        <div className="flex flex-col">
                             {rightClients.map(renderClientRow)}
                         </div>
                     </div>
                 )}
-            </>
+            </div>
         )}
       </div>
 
