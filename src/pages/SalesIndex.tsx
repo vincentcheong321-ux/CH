@@ -6,6 +6,10 @@ import { getClients, getSalesForDates, saveSaleRecord } from '../services/storag
 import { Client, SaleRecord } from '../types';
 import { MONTH_NAMES, getWeeksForMonth } from '../utils/reportUtils';
 
+// Specific Display Codes
+const PAPER_Z_CODES = ['Z03', 'Z05', 'Z07', 'Z15', 'Z19', 'Z20'];
+const PAPER_C_CODES = ['C03', 'C04', 'C06', 'C09', 'C13', 'C15', 'C17'];
+
 // --- Helper: Composite Input for B/S or A/C ---
 const CompositeInput = React.memo(({ 
     val1, 
@@ -391,18 +395,29 @@ const SalesIndex: React.FC = () => {
       }
   };
 
+  // Base Data Grouping
   const paperClients = useMemo(() => clients.filter(c => (c.category || 'paper') === 'paper'), [clients]);
   const mobileClients = useMemo(() => clients.filter(c => c.category === 'mobile'), [clients]);
 
-  const filteredClients = clients.filter(c => {
-      const category = c.category || 'paper';
-      const matchTab = category === activeTab;
-      const matchSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          c.code.toLowerCase().includes(searchTerm.toLowerCase());
-      return matchTab && matchSearch;
-  });
+  // Split Logic for Side-by-Side View
+  const { zClients, cClients } = useMemo(() => {
+      const zList = paperClients.filter(c => PAPER_Z_CODES.includes(c.code.toUpperCase()));
+      const cList = paperClients.filter(c => PAPER_C_CODES.includes(c.code.toUpperCase()));
+      
+      // Sort based on code index in the constant array to maintain specific order if needed
+      zList.sort((a,b) => PAPER_Z_CODES.indexOf(a.code.toUpperCase()) - PAPER_Z_CODES.indexOf(b.code.toUpperCase()));
+      cList.sort((a,b) => PAPER_C_CODES.indexOf(a.code.toUpperCase()) - PAPER_C_CODES.indexOf(b.code.toUpperCase()));
 
-  const totalPaper = paperClients.reduce((acc, client) => {
+      return { zClients: zList, cClients: cList };
+  }, [paperClients]);
+
+  // Mobile Filtered list
+  const filteredMobileClients = mobileClients.filter(c => 
+      c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      c.code.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const totalPaper = [...zClients, ...cClients].reduce((acc, client) => {
       const clientRecs = salesData.filter(r => r.clientId === client.id);
       return acc + clientRecs.reduce((sum, r) => sum + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
   }, 0);
@@ -533,25 +548,49 @@ const SalesIndex: React.FC = () => {
         {loading ? (
             <div className="flex justify-center items-center h-full"><Loader2 className="animate-spin text-gray-400" /></div>
         ) : (
-            <div className="max-w-7xl mx-auto pb-20">
+            <div className="max-w-[1600px] mx-auto pb-20">
                 
                 {activeTab === 'paper' ? (
-                    // Paper View: Grid of Cards
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                        {filteredClients.map(client => (
-                            <ClientWeeklyCard 
-                                key={client.id}
-                                client={client}
-                                dateStrings={activeDateStrings}
-                                salesData={salesData}
-                                onUpdate={handleUpdate}
-                            />
-                        ))}
+                    // Paper View: Split Layout
+                    <div className="flex flex-col lg:flex-row gap-6">
+                        {/* Z Series Column */}
+                        <div className="flex-1 bg-white/50 p-4 rounded-xl border border-dashed border-gray-300">
+                            <h2 className="text-lg font-bold text-gray-700 mb-4 px-2 border-b border-gray-200 pb-2">Z Series</h2>
+                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                                {zClients.map(client => (
+                                    <ClientWeeklyCard 
+                                        key={client.id}
+                                        client={client}
+                                        dateStrings={activeDateStrings}
+                                        salesData={salesData}
+                                        onUpdate={handleUpdate}
+                                    />
+                                ))}
+                                {zClients.length === 0 && <p className="text-gray-400 text-sm col-span-full text-center py-4">No Z-series clients found.</p>}
+                            </div>
+                        </div>
+
+                        {/* C Series Column */}
+                        <div className="flex-1 bg-white/50 p-4 rounded-xl border border-dashed border-gray-300">
+                            <h2 className="text-lg font-bold text-gray-700 mb-4 px-2 border-b border-gray-200 pb-2">C Series</h2>
+                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                                {cClients.map(client => (
+                                    <ClientWeeklyCard 
+                                        key={client.id}
+                                        client={client}
+                                        dateStrings={activeDateStrings}
+                                        salesData={salesData}
+                                        onUpdate={handleUpdate}
+                                    />
+                                ))}
+                                {cClients.length === 0 && <p className="text-gray-400 text-sm col-span-full text-center py-4">No C-series clients found.</p>}
+                            </div>
+                        </div>
                     </div>
                 ) : (
                     // Mobile View: List of Rows
                     <div className="space-y-4 max-w-4xl mx-auto">
-                        {filteredClients.map(client => {
+                        {filteredMobileClients.map(client => {
                             const clientRecords = salesData.filter(r => r.clientId === client.id);
                             const total = clientRecords.reduce((acc, r) => acc + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
                             return (
@@ -563,15 +602,7 @@ const SalesIndex: React.FC = () => {
                                 />
                             );
                         })}
-                    </div>
-                )}
-                
-                {filteredClients.length === 0 && (
-                    <div className="text-center text-gray-400 py-12">
-                        <div className={`mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-4 ${activeTab === 'mobile' ? 'bg-purple-100 text-purple-400' : 'bg-blue-100 text-blue-400'}`}>
-                            {activeTab === 'mobile' ? <Smartphone size={32} /> : <FileText size={32} />}
-                        </div>
-                        <p>No {activeTab} clients found.</p>
+                        {filteredMobileClients.length === 0 && <p className="text-gray-400 text-center py-8">No mobile clients found.</p>}
                     </div>
                 )}
             </div>
