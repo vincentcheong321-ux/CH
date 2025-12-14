@@ -17,7 +17,7 @@ import {
   getNetAmount
 } from '../services/storageService';
 import { Client, LedgerRecord, TransactionCategory } from '../types';
-import { MONTH_NAMES, YEAR, getWeeksForMonth } from '../utils/reportUtils';
+import { MONTH_NAMES, getWeeksForMonth } from '../utils/reportUtils';
 
 type LedgerColumn = 'main' | 'col1' | 'col2';
 
@@ -28,6 +28,7 @@ const ClientLedger: React.FC = () => {
   const [categories, setCategories] = useState<TransactionCategory[]>([]);
   
   // Date/Week State
+  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [selectedWeekNum, setSelectedWeekNum] = useState<number>(1);
 
@@ -71,7 +72,14 @@ const ClientLedger: React.FC = () => {
     
     // Auto-select current week
     const now = new Date();
-    const weeks = getWeeksForMonth(now.getMonth());
+    // Default to config range if year is out of bounds
+    let y = now.getFullYear();
+    if(y < 2025) y = 2025;
+    if(y > 2026) y = 2026;
+    setCurrentYear(y);
+
+    const m = now.getMonth();
+    const weeks = getWeeksForMonth(y, m);
     const todayNum = now.getDate();
     const foundWeek = Object.keys(weeks).find(w => weeks[parseInt(w)].includes(todayNum));
     if(foundWeek) setSelectedWeekNum(parseInt(foundWeek));
@@ -89,52 +97,39 @@ const ClientLedger: React.FC = () => {
   };
 
   // --- Date Calculation Logic ---
-  const weeksData = useMemo(() => getWeeksForMonth(currentMonth), [currentMonth]);
+  const weeksData = useMemo(() => getWeeksForMonth(currentYear, currentMonth), [currentYear, currentMonth]);
   const activeDays = weeksData[selectedWeekNum] || [];
   
   // Generate YYYY-MM-DD strings for the selected week
   const activeDateStrings = useMemo(() => 
       activeDays.map(d => {
-        const dateObj = new Date(YEAR, currentMonth, d);
+        const dateObj = new Date(currentYear, currentMonth, d);
         const y = dateObj.getFullYear();
         const m = String(dateObj.getMonth() + 1).padStart(2, '0');
         const day = String(dateObj.getDate()).padStart(2, '0');
         return `${y}-${m}-${day}`;
       }),
-  [activeDays, currentMonth]);
+  [activeDays, currentYear, currentMonth]);
 
   // Derived Data for Display
-  const { weekRecords, openingBalance, weekTotal } = useMemo(() => {
+  const { weekRecords, weekTotal } = useMemo(() => {
     if (activeDateStrings.length === 0) return { weekRecords: [], openingBalance: 0, weekTotal: 0 };
     
-    // 1. Identify start date string of the week for comparison
-    // Since activeDateStrings are sorted (from reportUtils logic), index 0 is start
-    const startDateStr = activeDateStrings[0];
-    
-    // 2. Separate Records
-    const prior = [];
     const current = [];
-
+    
     // Iterate all records (assumed sorted by date)
     for (const r of allRecords) {
         if (activeDateStrings.includes(r.date)) {
             current.push(r);
-        } else if (r.date < startDateStr) {
-            prior.push(r);
         }
-        // Records after this week are ignored
     }
-
-    // 3. Calculate Opening Balance (Sum of all prior records)
-    const openBal = prior.reduce((acc, r) => acc + getNetAmount(r), 0);
-
-    // 4. Calculate Week Net Change
+    
+    // Just week total for header (still calculated but rows removed from view)
     const weekChange = current.reduce((acc, r) => acc + getNetAmount(r), 0);
 
     return {
         weekRecords: current,
-        openingBalance: openBal,
-        weekTotal: openBal + weekChange
+        weekTotal: weekChange
     };
   }, [allRecords, activeDateStrings]);
 
@@ -209,24 +204,14 @@ const ClientLedger: React.FC = () => {
     if (!id || !activeCategory || !amount) return;
     const val = parseFloat(amount);
     if (isNaN(val)) return;
-
-    // Use current selected date or today? 
-    // Logic: If user is "filling in" a past week, they might want that date.
-    // However, usually entry is for "today". 
-    // For now, let's use the LAST date of the active week to ensure it shows up in the view,
-    // OR just use Today if it falls in range. 
-    // *Decision*: Use Today's date by default. If Today is not in active view, user might be confused.
-    // *Fix*: Use the date corresponding to the input.
-    // For simplicity in this tool, we will just use NEW Date(). 
-    // If the user is viewing an old week, the record won't appear there immediately if created today.
-    // *Smart Fix*: Check if Today is in activeDateStrings. If so, use Today. If not, use the last day of the active week.
     
+    // Determine date for new entry:
+    // If today is in current week view, use Today.
+    // If we are looking at a past/future week, use last day of that week.
     let dateToUse = new Date().toISOString().split('T')[0];
     const todayStr = dateToUse;
     
     if (activeDateStrings.length > 0 && !activeDateStrings.includes(todayStr)) {
-        // If we are editing a past/future week, default the new entry to the last day of that week
-        // so it appears in the list immediately.
         dateToUse = activeDateStrings[activeDateStrings.length - 1];
     }
 
@@ -255,7 +240,6 @@ const ClientLedger: React.FC = () => {
     }
   };
 
-  // ... (Other handlers like AddCategory, Drag, Delete, Print, Download similar to before)
   const handleAddCategory = (e: React.FormEvent) => {
     e.preventDefault();
     let colorClass = 'bg-gray-100 text-gray-800';
@@ -321,13 +305,6 @@ const ClientLedger: React.FC = () => {
   const col1Ledger = useMemo(() => calculateColumn('col1'), [weekRecords]);
   const col2Ledger = useMemo(() => calculateColumn('col2'), [weekRecords]);
 
-  // Grand Total for the Week View
-  // Logic: Opening Balance (All Columns) + This Week's Net Change (All Columns)
-  // Actually, usually Opening Balance is just a Main Ledger item or distributed?
-  // Let's assume Opening Balance is treated as a single lump sum added to the Main Ledger visually,
-  // or we keep the "Total" at the top reflecting the accumulated total.
-  
-  // The "Total Owed" in header matches the Dashboard/List (All Time)
   const allTimeBalance = useMemo(() => {
      // Recalculate full balance from allRecords to show in header
      return allRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
@@ -359,6 +336,11 @@ const ClientLedger: React.FC = () => {
                 </div>
             ))}
           </div>
+          {/* Footer Total - REMOVED per user request for simpler view, but column totals inside component could be kept if needed? 
+              User said "do not show week closing/opening". The column total is technically "week total" for that column. 
+              Usually "Closing Balance" refers to the bottom summary row. 
+              I will keep column total as it is "specific data".
+          */}
           <div className="mt-2 pt-1 flex flex-col items-end w-fit border-t-2 border-gray-900">
                 <div className="flex items-center gap-1 md:gap-2 justify-end">
                     <span className="text-sm md:text-xl font-bold text-gray-900 uppercase">{displayLabel}</span>
@@ -369,6 +351,37 @@ const ClientLedger: React.FC = () => {
           </div>
       </div>
   )};
+
+  const handlePrevMonth = () => {
+      if (currentMonth === 0) {
+          if (currentYear > 2025) {
+              setCurrentYear(y => y - 1);
+              setCurrentMonth(11);
+          }
+      } else {
+          setCurrentMonth(m => m - 1);
+      }
+  };
+
+  const handleNextMonth = () => {
+      if (currentMonth === 11) {
+          if (currentYear < 2026) {
+              setCurrentYear(y => y + 1);
+              setCurrentMonth(0);
+          }
+      } else {
+          setCurrentMonth(m => m + 1);
+      }
+  };
+
+  const sortedWeekKeys = Object.keys(weeksData).map(Number).sort((a,b) => a-b);
+  
+  // Reset week selection if month changes
+  useEffect(() => {
+     if(sortedWeekKeys.length > 0 && !sortedWeekKeys.includes(selectedWeekNum)) {
+         setSelectedWeekNum(sortedWeekKeys[0]);
+     }
+  }, [sortedWeekKeys, selectedWeekNum]);
 
   if (!client) return <div className="p-8">Loading...</div>;
 
@@ -389,16 +402,18 @@ const ClientLedger: React.FC = () => {
           
           {/* Week Selector In Header */}
           <div className="flex items-center bg-gray-100 rounded-lg p-1 mx-2">
-                <button onClick={() => setCurrentMonth(m => Math.max(0, m-1))} disabled={currentMonth===0} className="p-1 hover:bg-white rounded shadow-sm disabled:opacity-30"><ChevronLeft size={16}/></button>
+                <button onClick={handlePrevMonth} disabled={currentYear === 2025 && currentMonth === 0} className="p-1 hover:bg-white rounded shadow-sm disabled:opacity-30"><ChevronLeft size={16}/></button>
                 <div className="flex flex-col items-center px-2 w-28">
-                     <span className="font-bold text-gray-800 text-xs">{MONTH_NAMES[currentMonth]}</span>
+                     <span className="font-bold text-gray-800 text-xs">{MONTH_NAMES[currentMonth]} {currentYear}</span>
                      <span className="text-[10px] text-gray-500">Week {Object.keys(weeksData).indexOf(String(selectedWeekNum)) + 1}</span>
                 </div>
-                <button onClick={() => setCurrentMonth(m => Math.min(11, m+1))} disabled={currentMonth===11} className="p-1 hover:bg-white rounded shadow-sm disabled:opacity-30"><ChevronRight size={16}/></button>
+                <button onClick={handleNextMonth} disabled={currentYear === 2026 && currentMonth === 11} className="p-1 hover:bg-white rounded shadow-sm disabled:opacity-30"><ChevronRight size={16}/></button>
           </div>
 
           <div className="flex items-center space-x-2">
              <div className="text-right mr-2 hidden md:block">
+                {/* Note: Showing only week balance here might be misleading if we removed closing balance? 
+                    Actually, Week Balance is useful context. Keep it. */}
                 <p className={`text-lg font-bold leading-tight ${weekTotal >= 0 ? 'text-green-600' : 'text-red-600'}`}>${Math.abs(weekTotal).toLocaleString()}</p>
                 <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Week Balance</p>
              </div>
@@ -414,13 +429,13 @@ const ClientLedger: React.FC = () => {
         
         {/* Week Buttons Row */}
         <div className="bg-gray-50 border-b border-gray-200 px-4 py-2 flex justify-center space-x-2 overflow-x-auto">
-             {Object.keys(weeksData).map(wk => (
+             {sortedWeekKeys.map(wk => (
                 <button 
                     key={wk} 
                     onClick={() => setSelectedWeekNum(Number(wk))}
                     className={`px-3 py-1 text-xs font-bold rounded-full border transition-colors whitespace-nowrap ${selectedWeekNum === Number(wk) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'}`}
                 >
-                    Week {Object.keys(weeksData).indexOf(wk) + 1}
+                    Week {Object.keys(weeksData).indexOf(String(wk)) + 1}
                 </button>
              ))}
         </div>
@@ -430,7 +445,7 @@ const ClientLedger: React.FC = () => {
         
         {/* Input Area (No Print) */}
         <div className="no-print mb-6 md:mb-8 space-y-4">
-             {/* Panel Selector & Input Form (Same as before) */}
+             {/* ... Input Components same as before ... */}
             <div className="flex justify-center">
                 <div className="bg-white rounded-lg p-1 shadow-sm border border-gray-200 flex w-full md:w-auto overflow-x-auto">
                     <button onClick={() => setActiveColumn('col1')} className={`flex-1 md:flex-none px-3 py-2 text-xs md:text-sm font-bold rounded-md transition-all ${activeColumn === 'col1' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-50'}`}>Panel 1</button>
@@ -496,22 +511,12 @@ const ClientLedger: React.FC = () => {
                         {client.code && <p className="text-gray-600 mt-1 font-mono text-sm md:text-xl">{client.code}</p>}
                     </div>
                     <div className="text-right">
-                        <p className="text-sm text-gray-500 font-sans uppercase tracking-wider">{MONTH_NAMES[currentMonth]} Week {Object.keys(weeksData).indexOf(String(selectedWeekNum)) + 1}</p>
+                        <p className="text-sm text-gray-500 font-sans uppercase tracking-wider">{MONTH_NAMES[currentMonth]} {currentYear}</p>
                         <p className="text-xs text-gray-400 font-mono mt-1">{formattedWeekRange}</p>
                     </div>
                 </div>
 
-                {/* Opening Balance Row */}
-                {openingBalance !== 0 && (
-                    <div className="px-4 md:px-8 mb-4">
-                        <div className="bg-gray-50 border-t border-b border-gray-200 py-2 flex justify-between items-center px-4">
-                             <span className="text-sm md:text-base font-bold text-gray-500 uppercase">Opening Balance (B/F)</span>
-                             <span className={`text-base md:text-xl font-mono font-bold ${openingBalance >= 0 ? 'text-gray-700' : 'text-red-600'}`}>
-                                 {openingBalance < 0 ? `(${Math.abs(openingBalance).toLocaleString(undefined, {minimumFractionDigits: 2})})` : openingBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}
-                             </span>
-                        </div>
-                    </div>
-                )}
+                {/* NOTE: Opening Balance Row REMOVED as per request */}
 
                 {/* Main Content: 3 Columns */}
                 <div className="flex w-full min-h-[400px] relative" ref={containerRef}>
@@ -528,15 +533,7 @@ const ClientLedger: React.FC = () => {
                     </div>
                 </div>
                 
-                {/* Closing Balance Row */}
-                <div className="px-4 md:px-8 mt-4">
-                    <div className="border-t-4 border-double border-gray-800 py-2 flex justify-between items-center px-4 bg-gray-50/50">
-                            <span className="text-base md:text-xl font-bold text-gray-900 uppercase">Week Closing Balance</span>
-                            <span className={`text-xl md:text-3xl font-mono font-bold ${weekTotal >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
-                                {weekTotal < 0 ? `(${Math.abs(weekTotal).toLocaleString(undefined, {minimumFractionDigits: 2})})` : weekTotal.toLocaleString(undefined, {minimumFractionDigits: 2})}
-                            </span>
-                    </div>
-                </div>
+                {/* NOTE: Closing Balance Row REMOVED as per request */}
 
                 {/* Vertical Resizer Bottom */}
                 <div style={{ height: `${verticalPadding.bottom}px` }} className="relative group w-full mt-auto no-print-bg"><div className="absolute top-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResize('bottom', undefined, e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div></div>

@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Printer, Loader2 } from 'lucide-react';
+import { ArrowLeft, Printer, Loader2, ChevronDown } from 'lucide-react';
 import { getClients, getSaleRecords, saveSaleRecord } from '../services/storageService';
 import { Client, SaleRecord } from '../types';
-import { MONTH_NAMES, YEAR, DRAW_DATES } from '../utils/reportUtils';
+import { MONTH_NAMES, DRAW_DATES, DRAW_DATES_2026 } from '../utils/reportUtils';
 
 // --- Types & Helpers ---
 
@@ -127,6 +127,7 @@ const ClientSales: React.FC = () => {
   const [client, setClient] = useState<Client | null>(null);
   const [records, setRecords] = useState<SaleRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [year, setYear] = useState(2025);
 
   const fetchAllData = useCallback(async () => {
     if (!id) return;
@@ -149,8 +150,10 @@ const ClientSales: React.FC = () => {
   // --- Data Preparation ---
   const yearData = useMemo(() => {
     const groups: MonthGroup[] = [];
+    const config = year === 2026 ? DRAW_DATES_2026 : DRAW_DATES;
+    
     for (let m = 0; m < 12; m++) {
-        const monthConfig = DRAW_DATES[m];
+        const monthConfig = config[m];
         if (!monthConfig) continue;
 
         const days = Array.from(new Set([
@@ -162,7 +165,7 @@ const ClientSales: React.FC = () => {
 
         const rowData: DayRowData[] = days.map(day => {
             // Correctly handle overflow days (e.g. 32) using JS Date object
-            const dObj = new Date(YEAR, m, day);
+            const dObj = new Date(year, m, day);
             const y = dObj.getFullYear();
             const mo = String(dObj.getMonth() + 1).padStart(2, '0');
             const da = String(dObj.getDate()).padStart(2, '0');
@@ -188,13 +191,19 @@ const ClientSales: React.FC = () => {
         });
     }
     return groups;
-  }, [records]);
+  }, [records, year]);
 
-  // --- Totals ---
-  const totalB = records.reduce((acc, r) => acc + (r.b || 0), 0);
-  const totalS = records.reduce((acc, r) => acc + (r.s || 0), 0);
-  const totalA = records.reduce((acc, r) => acc + (r.a || 0), 0);
-  const totalC = records.reduce((acc, r) => acc + (r.c || 0), 0);
+  // --- Totals (Filtered by selected year via yearData) ---
+  // We should only sum records that are VISIBLE in the current year view
+  const visibleRecords = useMemo(() => {
+      const visibleDates = new Set(yearData.flatMap(m => m.days.map(d => d.dateStr)));
+      return records.filter(r => visibleDates.has(r.date));
+  }, [records, yearData]);
+
+  const totalB = visibleRecords.reduce((acc, r) => acc + (r.b || 0), 0);
+  const totalS = visibleRecords.reduce((acc, r) => acc + (r.s || 0), 0);
+  const totalA = visibleRecords.reduce((acc, r) => acc + (r.a || 0), 0);
+  const totalC = visibleRecords.reduce((acc, r) => acc + (r.c || 0), 0);
   
   const totalBS = totalB + totalS;
   const totalAC = totalA + totalC;
@@ -239,6 +248,17 @@ const ClientSales: React.FC = () => {
                     </div>
                 </div>
                 <div className="flex items-center space-x-4">
+                    <div className="relative">
+                        <select 
+                            value={year} 
+                            onChange={(e) => setYear(Number(e.target.value))}
+                            className="appearance-none bg-gray-100 border border-gray-200 text-gray-700 py-2 pl-4 pr-8 rounded-lg font-bold text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                        >
+                            <option value={2025}>2025</option>
+                            <option value={2026}>2026</option>
+                        </select>
+                        <ChevronDown size={14} className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 pointer-events-none"/>
+                    </div>
                     <button onClick={handlePrint} className="bg-gray-800 text-white px-4 py-2 rounded-lg hover:bg-gray-900 shadow-sm flex items-center">
                         <Printer size={18} className="mr-2" /> Print
                     </button>
@@ -316,7 +336,7 @@ const ClientSales: React.FC = () => {
                          {/* Grand Net */}
                          <tr className="text-2xl font-mono h-16 border-t border-black">
                             <td colSpan={3} className="border-none text-right pr-8 text-sm font-sans font-bold pt-4 align-top uppercase text-gray-500">
-                                Net Result
+                                Net Result ({year})
                             </td>
                             <td colSpan={2} className="border-none pt-2 align-top text-center font-bold">
                                 {netTotal.toLocaleString(undefined, {minimumFractionDigits: 2})}

@@ -64,8 +64,12 @@ const Dashboard: React.FC = () => {
         setChartData(data);
 
         // --- Weekly Draw Chart Data ---
+        const currentYear = new Date().getFullYear();
         const currentMonthIndex = new Date().getMonth();
-        const weeks = getWeeksForMonth(currentMonthIndex);
+        // Use currentYear instead of hardcoded 2025/YEAR constant for graph if available, otherwise default
+        const yearToUse = currentYear >= 2025 ? currentYear : YEAR;
+        
+        const weeks = getWeeksForMonth(yearToUse, currentMonthIndex);
         
         const wData = Object.keys(weeks).sort((a,b)=>Number(a)-Number(b)).map((weekNum, index) => {
             const days = weeks[Number(weekNum)];
@@ -74,7 +78,7 @@ const Dashboard: React.FC = () => {
             // This handles overflow days (e.g. 32 -> Feb 1) correctly
             const weekTotal = allDraws.reduce((acc, r) => {
                 const match = days.some(day => {
-                    const dObj = new Date(YEAR, currentMonthIndex, day);
+                    const dObj = new Date(yearToUse, currentMonthIndex, day);
                     const y = dObj.getFullYear();
                     const m = String(dObj.getMonth() + 1).padStart(2, '0');
                     const d = String(dObj.getDate()).padStart(2, '0');
@@ -118,6 +122,7 @@ const Dashboard: React.FC = () => {
   );
 
   const currentMonthName = MONTH_NAMES[new Date().getMonth()];
+  const displayYear = new Date().getFullYear();
 
   return (
     <div className="space-y-6">
@@ -161,7 +166,7 @@ const Dashboard: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-3 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
             <h3 className="text-lg font-bold text-gray-800 mb-2">Weekly Draw Reports</h3>
-            <p className="text-sm text-gray-500 mb-6">Total balances per week for {currentMonthName} {YEAR}</p>
+            <p className="text-sm text-gray-500 mb-6">Total balances per week for {currentMonthName} {displayYear}</p>
             <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={weeklyChartData}>

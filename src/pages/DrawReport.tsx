@@ -45,6 +45,7 @@ const ClientInputRow = React.memo(({ client, value, onChange, onBlur }: {
 });
 
 const DrawReport: React.FC = () => {
+  const [currentYear, setCurrentYear] = useState(2025);
   const [currentMonth, setCurrentMonth] = useState(0); 
   const [selectedDate, setSelectedDate] = useState<string>(''); 
   const [clients, setClients] = useState<Client[]>([]);
@@ -57,23 +58,29 @@ const DrawReport: React.FC = () => {
     
     // Auto-select nearest date to "Today"
     const now = new Date();
-    setCurrentMonth(now.getMonth());
+    // Logic to set year safely within config bounds
+    let y = now.getFullYear();
+    if(y < 2025) y = 2025;
+    if(y > 2026) y = 2026;
+    setCurrentYear(y);
+
+    const m = now.getMonth();
+    setCurrentMonth(m);
 
     // Find week that contains today
-    const currentM = now.getMonth();
-    const weeks = getWeeksForMonth(currentM);
+    const weeks = getWeeksForMonth(y, m);
     const todayNum = now.getDate();
     const weekNum = Object.keys(weeks).find(w => weeks[parseInt(w)].includes(todayNum));
     
     if (weekNum) {
-        // Select start date of this week
+        // Select start day of this week
         const startDay = weeks[parseInt(weekNum)][0];
-        handleDateClick(startDay, currentM);
+        handleDateClick(startDay, m, y);
     } else {
         // Fallback to first week of current month
         const firstWeekNum = Object.keys(weeks)[0];
         if (firstWeekNum) {
-            handleDateClick(weeks[parseInt(firstWeekNum)][0], currentM);
+            handleDateClick(weeks[parseInt(firstWeekNum)][0], m, y);
         }
     }
   }, []);
@@ -109,12 +116,12 @@ const DrawReport: React.FC = () => {
       setLoading(false);
   };
 
-  const handleDateClick = (day: number, mIndex: number = currentMonth) => {
-      const dObj = new Date(YEAR, mIndex, day);
-      const y = dObj.getFullYear();
+  const handleDateClick = (day: number, mIndex: number = currentMonth, y: number = currentYear) => {
+      const dObj = new Date(y, mIndex, day);
+      const yearStr = dObj.getFullYear();
       const m = String(dObj.getMonth() + 1).padStart(2, '0');
       const d = String(dObj.getDate()).padStart(2, '0');
-      setSelectedDate(`${y}-${m}-${d}`);
+      setSelectedDate(`${yearStr}-${m}-${d}`);
   };
 
   const handleInputChange = useCallback((clientId: string, val: string) => {
@@ -145,29 +152,41 @@ const DrawReport: React.FC = () => {
       }, 0);
   };
 
-  const nextMonth = () => setCurrentMonth(prev => Math.min(11, prev + 1));
-  const prevMonth = () => setCurrentMonth(prev => Math.max(0, prev - 1));
+  const nextMonth = () => {
+      if (currentMonth === 11) {
+          if (currentYear < 2026) {
+              setCurrentYear(y => y + 1);
+              setCurrentMonth(0);
+          }
+      } else {
+          setCurrentMonth(prev => prev + 1);
+      }
+  };
+
+  const prevMonth = () => {
+      if (currentMonth === 0) {
+          if (currentYear > 2025) {
+              setCurrentYear(y => y - 1);
+              setCurrentMonth(11);
+          }
+      } else {
+          setCurrentMonth(prev => prev - 1);
+      }
+  };
 
   // --- Week Grouping Logic ---
-  const currentMonthData = DRAW_DATES[currentMonth];
   const currentMonthWeeks = useMemo(() => {
-      return getWeeksForMonth(currentMonth);
-  }, [currentMonth]);
+      return getWeeksForMonth(currentYear, currentMonth);
+  }, [currentYear, currentMonth]);
 
   // Identify active week based on selectedDate
-  const activeDay = selectedDate ? new Date(selectedDate).getDate() : 0;
-  // If selectedDate is from next month (overflow), we need to check if it's in the week array of currentMonth
-  // But wait, the `weeks` array contains "virtual days" (e.g. 32). 
-  // We need to map real date back to virtual day for comparison if we are in the "overflow" zone.
-  // Actually, we can just check if the selectedDate (YYYY-MM-DD) matches the computed date of any day in the week.
-  
   let activeWeekNum: string | undefined;
   
   if (selectedDate) {
       for (const [wNum, days] of Object.entries(currentMonthWeeks)) {
           // Check if selectedDate matches any day in this week
           const match = days.some(d => {
-              const dObj = new Date(YEAR, currentMonth, d);
+              const dObj = new Date(currentYear, currentMonth, d);
               const y = dObj.getFullYear();
               const m = String(dObj.getMonth() + 1).padStart(2, '0');
               const dayStr = String(dObj.getDate()).padStart(2, '0');
@@ -185,14 +204,12 @@ const DrawReport: React.FC = () => {
   const sortedWeekNums = Object.keys(currentMonthWeeks).map(Number).sort((a,b) => a-b);
 
   const renderDateButtons = () => {
-      if (!currentMonthData) return null;
-
       return (
           <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
               <div className="flex items-center justify-between mb-4 pb-4 border-b">
-                  <button onClick={prevMonth} disabled={currentMonth === 0} className="p-2 hover:bg-gray-100 rounded-full disabled:opacity-30"><ChevronLeft /></button>
-                  <h2 className="text-lg font-bold text-gray-800">{MONTH_NAMES[currentMonth]} {YEAR}</h2>
-                  <button onClick={nextMonth} disabled={currentMonth === 11} className="p-2 hover:bg-gray-100 rounded-full disabled:opacity-30"><ChevronRight /></button>
+                  <button onClick={prevMonth} disabled={currentYear === 2025 && currentMonth === 0} className="p-2 hover:bg-gray-100 rounded-full disabled:opacity-30"><ChevronLeft /></button>
+                  <h2 className="text-lg font-bold text-gray-800">{MONTH_NAMES[currentMonth]} {currentYear}</h2>
+                  <button onClick={nextMonth} disabled={currentYear === 2026 && currentMonth === 11} className="p-2 hover:bg-gray-100 rounded-full disabled:opacity-30"><ChevronRight /></button>
               </div>
               
               <div className="space-y-2">
@@ -201,7 +218,7 @@ const DrawReport: React.FC = () => {
                       const isActiveWeek = weekNum.toString() === activeWeekNum;
                       
                       // Convert virtual days (e.g. 32) to real date numbers (e.g. 1) for display
-                      const realDaysStr = days.map(d => new Date(YEAR, currentMonth, d).getDate()).join(', ');
+                      const realDaysStr = days.map(d => new Date(currentYear, currentMonth, d).getDate()).join(', ');
 
                       return (
                         <button
@@ -233,7 +250,7 @@ const DrawReport: React.FC = () => {
   const total = calculateTotal();
 
   // Convert active week days to real dates for display header
-  const activeWeekRealDaysStr = activeWeekDays.map(d => new Date(YEAR, currentMonth, d).getDate()).join(', ');
+  const activeWeekRealDaysStr = activeWeekDays.map(d => new Date(currentYear, currentMonth, d).getDate()).join(', ');
 
   return (
     <div className="flex flex-col lg:flex-row gap-6 min-h-screen pb-20">
@@ -264,7 +281,7 @@ const DrawReport: React.FC = () => {
                                     Weekly Report - Week {activeWeekIndex + 1}
                                 </h2>
                                 <p className="text-gray-500 font-medium text-sm mt-1">
-                                    {MONTH_NAMES[currentMonth]}: {activeWeekRealDaysStr}
+                                    {MONTH_NAMES[currentMonth]} {currentYear}: {activeWeekRealDaysStr}
                                 </p>
                             </div>
                             <div className="flex items-center text-xs text-gray-500 bg-yellow-50 px-3 py-1 rounded-full border border-yellow-200">

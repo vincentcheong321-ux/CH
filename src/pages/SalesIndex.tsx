@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { Search, ChevronLeft, ChevronRight, Loader2, Calendar } from 'lucide-react';
 import { getClients, getSalesForDates, saveSaleRecord } from '../services/storageService';
 import { Client, SaleRecord } from '../types';
-import { MONTH_NAMES, YEAR, getWeeksForMonth } from '../utils/reportUtils';
+import { MONTH_NAMES, getWeeksForMonth } from '../utils/reportUtils';
 
 // --- Helper: Composite Input for B/S or A/C ---
 const CompositeInput = React.memo(({ 
@@ -172,29 +172,59 @@ const ClientWeeklyCard = React.memo(({
 const SalesIndex: React.FC = () => {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentYear, setCurrentYear] = useState(2025);
   const [currentMonth, setCurrentMonth] = useState(0);
   const [selectedWeekNum, setSelectedWeekNum] = useState<number>(1);
   const [salesData, setSalesData] = useState<SaleRecord[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Initial Load: Set to "Today"
   useEffect(() => {
       const now = new Date();
-      setCurrentMonth(now.getMonth());
+      let y = now.getFullYear();
+      let m = now.getMonth();
+      const d = now.getDate();
+
+      // Fallback for years not in config, default to 2025/2026 range logic
+      if (y < 2025) y = 2025;
+      if (y > 2026) y = 2026;
+
+      setCurrentYear(y);
+      setCurrentMonth(m);
+
+      // Auto-select the correct week for "Today"
+      const weeks = getWeeksForMonth(y, m);
+      const foundWeek = Object.keys(weeks).find(wKey => {
+          const days = weeks[parseInt(wKey)];
+          // Simple check: does this set of days contain today's day number?
+          // Note: This matches "virtual days" (e.g. 32) if we are in that overlap period
+          // But strict matching is better handled by date construction if needed.
+          // For now, simpler: check if 'd' is in 'days' (exact match)
+          // or if d is small (1, 2) and we are looking at prev month's overflow...
+          return days.includes(d);
+      });
+
+      if (foundWeek) {
+          setSelectedWeekNum(parseInt(foundWeek));
+      } else {
+          // Default to first week if not found (or complex overflow logic needed)
+          setSelectedWeekNum(parseInt(Object.keys(weeks)[0] || '1'));
+      }
   }, []);
 
-  const weeksData = useMemo(() => getWeeksForMonth(currentMonth), [currentMonth]);
+  const weeksData = useMemo(() => getWeeksForMonth(currentYear, currentMonth), [currentYear, currentMonth]);
   const activeDays = weeksData[selectedWeekNum] || [];
   
   // Convert day numbers (potentially > days in month) to valid YYYY-MM-DD strings
   const activeDateStrings = useMemo(() => 
       activeDays.map(d => {
-        const dateObj = new Date(YEAR, currentMonth, d);
+        const dateObj = new Date(currentYear, currentMonth, d);
         const y = dateObj.getFullYear();
         const m = String(dateObj.getMonth() + 1).padStart(2, '0');
         const day = String(dateObj.getDate()).padStart(2, '0');
         return `${y}-${m}-${day}`;
       }),
-  [activeDays, currentMonth]);
+  [activeDays, currentYear, currentMonth]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -259,12 +289,41 @@ const SalesIndex: React.FC = () => {
 
   }, [salesData]);
 
+  const handlePrevMonth = () => {
+      if (currentMonth === 0) {
+          if (currentYear > 2025) {
+              setCurrentYear(y => y - 1);
+              setCurrentMonth(11);
+          }
+      } else {
+          setCurrentMonth(m => m - 1);
+      }
+  };
+
+  const handleNextMonth = () => {
+      if (currentMonth === 11) {
+          if (currentYear < 2026) {
+              setCurrentYear(y => y + 1);
+              setCurrentMonth(0);
+          }
+      } else {
+          setCurrentMonth(m => m + 1);
+      }
+  };
+
   const filteredClients = clients.filter(c => 
     c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     c.code.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const sortedWeekKeys = Object.keys(weeksData).map(Number).sort((a,b) => a-b);
+  
+  // Default selection if current week num becomes invalid after month switch
+  useEffect(() => {
+     if (sortedWeekKeys.length > 0 && !sortedWeekKeys.includes(selectedWeekNum)) {
+         setSelectedWeekNum(sortedWeekKeys[0]);
+     }
+  }, [sortedWeekKeys, selectedWeekNum]);
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-gray-50">
@@ -272,9 +331,9 @@ const SalesIndex: React.FC = () => {
       <div className="bg-white border-b border-gray-200 px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-3 flex-shrink-0 z-20 shadow-sm">
         <div className="flex items-center space-x-4 overflow-x-auto w-full md:w-auto">
             <div className="flex items-center bg-gray-100 rounded-lg p-1 flex-shrink-0">
-                <button onClick={() => setCurrentMonth(m => Math.max(0, m-1))} disabled={currentMonth===0} className="p-1 hover:bg-white rounded shadow-sm disabled:opacity-30"><ChevronLeft size={18}/></button>
-                <span className="w-28 text-center font-bold text-gray-800 text-sm">{MONTH_NAMES[currentMonth]} {YEAR}</span>
-                <button onClick={() => setCurrentMonth(m => Math.min(11, m+1))} disabled={currentMonth===11} className="p-1 hover:bg-white rounded shadow-sm disabled:opacity-30"><ChevronRight size={18}/></button>
+                <button onClick={handlePrevMonth} disabled={currentYear === 2025 && currentMonth === 0} className="p-1 hover:bg-white rounded shadow-sm disabled:opacity-30"><ChevronLeft size={18}/></button>
+                <span className="w-28 text-center font-bold text-gray-800 text-sm">{MONTH_NAMES[currentMonth]} {currentYear}</span>
+                <button onClick={handleNextMonth} disabled={currentYear === 2026 && currentMonth === 11} className="p-1 hover:bg-white rounded shadow-sm disabled:opacity-30"><ChevronRight size={18}/></button>
             </div>
 
             <div className="flex space-x-1">

@@ -1,5 +1,5 @@
 
-export const YEAR = 2025;
+export const YEAR = 2025; // Default/Fallback
 
 export const MONTH_NAMES = [
   "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE",
@@ -8,8 +8,6 @@ export const MONTH_NAMES = [
 
 // Data Structure: [Month Index 0-11]: { type: [days] }
 // NOTE: Overflow days (e.g. 32, 33) are used to group dates from the start of the next month into the current month's weeks.
-// Logic: If the last week of the month (Wed/Sat/Sun) includes dates from the next month, they are added here as 32, 33, etc.
-// The corresponding dates (1, 2, etc.) are removed from the next month's configuration.
 
 // 2025 Configuration
 export const DRAW_DATES: Record<number, { w: number[], s1: number[], s2: number[], t: number[] }> = {
@@ -27,8 +25,7 @@ export const DRAW_DATES: Record<number, { w: number[], s1: number[], s2: number[
   11: { w: [3,10,17,24,31], s1: [6,13,20,27,34], s2: [7,14,21,28,35], t: [] }, // DEC (34=Jan3, 35=Jan4)
 };
 
-// 2026 Configuration (Future Use)
-// Standard Draws: Wed, Sat, Sun. Special Draws (t) are placeholders.
+// 2026 Configuration
 export const DRAW_DATES_2026: Record<number, { w: number[], s1: number[], s2: number[], t: number[] }> = {
   0: { w: [7,14,21,28], s1: [3,10,17,24,31], s2: [4,11,18,25,32], t: [] }, // JAN (32=Feb1)
   1: { w: [4,11,18,25], s1: [7,14,21,28], s2: [1,8,15,22], t: [] }, // FEB
@@ -52,9 +49,9 @@ export const getWeekNumber = (d: Date) => {
     return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1)/7);
 };
 
-export const getWeeksForMonth = (monthIndex: number) => {
+export const getWeeksForMonth = (year: number, monthIndex: number) => {
     // Check if we are using 2026 or 2025
-    const currentMonthData = YEAR === 2025 ? DRAW_DATES[monthIndex] : DRAW_DATES_2026[monthIndex];
+    const currentMonthData = year === 2026 ? DRAW_DATES_2026[monthIndex] : DRAW_DATES[monthIndex];
       
     if (!currentMonthData) return {};
     
@@ -63,12 +60,10 @@ export const getWeeksForMonth = (monthIndex: number) => {
     
     allDays.forEach(day => {
         // Construct date using the day. Overflow days (32, 33) automatically roll over to next month.
-        const date = new Date(YEAR, monthIndex, day);
+        const date = new Date(year, monthIndex, day);
         let weekNum = getWeekNumber(date);
         
         // FIX: Handle Year-End Week Wrapping
-        // If it's December and we get Week 1 (which belongs to next year), treat it as Week 53 
-        // to ensure it appears at the end of the December list, not the beginning.
         if (monthIndex === 11 && weekNum === 1) {
             weekNum = 53;
         }
