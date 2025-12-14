@@ -75,6 +75,18 @@ const DrawReport: React.FC = () => {
         });
     });
 
+    // Ensure we select the *start* of the week for the closest date
+    const mData = DRAW_DATES[closestMonth];
+    if (mData) {
+        const weeks = getWeeksForMonth(closestMonth);
+        const day = parseInt(closestDateStr.split('-')[2]);
+        const weekNum = Object.keys(weeks).find(w => weeks[parseInt(w)].includes(day));
+        if (weekNum) {
+            const firstDay = weeks[parseInt(weekNum)][0];
+            closestDateStr = `${YEAR}-${String(closestMonth+1).padStart(2, '0')}-${String(firstDay).padStart(2, '0')}`;
+        }
+    }
+
     setSelectedDate(closestDateStr);
     setCurrentMonth(closestMonth);
   }, []);
@@ -168,11 +180,11 @@ const DrawReport: React.FC = () => {
   
   // Calculate visual index for "Week X" label
   const activeWeekIndex = activeWeekNum ? Object.keys(currentMonthWeeks).map(Number).sort((a,b) => a-b).indexOf(Number(activeWeekNum)) : 0;
+  
+  const sortedWeekNums = Object.keys(currentMonthWeeks).map(Number).sort((a,b) => a-b);
 
   const renderDateButtons = () => {
       if (!currentMonthData) return null;
-
-      const sortedWeekNums = Object.keys(currentMonthWeeks).map(Number).sort((a,b) => a-b);
 
       return (
           <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
@@ -220,7 +232,7 @@ const DrawReport: React.FC = () => {
   return (
     <div className="flex flex-col lg:flex-row gap-6 min-h-screen pb-20">
        {/* Left Sidebar: Calendar Controls */}
-       <div className="lg:w-80 flex-shrink-0 no-print">
+       <div className="lg:w-80 flex-shrink-0 no-print hidden lg:block">
             <h1 className="text-2xl font-bold text-gray-800 mb-2 flex items-center">
                 <Calendar className="mr-2" /> Draw Reports
             </h1>
@@ -243,11 +255,10 @@ const DrawReport: React.FC = () => {
                             <div>
                                 <h2 className="text-xl font-bold text-gray-900 flex items-center">
                                     <Layers size={20} className="mr-2 text-blue-600" />
-                                    {/* Updated Header to match Sidebar Structure */}
                                     Weekly Report - Week {activeWeekIndex + 1}
                                 </h2>
                                 <p className="text-gray-500 font-medium text-sm mt-1">
-                                    {/* Explicitly list dates to match sidebar detail */}
+                                    {/* Dates included in this week */}
                                     {MONTH_NAMES[currentMonth]}: {activeWeekDays.join(', ')}
                                 </p>
                             </div>
@@ -256,29 +267,28 @@ const DrawReport: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Date Tabs (Pills) for Active Week */}
-                        {activeWeekDays.length > 0 && (
-                            <div className="flex space-x-2 bg-gray-200 p-1 rounded-lg w-fit">
-                                {activeWeekDays.map(day => {
-                                    const dateStr = `${YEAR}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                                    const isActive = selectedDate === dateStr;
-                                    return (
-                                        <button
-                                            key={day}
-                                            onClick={() => handleDateClick(day)}
-                                            className={`
-                                                px-6 py-1.5 rounded-md text-sm font-bold transition-all
-                                                ${isActive 
-                                                    ? 'bg-white text-blue-600 shadow-sm' 
-                                                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}
-                                            `}
-                                        >
-                                            Day {day}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        )}
+                        {/* Week Selection Pills (Replaces Day Pills) */}
+                        <div className="flex space-x-2 bg-gray-200 p-1 rounded-lg w-fit overflow-x-auto max-w-full">
+                            {sortedWeekNums.map((weekNum, idx) => {
+                                const days = currentMonthWeeks[weekNum];
+                                const firstDay = days[0];
+                                const isActive = days.includes(activeDay);
+                                return (
+                                    <button
+                                        key={weekNum}
+                                        onClick={() => handleDateClick(firstDay)}
+                                        className={`
+                                            px-4 py-1.5 rounded-md text-sm font-bold transition-all whitespace-nowrap
+                                            ${isActive 
+                                                ? 'bg-white text-blue-600 shadow-sm' 
+                                                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}
+                                        `}
+                                    >
+                                        Week {idx + 1}
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
 
                     {loading ? (
