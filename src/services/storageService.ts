@@ -259,6 +259,12 @@ const getLocalCashAdvanceRecords = (): CashAdvanceRecord[] => {
     return data ? JSON.parse(data) : [];
 };
 
+// Internal Helper to get draw records synchronously from localStorage
+const getLocalDrawRecords = (): { date: string, clientId: string, balance: number }[] => {
+    const data = localStorage.getItem(DRAW_BALANCES_KEY);
+    return data ? JSON.parse(data) : [];
+};
+
 export const getLedgerRecords = (clientId: string): LedgerRecord[] => {
   const data = localStorage.getItem(RECORDS_KEY);
   const allRecords: any[] = data ? JSON.parse(data) : [];
@@ -301,7 +307,24 @@ export const getLedgerRecords = (clientId: string): LedgerRecord[] => {
       } as LedgerRecord;
   }).filter((r): r is LedgerRecord => r !== null);
 
-  return [...manualRecords, ...salesAsLedger, ...advancesAsLedger];
+  // Merge Draw Records as Read-Only Ledger Entries
+  const draws = getLocalDrawRecords().filter(d => d.clientId === clientId);
+  const drawsAsLedger: LedgerRecord[] = draws.map(d => {
+      if (d.balance === 0) return null;
+      return {
+          id: `draw_${d.clientId}_${d.date}`,
+          clientId: d.clientId,
+          date: d.date,
+          description: 'Draw Report',
+          typeLabel: '收', // Draw Report shows as '收'
+          amount: d.balance,
+          operation: 'add', 
+          column: 'col1',
+          isVisible: true
+      } as LedgerRecord;
+  }).filter((r): r is LedgerRecord => r !== null);
+
+  return [...manualRecords, ...salesAsLedger, ...advancesAsLedger, ...drawsAsLedger];
 };
 
 export const getAllLedgerRecords = (): LedgerRecord[] => {
@@ -344,7 +367,24 @@ export const getAllLedgerRecords = (): LedgerRecord[] => {
       } as LedgerRecord;
   }).filter((r): r is LedgerRecord => r !== null);
 
-  return [...manualRecords, ...salesAsLedger, ...advancesAsLedger];
+  // Merge all draws
+  const draws = getLocalDrawRecords();
+  const drawsAsLedger: LedgerRecord[] = draws.map(d => {
+      if (d.balance === 0) return null;
+      return {
+          id: `draw_${d.clientId}_${d.date}`,
+          clientId: d.clientId,
+          date: d.date,
+          description: 'Draw Report',
+          typeLabel: '收', // Draw Report shows as '收'
+          amount: d.balance,
+          operation: 'add', 
+          column: 'col1',
+          isVisible: true
+      } as LedgerRecord;
+  }).filter((r): r is LedgerRecord => r !== null);
+
+  return [...manualRecords, ...salesAsLedger, ...advancesAsLedger, ...drawsAsLedger];
 };
 
 // Updated: Supports optional 'untilDate' (inclusive)
