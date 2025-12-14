@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, ChevronLeft, ChevronRight, Loader2, Calendar, Smartphone, FileText } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Loader2, Calendar, Smartphone, FileText, DollarSign } from 'lucide-react';
 import { getClients, getSalesForDates, saveSaleRecord } from '../services/storageService';
 import { Client, SaleRecord } from '../types';
 import { MONTH_NAMES, getWeeksForMonth } from '../utils/reportUtils';
@@ -32,8 +32,6 @@ const CompositeInput = React.memo(({
     }, [val1, val2]);
 
     const handleBlur = () => {
-        // Parse "10/5" or "10"
-        // Allow "." for decimal values
         let v1 = 0, v2 = 0;
         
         if (localVal.trim() === '') {
@@ -47,13 +45,12 @@ const CompositeInput = React.memo(({
             v2 = parseFloat(parts[1]) || 0;
         } else {
             v1 = parseFloat(localVal) || 0;
-            v2 = 0; // Default to first value only if no separator
+            v2 = 0; 
         }
 
         if (v1 !== val1 || v2 !== val2) {
             onChange(v1, v2);
         }
-        // Re-format on blur to clean up input
         setLocalVal(formatValue(v1, v2));
     };
 
@@ -76,7 +73,60 @@ const CompositeInput = React.memo(({
     );
 });
 
-// --- Client Card Component ---
+// --- Mobile List Row Component ---
+const MobileClientRow = React.memo(({ 
+    client, 
+    total, 
+    onUpdate 
+}: { 
+    client: Client, 
+    total: number, 
+    onUpdate: (clientId: string, val: number) => void 
+}) => {
+    const [localVal, setLocalVal] = useState(total > 0 ? total.toString() : '');
+
+    useEffect(() => {
+        setLocalVal(total > 0 ? total.toString() : '');
+    }, [total]);
+
+    const handleBlur = () => {
+        const val = parseFloat(localVal) || 0;
+        if (val !== total) {
+            onUpdate(client.id, val);
+        }
+    };
+
+    return (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 flex items-center justify-between hover:shadow-md transition-shadow">
+            <div className="flex items-center space-x-3">
+                <div className="bg-purple-50 p-2 rounded-full text-purple-600">
+                    <Smartphone size={20} />
+                </div>
+                <div>
+                    <h3 className="font-bold text-gray-900 leading-tight">{client.name}</h3>
+                    <p className="text-xs text-gray-500 font-mono">{client.code}</p>
+                </div>
+            </div>
+            <div className="w-32">
+                <div className="relative">
+                    <span className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 font-bold">$</span>
+                    <input 
+                        type="number"
+                        inputMode="decimal"
+                        value={localVal}
+                        onChange={(e) => setLocalVal(e.target.value)}
+                        onBlur={handleBlur}
+                        onFocus={(e) => e.target.select()}
+                        className={`w-full pl-6 pr-3 py-2 text-right font-mono font-bold text-lg border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 ${localVal ? 'text-purple-700 bg-purple-50 border-purple-200' : 'text-gray-900 border-gray-300'}`}
+                        placeholder="0"
+                    />
+                </div>
+            </div>
+        </div>
+    );
+});
+
+// --- Client Card Component (Paper View) ---
 const ClientWeeklyCard = React.memo(({ 
     client, 
     dateStrings, 
@@ -95,7 +145,6 @@ const ClientWeeklyCard = React.memo(({
 
     const formatMonth = (mIndex: number) => {
         const name = MONTH_NAMES[mIndex] || "";
-        // Convert "JANUARY" -> "Jan"
         return name.charAt(0) + name.slice(1, 3).toLowerCase();
     };
 
@@ -117,7 +166,7 @@ const ClientWeeklyCard = React.memo(({
                 </div>
             </div>
 
-            {/* Matrix Table: Transposed (Date x Type) */}
+            {/* Matrix Table */}
             <div className="flex-1 overflow-x-auto">
                 <table className="w-full text-center border-collapse">
                     <thead className="bg-gray-50/50 text-xs text-gray-500 font-semibold uppercase tracking-wider">
@@ -130,7 +179,6 @@ const ClientWeeklyCard = React.memo(({
                     <tbody className="divide-y divide-gray-100 text-sm">
                         {dateStrings.map(dateStr => {
                             const [y, m, d] = dateStr.split('-').map(Number);
-                            // m is 1-based from string split
                             const displayDate = `${d} ${formatMonth(m-1)}`;
                             const record = salesData.find(r => r.clientId === client.id && r.date === dateStr);
                             
@@ -158,9 +206,6 @@ const ClientWeeklyCard = React.memo(({
                                 </tr>
                             );
                         })}
-                        {dateStrings.length === 0 && (
-                            <tr><td colSpan={3} className="py-6 text-center text-gray-400 italic text-xs">No dates in this week</td></tr>
-                        )}
                     </tbody>
                 </table>
             </div>
@@ -188,14 +233,12 @@ const SalesIndex: React.FC = () => {
       let m = now.getMonth();
       const d = now.getDate();
 
-      // Fallback for years not in config, default to 2025/2026 range logic
       if (y < 2025) y = 2025;
       if (y > 2026) y = 2026;
 
       setCurrentYear(y);
       setCurrentMonth(m);
 
-      // Auto-select the correct week for "Today"
       const weeks = getWeeksForMonth(y, m);
       const foundWeek = Object.keys(weeks).find(wKey => {
           const days = weeks[parseInt(wKey)];
@@ -205,7 +248,6 @@ const SalesIndex: React.FC = () => {
       if (foundWeek) {
           setSelectedWeekNum(parseInt(foundWeek));
       } else {
-          // Default to first week if not found (or complex overflow logic needed)
           setSelectedWeekNum(parseInt(Object.keys(weeks)[0] || '1'));
       }
   }, []);
@@ -213,7 +255,6 @@ const SalesIndex: React.FC = () => {
   const weeksData = useMemo(() => getWeeksForMonth(currentYear, currentMonth), [currentYear, currentMonth]);
   const activeDays = weeksData[selectedWeekNum] || [];
   
-  // Convert day numbers (potentially > days in month) to valid YYYY-MM-DD strings
   const activeDateStrings = useMemo(() => 
       activeDays.map(d => {
         const dateObj = new Date(currentYear, currentMonth, d);
@@ -247,6 +288,7 @@ const SalesIndex: React.FC = () => {
     loadData();
   }, [loadData]);
 
+  // Handle updates for Paper Clients (Detailed B/S/A/C)
   const handleUpdate = useCallback(async (
       clientId: string, 
       dateStr: string, 
@@ -254,7 +296,6 @@ const SalesIndex: React.FC = () => {
       f2: 's'|'c', v2: number
     ) => {
       
-      // Optimistic Update
       setSalesData(prev => {
           const idx = prev.findIndex(r => r.clientId === clientId && r.date === dateStr);
           if (idx >= 0) {
@@ -272,7 +313,6 @@ const SalesIndex: React.FC = () => {
           }
       });
 
-      // DB Save
       const existing = salesData.find(r => r.clientId === clientId && r.date === dateStr);
       const payload = existing 
         ? { ...existing, [f1]: v1, [f2]: v2 } 
@@ -286,6 +326,54 @@ const SalesIndex: React.FC = () => {
       await saveSaleRecord(savePayload);
 
   }, [salesData]);
+
+  // Handle updates for Mobile Clients (Weekly Total)
+  const handleMobileUpdate = useCallback(async (clientId: string, val: number) => {
+      // 1. Calculate current sum of other days in this week for this client
+      // 2. We will treat the input as the NEW TOTAL.
+      // 3. To keep it simple, we update the LAST day of the week to ensure the sum matches.
+      // 4. Actually, simpler: Mobile view treats daily granularity as irrelevant. 
+      //    We will fetch existing total, find difference, and apply difference to the last day.
+      //    Or better: Just set the last day to (Val - SumOfOtherDays).
+      
+      const lastDateStr = activeDateStrings[activeDateStrings.length - 1];
+      if (!lastDateStr) return;
+
+      const clientRecords = salesData.filter(r => r.clientId === clientId);
+      
+      // Calculate sum of all OTHER days
+      const otherDaysSum = clientRecords
+          .filter(r => r.date !== lastDateStr)
+          .reduce((acc, r) => acc + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
+
+      // New value for last day = Desired Total - Other Days
+      // Use 'b' field as the bucket for mobile sales
+      const newLastDayVal = Math.max(0, val - otherDaysSum); 
+
+      // Optimistic update
+      setSalesData(prev => {
+          const idx = prev.findIndex(r => r.clientId === clientId && r.date === lastDateStr);
+          if (idx >= 0) {
+              const updated = [...prev];
+              updated[idx] = { ...updated[idx], b: newLastDayVal, s:0, a:0, c:0 }; // Reset others to 0 on the update target for cleanliness
+              return updated;
+          } else {
+               return [...prev, { 
+                  id: 'temp', clientId, date: lastDateStr, 
+                  b: newLastDayVal, s: 0, a: 0, c: 0 
+              }];
+          }
+      });
+
+      // Save
+      await saveSaleRecord({
+          clientId,
+          date: lastDateStr,
+          b: newLastDayVal,
+          s: 0, a: 0, c: 0
+      });
+
+  }, [salesData, activeDateStrings]);
 
   const handlePrevMonth = () => {
       if (currentMonth === 0) {
@@ -309,9 +397,7 @@ const SalesIndex: React.FC = () => {
       }
   };
 
-  // Logic: First filter by category (tab), then filter by search term
   const filteredClients = clients.filter(c => {
-      // If client has no category, assume 'paper' for backward compatibility
       const category = c.category || 'paper';
       const matchTab = category === activeTab;
       const matchSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -319,9 +405,23 @@ const SalesIndex: React.FC = () => {
       return matchTab && matchSearch;
   });
 
+  // --- Calculations for Header Totals ---
+  // Paper Total
+  const paperClients = clients.filter(c => (c.category || 'paper') === 'paper');
+  const totalPaper = paperClients.reduce((acc, client) => {
+      const clientRecs = salesData.filter(r => r.clientId === client.id);
+      return acc + clientRecs.reduce((sum, r) => sum + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
+  }, 0);
+
+  // Mobile Total
+  const mobileClients = clients.filter(c => c.category === 'mobile');
+  const totalMobile = mobileClients.reduce((acc, client) => {
+      const clientRecs = salesData.filter(r => r.clientId === client.id);
+      return acc + clientRecs.reduce((sum, r) => sum + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
+  }, 0);
+
   const sortedWeekKeys = Object.keys(weeksData).map(Number).sort((a,b) => a-b);
   
-  // Default selection if current week num becomes invalid after month switch
   useEffect(() => {
      if (sortedWeekKeys.length > 0 && !sortedWeekKeys.includes(selectedWeekNum)) {
          setSelectedWeekNum(sortedWeekKeys[0]);
@@ -335,21 +435,39 @@ const SalesIndex: React.FC = () => {
           
           {/* Row 1: Search and Tab Switcher */}
           <div className="px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-3">
-             <div className="flex bg-gray-100 p-1 rounded-lg">
-                <button 
-                    onClick={() => setActiveTab('paper')}
-                    className={`flex items-center px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'paper' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
-                >
-                    <FileText size={16} className="mr-2" />
-                    Paper List
-                </button>
-                <button 
-                    onClick={() => setActiveTab('mobile')}
-                    className={`flex items-center px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'mobile' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
-                >
-                    <Smartphone size={16} className="mr-2" />
-                    Mobile List
-                </button>
+             <div className="flex items-center space-x-4">
+                 <div className="flex bg-gray-100 p-1 rounded-lg">
+                    <button 
+                        onClick={() => setActiveTab('paper')}
+                        className={`flex items-center px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'paper' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                    >
+                        <FileText size={16} className="mr-2" />
+                        Paper List
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('mobile')}
+                        className={`flex items-center px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'mobile' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                    >
+                        <Smartphone size={16} className="mr-2" />
+                        Mobile List
+                    </button>
+                 </div>
+                 
+                 {/* Weekly Total Display */}
+                 <div className="hidden lg:flex items-center space-x-4 ml-4 pl-4 border-l border-gray-200">
+                    <div>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Paper Total</p>
+                        <p className="font-mono font-bold text-gray-800">${totalPaper.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                    </div>
+                    <div>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Mobile Total</p>
+                        <p className="font-mono font-bold text-purple-600">${totalMobile.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                    </div>
+                    <div>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Grand Total</p>
+                        <p className="font-mono font-bold text-green-600 text-lg">${(totalPaper + totalMobile).toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                    </div>
+                 </div>
              </div>
 
              <div className="relative w-full md:w-64">
@@ -394,18 +512,49 @@ const SalesIndex: React.FC = () => {
             <div className="flex justify-center items-center h-full"><Loader2 className="animate-spin text-gray-400" /></div>
         ) : (
             <div className="max-w-7xl mx-auto pb-20">
-                {/* Grid Layout for Side-by-Side Viewing */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                    {filteredClients.map(client => (
-                        <ClientWeeklyCard 
-                            key={client.id}
-                            client={client}
-                            dateStrings={activeDateStrings}
-                            salesData={salesData}
-                            onUpdate={handleUpdate}
-                        />
-                    ))}
-                </div>
+                
+                {activeTab === 'paper' ? (
+                    // Paper View: Grid of Cards
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                        {filteredClients.map(client => (
+                            <ClientWeeklyCard 
+                                key={client.id}
+                                client={client}
+                                dateStrings={activeDateStrings}
+                                salesData={salesData}
+                                onUpdate={handleUpdate}
+                            />
+                        ))}
+                    </div>
+                ) : (
+                    // Mobile View: List of Rows
+                    <div className="space-y-2 max-w-4xl mx-auto">
+                        {/* Totals Card for Mobile View Specific */}
+                        <div className="bg-purple-600 text-white rounded-xl p-6 mb-6 shadow-md flex justify-between items-center">
+                             <div>
+                                 <h2 className="text-xl font-bold">Mobile Sales Summary</h2>
+                                 <p className="opacity-80 text-sm">Week {Object.keys(weeksData).indexOf(String(selectedWeekNum)) + 1} - {MONTH_NAMES[currentMonth]} {currentYear}</p>
+                             </div>
+                             <div className="text-right">
+                                 <p className="text-xs uppercase opacity-80 font-bold tracking-wider">Week Total</p>
+                                 <p className="text-3xl font-mono font-bold">${totalMobile.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                             </div>
+                        </div>
+
+                        {filteredClients.map(client => {
+                            const clientRecords = salesData.filter(r => r.clientId === client.id);
+                            const total = clientRecords.reduce((acc, r) => acc + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
+                            return (
+                                <MobileClientRow
+                                    key={client.id}
+                                    client={client}
+                                    total={total}
+                                    onUpdate={handleMobileUpdate}
+                                />
+                            );
+                        })}
+                    </div>
+                )}
                 
                 {filteredClients.length === 0 && (
                     <div className="text-center text-gray-400 py-12">
