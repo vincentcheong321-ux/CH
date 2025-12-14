@@ -210,7 +210,8 @@ const ClientSales: React.FC = () => {
   
   const totalBS = totalB + totalS;
   const totalAC = totalA + totalC;
-  const netTotal = totalBS - totalAC;
+  // CHANGED: Summing everything instead of difference (User Request: "they are both sum up total")
+  const netTotal = totalBS + totalAC;
 
   if (loading || !client) {
       return (
@@ -339,9 +340,9 @@ const ClientSales: React.FC = () => {
                          {/* Grand Net */}
                          <tr className="text-2xl font-mono h-16 border-t border-black">
                             <td colSpan={3} className="border-none text-right pr-8 text-sm font-sans font-bold pt-4 align-top uppercase text-gray-500">
-                                Net Result ({year})
+                                Total Sum ({year})
                             </td>
-                            <td colSpan={2} className="border-none pt-2 align-top text-center font-bold">
+                            <td colSpan={2} className="border-none pt-2 align-top text-center font-bold text-blue-700">
                                 {netTotal.toLocaleString(undefined, {minimumFractionDigits: 2})}
                             </td>
                         </tr>

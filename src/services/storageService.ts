@@ -291,7 +291,9 @@ export const getSalesForDates = async (dates: string[]): Promise<SaleRecord[]> =
 
 export const saveSaleRecord = async (record: Omit<SaleRecord, 'id'>) => {
     if (supabase) {
-        const netAmount = (record.b + record.s) - (record.a + record.c);
+        // CHANGED: Summing everything instead of difference (User Request: "both sum up total")
+        const netAmount = record.b + record.s + record.a + record.c;
+        
         const { data: existing } = await supabase.from('financial_journal')
             .select('id, data')
             .eq('client_id', record.clientId)

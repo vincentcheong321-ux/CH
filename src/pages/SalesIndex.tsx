@@ -104,14 +104,13 @@ const DetailedMobileTableRow = React.memo(({
     };
 
     // Special Helper for Agent Total (Index 16)
-    // If raw data is short, fallback to last element if plausible
+    // Grab the very last element of the raw array
     const getAgentTotal = (): string | number => {
-        if (raw) {
-            if (raw.length > 16) return raw[16];
-            // Fallback: if raw length is close to expected (e.g. 16 or 17), assume last is total
-            if (raw.length >= 15) return raw[raw.length - 1];
+        if (raw && raw.length > 0) {
+            return raw[raw.length - 1];
         }
-        return getVal(16);
+        if (legacy) return legacy.agentTotal || '';
+        return '';
     };
 
     // Helper to format currency/number
@@ -186,8 +185,8 @@ const ClientWeeklyCard = React.memo(({
     const clientRecords = salesData.filter(r => r.clientId === client.id);
     const rawTotal = clientRecords.reduce((acc, r) => acc + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
     
-    // ADJUSTMENT: Apply -14% to the calculated total (Multiply by 0.86)
-    const totalWeek = rawTotal * 0.86;
+    // ADJUSTMENT: REMOVED 14% deduction as requested
+    const totalWeek = rawTotal;
 
     const formatMonth = (mIndex: number) => {
         const name = MONTH_NAMES[mIndex] || "";
@@ -212,7 +211,7 @@ const ClientWeeklyCard = React.memo(({
                     </div>
                 </Link>
                 <div className="text-right">
-                    <div className="text-[9px] text-gray-400 uppercase tracking-wider font-semibold">Week Total (-14%)</div>
+                    <div className="text-[9px] text-gray-400 uppercase tracking-wider font-semibold">Week Total</div>
                     <span className={`font-mono font-bold text-sm ${totalWeek > 0 ? 'text-blue-600' : 'text-gray-900'}`}>
                         {totalWeek !== 0 ? totalWeek.toLocaleString(undefined, {minimumFractionDigits: 2}) : '-'}
                     </span>
@@ -407,13 +406,25 @@ const SalesIndex: React.FC = () => {
   const paperClients = useMemo(() => clients.filter(c => (c.category || 'paper') === 'paper'), [clients]);
   const mobileClients = useMemo(() => clients.filter(c => c.category === 'mobile'), [clients]);
 
+  // Updated Memo: Includes Search Filtering for Paper Clients
   const { zClients, cClients } = useMemo(() => {
-      const zList = paperClients.filter(c => PAPER_Z_CODES.includes(c.code.toUpperCase()));
-      const cList = paperClients.filter(c => PAPER_C_CODES.includes(c.code.toUpperCase()));
+      // 1. Filter by search term first
+      const term = searchTerm.toLowerCase();
+      const filtered = paperClients.filter(c => 
+          c.name.toLowerCase().includes(term) || 
+          c.code.toLowerCase().includes(term)
+      );
+
+      // 2. Separate into Z and C lists
+      const zList = filtered.filter(c => PAPER_Z_CODES.includes(c.code.toUpperCase()));
+      const cList = filtered.filter(c => PAPER_C_CODES.includes(c.code.toUpperCase()));
+      
+      // 3. Sort
       zList.sort((a,b) => PAPER_Z_CODES.indexOf(a.code.toUpperCase()) - PAPER_Z_CODES.indexOf(b.code.toUpperCase()));
       cList.sort((a,b) => PAPER_C_CODES.indexOf(a.code.toUpperCase()) - PAPER_C_CODES.indexOf(b.code.toUpperCase()));
+      
       return { zClients: zList, cClients: cList };
-  }, [paperClients]);
+  }, [paperClients, searchTerm]);
 
   const filteredMobileClients = mobileClients.filter(c => 
       c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -423,8 +434,8 @@ const SalesIndex: React.FC = () => {
   const totalPaper = [...zClients, ...cClients].reduce((acc, client) => {
       const clientRecs = salesData.filter(r => r.clientId === client.id);
       const rawSum = clientRecs.reduce((sum, r) => sum + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
-      // ADJUSTMENT: Apply -14% to the global paper total as well
-      return acc + (rawSum * 0.86);
+      // ADJUSTMENT: REMOVED 14% deduction
+      return acc + rawSum;
   }, 0);
 
   // ADJUSTMENT: Mobile Week Total based on Shareholder Total (Index 11)
@@ -488,7 +499,7 @@ const SalesIndex: React.FC = () => {
                  
                  <div className="hidden lg:flex items-center space-x-6 ml-6 pl-6 border-l border-gray-200">
                     <div className={`transition-opacity duration-300 ${activeTab === 'paper' ? 'opacity-100' : 'opacity-40'}`}>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Paper Week Total (Less 14%)</p>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Paper Week Total</p>
                         <p className="font-mono font-bold text-gray-800 text-lg">${totalPaper.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
                     </div>
                     <div className={`transition-opacity duration-300 ${activeTab === 'mobile' ? 'opacity-100' : 'opacity-40'}`}>
@@ -577,7 +588,7 @@ const SalesIndex: React.FC = () => {
                                         onUpdate={handleUpdate}
                                     />
                                 ))}
-                                {zClients.length === 0 && <p className="text-gray-400 text-sm col-span-full text-center py-4">No Z-series clients found.</p>}
+                                {zClients.length === 0 && <p className="text-gray-400 text-sm col-span-full text-center py-4">No Z-series clients found matching search.</p>}
                             </div>
                         </div>
 
@@ -593,7 +604,7 @@ const SalesIndex: React.FC = () => {
                                         onUpdate={handleUpdate}
                                     />
                                 ))}
-                                {cClients.length === 0 && <p className="text-gray-400 text-sm col-span-full text-center py-4">No C-series clients found.</p>}
+                                {cClients.length === 0 && <p className="text-gray-400 text-sm col-span-full text-center py-4">No C-series clients found matching search.</p>}
                             </div>
                         </div>
                     </div>
