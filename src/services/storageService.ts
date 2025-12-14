@@ -528,31 +528,32 @@ export const getClientBalance = (clientId: string): number => {
     return 0;
 };
 
-// UPDATED: Calculate Total Balance respecting Draw checkpoints and Panel 1 logic
+// UPDATED: Calculate Total Balance respecting checkpoints (Draw OR Manual '上欠') and Panel 1 logic
 export const fetchClientTotalBalance = async (clientId: string): Promise<number> => {
     // 1. Fetch all records for the client
     const records = await getLedgerRecords(clientId);
     if (records.length === 0) return 0;
 
-    // 2. Find the latest DRAW record (Snapshot) to prevent double counting history
+    // 2. Find the latest SNAPSHOT record to prevent double counting history
     // Sort descending by date to find latest
     records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     
-    const latestDraw = records.find(r => r.id.startsWith('draw_'));
+    // Look for either a system Draw OR a manual '上欠' (Forward Balance)
+    const latestSnapshot = records.find(r => r.id.startsWith('draw_') || r.typeLabel === '上欠');
     let effectiveRecords = records;
 
-    if (latestDraw) {
-        // If a Draw exists, we sum: The Draw Amount + All Transactions ON or AFTER the Draw Date.
-        // We exclude transactions that are BEFORE the Draw Date.
-        // For transactions ON the same date as Draw:
-        // - If Draw is "Opening", it precedes transactions.
-        // - We assume standard ledger practice: Draw (Snapshot) + Transactions.
+    if (latestSnapshot) {
+        // If a Snapshot exists, we sum: The Snapshot Amount + All Transactions ON or AFTER the Snapshot Date.
         effectiveRecords = records.filter(r => {
-            if (r.id === latestDraw.id) return true; // Include the draw itself
-            if (r.date > latestDraw.date) return true; // Include newer
-            if (r.date === latestDraw.date) {
-                // Include same-day transactions (excluding other draws to be safe)
-                return !r.id.startsWith('draw_');
+            // Include the snapshot itself
+            if (r.id === latestSnapshot.id) return true; 
+            // Include records newer than the snapshot
+            if (r.date > latestSnapshot.date) return true; 
+            // Include records on the same day (unless it's another snapshot, to avoid dupes)
+            if (r.date === latestSnapshot.date) {
+                // If finding logic was sound, 'latestSnapshot' is the first one found in desc sort.
+                // We shouldn't include other snapshots on same day if they exist (unlikely but safe to exclude).
+                return r.id !== latestSnapshot.id && !(r.id.startsWith('draw_') || r.typeLabel === '上欠');
             }
             return false;
         });
@@ -572,21 +573,68 @@ export const fetchClientTotalBalance = async (clientId: string): Promise<number>
     return mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
 };
 
-// NEW: Helper to calculate balance STRICTLY before a certain date
+// UPDATED: Helper to calculate balance STRICTLY before a certain date, respecting Ledger Rules
 export const getClientBalancesPriorToDate = async (dateLimit: string): Promise<Record<string, number>> => {
     if (supabase) {
+        // 1. Fetch ALL records prior to the date limit
         const { data } = await supabase
             .from('financial_journal')
-            .select('client_id, amount')
-            .lt('entry_date', dateLimit);
+            .select('*')
+            .lt('entry_date', dateLimit)
+            .order('entry_date', { ascending: true }); // Important for sorting
 
+        if (!data) return {};
+
+        // 2. Group by Client
+        const clientRecords: Record<string, LedgerRecord[]> = {};
+        data.forEach(row => {
+            const record = mapJournalToLedgerRecord(row);
+            if (!clientRecords[record.clientId]) {
+                clientRecords[record.clientId] = [];
+            }
+            clientRecords[record.clientId].push(record);
+        });
+
+        // 3. Calculate Balance per Client using Ledger Logic
         const balances: Record<string, number> = {};
-        if (data) {
-            data.forEach((row: any) => {
-                const cid = row.client_id;
-                balances[cid] = (balances[cid] || 0) + row.amount;
-            });
-        }
+        
+        Object.keys(clientRecords).forEach(clientId => {
+            const records = clientRecords[clientId];
+            
+            // --- Ledger Logic (Same as fetchClientTotalBalance) ---
+            
+            // A. Sort Descending
+            records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+            // B. Find Snapshot (Draw or Manual '上欠')
+            const latestSnapshot = records.find(r => r.id.startsWith('draw_') || r.typeLabel === '上欠');
+            let effectiveRecords = records;
+
+            if (latestSnapshot) {
+                effectiveRecords = records.filter(r => {
+                    if (r.id === latestSnapshot.id) return true; 
+                    if (r.date > latestSnapshot.date) return true;
+                    if (r.date === latestSnapshot.date) {
+                        return r.id !== latestSnapshot.id && !(r.id.startsWith('draw_') || r.typeLabel === '上欠');
+                    }
+                    return false;
+                });
+            }
+
+            // C. Panel 1 Priority Logic
+            const col1Records = effectiveRecords.filter(r => r.column === 'col1' && r.isVisible);
+            let total = 0;
+
+            if (col1Records.length > 0) {
+                total = col1Records.reduce((acc, r) => acc + getNetAmount(r), 0);
+            } else {
+                const mainRecords = effectiveRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
+                total = mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
+            }
+
+            balances[clientId] = total;
+        });
+
         return balances;
     }
     return {};
