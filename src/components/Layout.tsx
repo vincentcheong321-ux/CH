@@ -10,7 +10,8 @@ import {
   X,
   PieChart,
   Calendar,
-  FileText
+  FileText,
+  Banknote
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -27,6 +28,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/clients', label: 'Client Accounts', icon: Users },
     { path: '/sales', label: 'Sales Opening', icon: FileText },
+    { path: '/cash-advance', label: 'Cash Advance', icon: Banknote },
     { path: '/draw-report', label: 'Draw Reports', icon: Calendar },
     { path: '/cashflow', label: 'Company Cash Flow', icon: ArrowRightLeft },
     { path: '/summary', label: 'Total Balance Summary', icon: PieChart },

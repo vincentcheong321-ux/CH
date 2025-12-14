@@ -1,5 +1,5 @@
 
-import { Client, LedgerRecord, AssetRecord, TransactionCategory, DrawBalance, SaleRecord } from '../types';
+import { Client, LedgerRecord, AssetRecord, TransactionCategory, DrawBalance, SaleRecord, CashAdvanceRecord } from '../types';
 import { supabase } from '../supabaseClient';
 
 const CLIENTS_KEY = 'ledger_clients';
@@ -8,6 +8,7 @@ const ASSETS_KEY = 'ledger_assets';
 const CATEGORIES_KEY = 'ledger_categories';
 const DRAW_BALANCES_KEY = 'ledger_draw_balances';
 const SALES_KEY = 'ledger_sales';
+const CASH_ADVANCE_KEY = 'ledger_cash_advances';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
@@ -548,6 +549,50 @@ export const deleteSaleRecord = async (id: string) => {
   const allRecords: SaleRecord[] = data ? JSON.parse(data) : [];
   const filtered = allRecords.filter(r => r.id !== id);
   localStorage.setItem(SALES_KEY, JSON.stringify(filtered));
+};
+
+// --- Cash Advances (New Feature) ---
+
+export const getCashAdvances = async (date: string): Promise<Record<string, number>> => {
+  if (supabase) {
+    const { data, error } = await supabase
+      .from('cash_advances')
+      .select('client_id, amount')
+      .eq('date', date);
+      
+    if (!error && data) {
+      const advances: Record<string, number> = {};
+      data.forEach((row: any) => {
+        advances[row.client_id] = Number(row.amount);
+      });
+      return advances;
+    }
+    console.warn('Supabase fetch cash advances error (using local):', error?.message);
+  }
+
+  const allData = JSON.parse(localStorage.getItem(CASH_ADVANCE_KEY) || '[]');
+  const advances: Record<string, number> = {};
+  allData.forEach((row: any) => {
+    if (row.date === date) {
+      advances[row.clientId] = Number(row.amount);
+    }
+  });
+  return advances;
+};
+
+export const saveCashAdvance = async (date: string, clientId: string, amount: number) => {
+  if (supabase) {
+    const { error } = await supabase
+      .from('cash_advances')
+      .upsert({ date, client_id: clientId, amount }, { onConflict: 'client_id,date' });
+      
+    if (error) console.error('Supabase save cash advance error:', error);
+  }
+
+  const allData = JSON.parse(localStorage.getItem(CASH_ADVANCE_KEY) || '[]');
+  const filtered = allData.filter((r: any) => !(r.date === date && r.clientId === clientId));
+  filtered.push({ date, clientId, amount });
+  localStorage.setItem(CASH_ADVANCE_KEY, JSON.stringify(filtered));
 };
 
 // --- Company Assets ---

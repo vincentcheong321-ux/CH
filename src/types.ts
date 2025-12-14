@@ -67,6 +67,12 @@ export interface SaleRecord {
   c: number;
 }
 
+export interface CashAdvanceRecord {
+  clientId: string;
+  date: string; // YYYY-MM-DD
+  amount: number;
+}
+
 export interface User {
   username: string;
   isAuthenticated: boolean;
