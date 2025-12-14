@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { getClients, getClientBalance, getAllDrawRecords } from '../services/storageService';
+import { getClients, fetchClientTotalBalance, getAllDrawRecords } from '../services/storageService';
 import { Client } from '../types';
 import { TrendingUp, TrendingDown, Calendar, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { MONTH_NAMES } from '../utils/reportUtils';
@@ -12,12 +12,13 @@ const Summary: React.FC = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-        // 1. Fetch Client Balances
+        // 1. Fetch Client Balances (Async)
         const clients = await getClients();
-        const summary = clients.map(client => {
-            const total = getClientBalance(client.id);
+        const summary = await Promise.all(clients.map(async (client) => {
+            const total = await fetchClientTotalBalance(client.id);
             return { client, total };
-        });
+        }));
+        
         summary.sort((a, b) => b.total - a.total);
         setClientData(summary);
 

@@ -161,11 +161,12 @@ const mapJournalToLedgerRecord = (row: any): LedgerRecord => {
 
 export const getLedgerRecords = async (clientId: string): Promise<LedgerRecord[]> => {
     if (supabase) {
-        // Fetch ALL types for this client (Removed entry_type filter)
+        // Fetch ALL types for this client
         const { data } = await supabase
             .from('financial_journal')
             .select('*')
-            .eq('client_id', clientId);
+            .eq('client_id', clientId)
+            .order('entry_date', { ascending: true }); // Ensure sorted order
             
         if (data) return data.map(mapJournalToLedgerRecord);
     }
@@ -527,19 +528,48 @@ export const getClientBalance = (clientId: string): number => {
     return 0;
 };
 
+// UPDATED: Calculate Total Balance respecting Draw checkpoints and Panel 1 logic
 export const fetchClientTotalBalance = async (clientId: string): Promise<number> => {
-    if (supabase) {
-        const { data, error } = await supabase.rpc('get_client_balance', { cid: clientId });
-        if (error) {
-             const { data: sumData } = await supabase
-                .from('financial_journal')
-                .select('amount')
-                .eq('client_id', clientId);
-             return sumData?.reduce((acc, r) => acc + r.amount, 0) || 0;
-        }
-        return data || 0;
+    // 1. Fetch all records for the client
+    const records = await getLedgerRecords(clientId);
+    if (records.length === 0) return 0;
+
+    // 2. Find the latest DRAW record (Snapshot) to prevent double counting history
+    // Sort descending by date to find latest
+    records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    
+    const latestDraw = records.find(r => r.id.startsWith('draw_'));
+    let effectiveRecords = records;
+
+    if (latestDraw) {
+        // If a Draw exists, we sum: The Draw Amount + All Transactions ON or AFTER the Draw Date.
+        // We exclude transactions that are BEFORE the Draw Date.
+        // For transactions ON the same date as Draw:
+        // - If Draw is "Opening", it precedes transactions.
+        // - We assume standard ledger practice: Draw (Snapshot) + Transactions.
+        effectiveRecords = records.filter(r => {
+            if (r.id === latestDraw.id) return true; // Include the draw itself
+            if (r.date > latestDraw.date) return true; // Include newer
+            if (r.date === latestDraw.date) {
+                // Include same-day transactions (excluding other draws to be safe)
+                return !r.id.startsWith('draw_');
+            }
+            return false;
+        });
     }
-    return 0;
+
+    // 3. Apply Column Logic (Panel 1 vs Main)
+    // "If Panel 1 has visible data in the effective period, use that only. Otherwise fallback to Main Ledger."
+    
+    const col1Records = effectiveRecords.filter(r => r.column === 'col1' && r.isVisible);
+    
+    if (col1Records.length > 0) {
+        return col1Records.reduce((acc, r) => acc + getNetAmount(r), 0);
+    }
+    
+    // Fallback to Main (Sum of everything in effective set that is main or undefined)
+    const mainRecords = effectiveRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
+    return mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
 };
 
 // NEW: Helper to calculate balance STRICTLY before a certain date
