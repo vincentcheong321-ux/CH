@@ -11,6 +11,7 @@ import Summary from './pages/Summary';
 import CashFlow from './pages/CashFlow';
 import SalesIndex from './pages/SalesIndex';
 import ClientSales from './pages/ClientSales';
+import MobileReport from './pages/MobileReport';
 import Login from './pages/Login';
 import { seedData } from './services/storageService';
 
@@ -72,6 +73,14 @@ const App: React.FC = () => {
           isAuthenticated ? (
             <Layout onLogout={handleLogout}>
               <SalesIndex />
+            </Layout>
+          ) : <Navigate to="/login" />
+        } />
+
+        <Route path="/sales/mobile-report" element={
+          isAuthenticated ? (
+            <Layout onLogout={handleLogout}>
+              <MobileReport />
             </Layout>
           ) : <Navigate to="/login" />
         } />

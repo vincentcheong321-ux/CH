@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Link } from 'react-router-dom';
-import { Search, ChevronLeft, ChevronRight, Loader2, Calendar, Smartphone, FileText, DollarSign, RefreshCw } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Search, ChevronLeft, ChevronRight, Loader2, Calendar, Smartphone, FileText, DollarSign, RefreshCw, FileSpreadsheet } from 'lucide-react';
 import { getClients, getSalesForDates, saveSaleRecord } from '../services/storageService';
 import { Client, SaleRecord } from '../types';
 import { MONTH_NAMES, getWeeksForMonth } from '../utils/reportUtils';
@@ -219,6 +219,7 @@ const ClientWeeklyCard = React.memo(({
 
 
 const SalesIndex: React.FC = () => {
+  const navigate = useNavigate();
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentYear, setCurrentYear] = useState(2025);
@@ -341,8 +342,6 @@ const SalesIndex: React.FC = () => {
 
   // Handle updates for Mobile Clients (Weekly Total)
   const handleMobileUpdate = useCallback(async (clientId: string, val: number) => {
-      // Logic: Mobile clients enter a single weekly amount.
-      // We will store this entire amount in the 'b' column of the LAST DAY of the week.
       const lastDateStr = activeDateStrings[activeDateStrings.length - 1];
       if (!lastDateStr) return;
 
@@ -471,15 +470,27 @@ const SalesIndex: React.FC = () => {
                  </div>
              </div>
 
-             <div className="relative w-full md:w-64">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-                <input 
-                type="text" 
-                placeholder={`Search ${activeTab} clients...`}
-                className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                />
+             <div className="flex items-center space-x-4">
+                <div className="relative w-full md:w-64">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+                    <input 
+                    type="text" 
+                    placeholder={`Search ${activeTab} clients...`}
+                    className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
+                {activeTab === 'mobile' && (
+                    <button
+                        onClick={() => navigate('/sales/mobile-report')}
+                        className="flex items-center px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 shadow-sm text-sm font-bold whitespace-nowrap"
+                        title="Import/View External Report"
+                    >
+                        <FileSpreadsheet size={16} className="mr-2" />
+                        Report
+                    </button>
+                )}
             </div>
           </div>
 

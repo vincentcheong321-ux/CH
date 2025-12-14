@@ -119,13 +119,6 @@ const ClientLedger: React.FC = () => {
     return { weekRecords: current, weekTotal: weekChange };
   }, [allRecords, activeDateStrings]);
 
-  const formattedWeekRange = useMemo(() => {
-      if(activeDateStrings.length === 0) return "";
-      const first = new Date(activeDateStrings[0]);
-      const last = new Date(activeDateStrings[activeDateStrings.length-1]);
-      return `${first.getDate()} ${MONTH_NAMES[first.getMonth()].slice(0,3)} - ${last.getDate()} ${MONTH_NAMES[last.getMonth()].slice(0,3)}`;
-  }, [activeDateStrings]);
-
   const onMouseMove = useCallback((e: MouseEvent) => {
     if (!dragInfo.current) return;
     if (dragInfo.current.type === 'col' && dragInfo.current.startWidths && dragInfo.current.containerWidth && dragInfo.current.startX !== undefined && dragInfo.current.index !== undefined) {
@@ -289,11 +282,11 @@ const ClientLedger: React.FC = () => {
       
       return (
       <div className="flex flex-col items-center">
-          <div className="flex flex-col space-y-0.5 w-fit items-end">
+          <div className="flex flex-col w-fit items-end">
                 {data.processed.map((r) => {
                     const isReflected = r.id.startsWith('sale_') || r.id.startsWith('adv_');
                     return (
-                        <div key={r.id} className={`group flex justify-end items-center py-0.5 relative gap-1 md:gap-2 ${!r.isVisible ? 'opacity-30 grayscale no-print' : ''}`}>
+                        <div key={r.id} className={`group flex justify-end items-center leading-none relative gap-1 md:gap-1.5 ${!r.isVisible ? 'opacity-30 grayscale no-print' : ''}`}>
                             {/* Disable Edit/Delete for Reflected Records */}
                             {!isReflected && (
                                 <div className="no-print opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1 absolute -left-16 z-10 bg-white shadow-sm rounded border border-gray-100 p-1">
@@ -301,19 +294,19 @@ const ClientLedger: React.FC = () => {
                                     <button onClick={() => requestDeleteRecord(r.id)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 size={12} /></button>
                                 </div>
                             )}
-                            <div className="text-sm md:text-xl font-bold uppercase tracking-wide text-gray-600">{r.typeLabel}</div>
-                            {r.description && <div className="text-xs md:text-sm text-gray-600 font-medium mr-1 md:mr-2 max-w-[100px] md:max-w-[150px] truncate">{r.description}</div>}
-                            <div className={`text-base md:text-2xl font-mono font-bold w-20 md:w-36 text-right ${r.operation === 'add' ? 'text-green-700' : r.operation === 'subtract' ? 'text-red-700' : 'text-gray-600'}`}>
+                            <div className="text-sm md:text-lg font-bold uppercase tracking-wide text-gray-700">{r.typeLabel}</div>
+                            {r.description && <div className="text-xs md:text-sm text-gray-500 font-medium mr-1 md:mr-2 max-w-[80px] md:max-w-[120px] truncate">{r.description}</div>}
+                            <div className={`text-base md:text-xl font-mono font-bold w-16 md:w-28 text-right ${r.operation === 'add' ? 'text-green-700' : r.operation === 'subtract' ? 'text-red-700' : 'text-gray-600'}`}>
                                 {r.operation === 'none' ? r.amount.toLocaleString(undefined, {minimumFractionDigits: 2}) : Math.abs(r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2})}
                             </div>
                         </div>
                     );
                 })}
           </div>
-          <div className="mt-2 pt-1 flex flex-col items-end w-fit border-t-2 border-gray-900">
+          <div className="mt-1 pt-1 flex flex-col items-end w-fit border-t-2 border-gray-900">
                 <div className="flex items-center gap-1 md:gap-2 justify-end">
-                    <span className="text-sm md:text-xl font-bold text-gray-900 uppercase">{displayLabel}</span>
-                    <span className={`text-lg md:text-3xl font-mono font-bold w-24 md:w-40 text-right ${data.finalBalance >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
+                    <span className="text-sm md:text-lg font-bold text-gray-900 uppercase">{displayLabel}</span>
+                    <span className={`text-lg md:text-2xl font-mono font-bold w-20 md:w-32 text-right ${data.finalBalance >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
                         {data.finalBalance < 0 ? `(${Math.abs(data.finalBalance).toLocaleString(undefined, {minimumFractionDigits: 2})})` : data.finalBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}
                     </span>
                 </div>
@@ -459,7 +452,7 @@ const ClientLedger: React.FC = () => {
         </div>
 
         <div id="printable-area" className="relative max-w-5xl mx-auto">
-            <div className="bg-white border border-gray-200 shadow-sm min-h-[600px] relative text-lg font-serif">
+            <div className="bg-white border border-gray-200 shadow-sm min-h-[400px] relative text-lg font-serif">
                 <div style={{ height: `${verticalPadding.top}px` }} className="relative group w-full no-print-bg"><div className="absolute bottom-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResize('top', undefined, e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div></div>
 
                 <div className="px-4 md:px-8 pb-2 md:pb-4 flex justify-between items-end mb-2 md:mb-4">
@@ -469,20 +462,20 @@ const ClientLedger: React.FC = () => {
                     </div>
                     <div className="text-right">
                         <p className="text-sm text-gray-500 font-sans uppercase tracking-wider">{MONTH_NAMES[currentMonth]} {currentYear}</p>
-                        <p className="text-xs text-gray-400 font-mono mt-1">{formattedWeekRange}</p>
+                        {/* Week Range Removed from Header */}
                     </div>
                 </div>
 
                 <div className="flex w-full min-h-[400px] relative" ref={containerRef}>
-                    <div style={{ width: `${colWidths[0]}%` }} className="relative flex flex-col p-1 md:p-2 border-r border-transparent group">
+                    <div style={{ width: `${colWidths[0]}%` }} className="relative flex flex-col p-1 border-r border-transparent group">
                         <LedgerColumnView data={col1Ledger} footerLabel="收"/>
                         <div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print" onMouseDown={(e) => startResize('col', 0, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div>
                     </div>
-                    <div style={{ width: `${colWidths[1]}%` }} className="relative flex flex-col p-1 md:p-2 border-r border-transparent group">
+                    <div style={{ width: `${colWidths[1]}%` }} className="relative flex flex-col p-1 border-r border-transparent group">
                         <LedgerColumnView data={col2Ledger} footerLabel="收"/>
                         <div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print" onMouseDown={(e) => startResize('col', 1, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div>
                     </div>
-                    <div style={{ width: `${colWidths[2]}%` }} className="relative flex flex-col p-1 md:p-2 bg-gray-50/30">
+                    <div style={{ width: `${colWidths[2]}%` }} className="relative flex flex-col p-1 bg-gray-50/30">
                         <LedgerColumnView data={mainLedger} footerLabel="欠"/>
                     </div>
                 </div>
