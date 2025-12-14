@@ -107,19 +107,15 @@ const DetailedMobileTableRow = React.memo(({
     const fmt = (val: string | number) => {
         if (!val) return '';
         const s = String(val);
-        // If it looks like a number, try to clean it? 
-        // The raw data usually comes pre-formatted from the input, but we can trust it for now.
         return s;
     };
 
     // Calculate Colors for Totals
-    const get colorClass() {
-        return (val: string | number) => {
-            const num = parseFloat(String(val).replace(/,/g,''));
-            if (isNaN(num)) return 'text-gray-900';
-            return num >= 0 ? 'text-green-700' : 'text-red-600';
-        };
-    }
+    const getColorClass = (val: string | number) => {
+        const num = parseFloat(String(val).replace(/,/g,''));
+        if (isNaN(num)) return 'text-gray-900';
+        return num >= 0 ? 'text-green-700' : 'text-red-600';
+    };
 
     return (
         <tr className="hover:bg-purple-50/50 transition-colors border-b border-gray-100 last:border-0 font-mono text-[10px] md:text-xs">
@@ -138,7 +134,7 @@ const DetailedMobileTableRow = React.memo(({
             <td className="px-2 py-3 text-right">{fmt(getVal(4))}</td>
             <td className="px-2 py-3 text-right">{fmt(getVal(5))}</td>
             <td className="px-2 py-3 text-right">{fmt(getVal(6))}</td>
-            <td className={`px-2 py-3 text-right font-extrabold bg-blue-50/50 border-x border-blue-100 ${colorClass(getVal(7))}`}>
+            <td className={`px-2 py-3 text-right font-extrabold bg-blue-50/50 border-x border-blue-100 ${getColorClass(getVal(7))}`}>
                 {fmt(getVal(7))}
             </td>
             
@@ -146,16 +142,16 @@ const DetailedMobileTableRow = React.memo(({
             <td className="px-2 py-3 text-right">{fmt(getVal(8))}</td>
             <td className="px-2 py-3 text-right">{fmt(getVal(9))}</td>
             <td className="px-2 py-3 text-right">{fmt(getVal(10))}</td>
-            <td className={`px-2 py-3 text-right font-extrabold bg-indigo-50/50 border-x border-indigo-100 ${colorClass(getVal(11))}`}>
+            <td className={`px-2 py-3 text-right font-extrabold bg-indigo-50/50 border-x border-indigo-100 ${getColorClass(getVal(11))}`}>
                 {fmt(getVal(11))}
             </td>
             
             {/* 5. Agent (5 cols) */}
             <td className="px-2 py-3 text-right">{fmt(getVal(12))}</td>
-            <td className="px-2 py-3 text-right">{fmt(getVal(13)}</td>
+            <td className="px-2 py-3 text-right">{fmt(getVal(13))}</td>
             <td className="px-2 py-3 text-right">{fmt(getVal(14))}</td>
             <td className="px-2 py-3 text-right">{fmt(getVal(15))}</td>
-            <td className={`px-2 py-3 text-right font-extrabold bg-green-50/50 border-l border-green-100 ${colorClass(getVal(16))}`}>
+            <td className={`px-2 py-3 text-right font-extrabold bg-green-50/50 border-l border-green-100 ${getColorClass(getVal(16))}`}>
                 {fmt(getVal(16))}
             </td>
         </tr>
