@@ -121,12 +121,43 @@ const ClientLedger: React.FC = () => {
   const { weekRecords, weekTotal } = useMemo(() => {
     if (activeDateStrings.length === 0) return { weekRecords: [], weekTotal: 0 };
     
-    // Current Week Records Only - No virtual balance calculation here anymore
+    // 1. Get all records for current week
     const current = allRecords.filter(r => activeDateStrings.includes(r.date));
     
+    // 2. Separate 'Sales Opening' records (id starts with 'sale_') from others
+    const salesRecords = current.filter(r => r.id.startsWith('sale_'));
+    const otherRecords = current.filter(r => !r.id.startsWith('sale_'));
+
+    let finalRecords = [...otherRecords];
+
+    // 3. Aggregate Sales Records if any exist
+    if (salesRecords.length > 0) {
+        const totalSalesNet = salesRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
+        // Use the latest date from sales records for chronological sorting
+        const latestDate = salesRecords.reduce((max, r) => r.date > max ? r.date : max, salesRecords[0].date);
+
+        const aggregatedSale: LedgerRecord = {
+            id: 'agg_sale_week', // Virtual ID for display
+            clientId: id!,
+            date: latestDate,
+            description: 'Sales Opening',
+            typeLabel: '收',
+            amount: Math.abs(totalSalesNet),
+            operation: totalSalesNet >= 0 ? 'add' : 'subtract',
+            column: 'main',
+            isVisible: true
+        };
+        finalRecords.push(aggregatedSale);
+    }
+
+    // 4. Sort aggregated list chronologically
+    finalRecords.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    // 5. Calculate total (should be same as summing all original 'current' records)
     const weekChange = current.reduce((acc, r) => acc + getNetAmount(r), 0);
-    return { weekRecords: current, weekTotal: weekChange };
-  }, [allRecords, activeDateStrings]);
+    
+    return { weekRecords: finalRecords, weekTotal: weekChange };
+  }, [allRecords, activeDateStrings, id]);
 
   const onMouseMove = useCallback((e: MouseEvent) => {
     if (!dragInfo.current) return;
@@ -295,7 +326,7 @@ const ClientLedger: React.FC = () => {
       <div className="flex flex-col items-center">
           <div className="flex flex-col w-fit items-end">
                 {data.processed.map((r) => {
-                    const isReflected = r.id.startsWith('sale_') || r.id.startsWith('adv_') || r.id.startsWith('draw_');
+                    const isReflected = r.id.startsWith('sale_') || r.id.startsWith('adv_') || r.id.startsWith('draw_') || r.id === 'agg_sale_week';
                     
                     // Formatting Logic: Negative numbers (including negative adds) get brackets and red color
                     const isNetNegative = r.operation !== 'none' && r.netChange < 0;
