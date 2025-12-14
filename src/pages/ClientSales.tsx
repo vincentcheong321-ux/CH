@@ -11,7 +11,8 @@ import { MONTH_NAMES, YEAR, DRAW_DATES } from '../utils/reportUtils';
 interface DayRowData {
   dateStr: string; // YYYY-MM-DD
   dayNum: number;
-  monthIndex: number; // needed for display
+  monthIndex: number; 
+  displayDate: string; // e.g. "01-Feb"
   record?: SaleRecord;
 }
 
@@ -25,15 +26,13 @@ interface MonthGroup {
 const SalesRow = React.memo(({ 
     clientId, 
     dateStr, 
-    dayNum,
-    monthIndex,
+    displayDate,
     initialRecord, 
     onUpdate 
 }: { 
     clientId: string;
     dateStr: string;
-    dayNum: number;
-    monthIndex: number;
+    displayDate: string;
     initialRecord?: SaleRecord;
     onUpdate: () => void;
 }) => {
@@ -78,9 +77,6 @@ const SalesRow = React.memo(({
         setIsSaving(false);
         onUpdate(); 
     };
-
-    // Format Date: "21-Jul"
-    const displayDate = `${String(dayNum).padStart(2, '0')}-${MONTH_NAMES[monthIndex].slice(0, 3)}`;
 
     return (
         <tr className="hover:bg-blue-50/30 transition-colors group h-10">
@@ -165,12 +161,22 @@ const ClientSales: React.FC = () => {
         ])).sort((a, b) => a - b);
 
         const rowData: DayRowData[] = days.map(day => {
-            const dateStr = `${YEAR}-${String(m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            // Correctly handle overflow days (e.g. 32) using JS Date object
+            const dObj = new Date(YEAR, m, day);
+            const y = dObj.getFullYear();
+            const mo = String(dObj.getMonth() + 1).padStart(2, '0');
+            const da = String(dObj.getDate()).padStart(2, '0');
+            const dateStr = `${y}-${mo}-${da}`;
+
+            // Determine display date (e.g. "01-Feb")
+            const displayDate = `${da}-${MONTH_NAMES[dObj.getMonth()].slice(0, 3)}`;
+
             const record = records.find(r => r.date === dateStr);
             return {
                 dateStr,
                 dayNum: day,
                 monthIndex: m,
+                displayDate,
                 record
             };
         });
@@ -278,8 +284,7 @@ const ClientSales: React.FC = () => {
                                 key={day.dateStr}
                                 clientId={id!}
                                 dateStr={day.dateStr}
-                                dayNum={day.dayNum}
-                                monthIndex={day.monthIndex}
+                                displayDate={day.displayDate}
                                 initialRecord={day.record}
                                 onUpdate={fetchAllData}
                             />

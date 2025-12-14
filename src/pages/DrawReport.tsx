@@ -57,44 +57,29 @@ const DrawReport: React.FC = () => {
     
     // Auto-select nearest date to "Today"
     const now = new Date();
-    let minDiff = Infinity;
-    let closestDateStr = `${YEAR}-01-01`;
-    let closestMonth = 0;
+    setCurrentMonth(now.getMonth());
 
-    Object.entries(DRAW_DATES).forEach(([mStr, data]) => {
-        const m = parseInt(mStr);
-        const days = [...data.w, ...data.s1, ...data.s2, ...data.t];
-        days.forEach(d => {
-            const dateObj = new Date(YEAR, m, d);
-            const diff = Math.abs(dateObj.getTime() - now.getTime());
-            if (diff < minDiff) {
-                minDiff = diff;
-                closestDateStr = `${YEAR}-${String(m+1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-                closestMonth = m;
-            }
-        });
-    });
-
-    // Ensure we select the *start* of the week for the closest date
-    const mData = DRAW_DATES[closestMonth];
-    if (mData) {
-        const weeks = getWeeksForMonth(closestMonth);
-        const day = parseInt(closestDateStr.split('-')[2]);
-        const weekNum = Object.keys(weeks).find(w => weeks[parseInt(w)].includes(day));
-        if (weekNum) {
-            const firstDay = weeks[parseInt(weekNum)][0];
-            closestDateStr = `${YEAR}-${String(closestMonth+1).padStart(2, '0')}-${String(firstDay).padStart(2, '0')}`;
+    // Find week that contains today
+    const currentM = now.getMonth();
+    const weeks = getWeeksForMonth(currentM);
+    const todayNum = now.getDate();
+    const weekNum = Object.keys(weeks).find(w => weeks[parseInt(w)].includes(todayNum));
+    
+    if (weekNum) {
+        // Select start date of this week
+        const startDay = weeks[parseInt(weekNum)][0];
+        handleDateClick(startDay, currentM);
+    } else {
+        // Fallback to first week of current month
+        const firstWeekNum = Object.keys(weeks)[0];
+        if (firstWeekNum) {
+            handleDateClick(weeks[parseInt(firstWeekNum)][0], currentM);
         }
     }
-
-    setSelectedDate(closestDateStr);
-    setCurrentMonth(closestMonth);
   }, []);
 
   const fetchClients = async () => {
     let list = await getClients();
-    
-    // Hardcode fallback if empty for preview purposes
     if (list.length === 0) {
         list = INITIAL_CLIENTS_DATA.map((c, i) => ({
             ...c,
@@ -117,7 +102,6 @@ const DrawReport: React.FC = () => {
       const mapped: Record<string, string> = {};
       
       clients.forEach(c => {
-          // If data exists, use it. If not, default to empty string for input placeholder
           mapped[c.id] = data[c.id] !== undefined ? data[c.id].toString() : '';
       });
       
@@ -125,14 +109,15 @@ const DrawReport: React.FC = () => {
       setLoading(false);
   };
 
-  const handleDateClick = (day: number) => {
-      const m = String(currentMonth + 1).padStart(2, '0');
-      const d = String(day).padStart(2, '0');
-      setSelectedDate(`${YEAR}-${m}-${d}`);
+  const handleDateClick = (day: number, mIndex: number = currentMonth) => {
+      const dObj = new Date(YEAR, mIndex, day);
+      const y = dObj.getFullYear();
+      const m = String(dObj.getMonth() + 1).padStart(2, '0');
+      const d = String(dObj.getDate()).padStart(2, '0');
+      setSelectedDate(`${y}-${m}-${d}`);
   };
 
   const handleInputChange = useCallback((clientId: string, val: string) => {
-      // Allow empty string, minus sign at start, numbers, and one decimal point
       if (val === '' || /^-?\d*\.?\d*$/.test(val)) {
         setClientBalances(prev => ({
             ...prev,
@@ -142,12 +127,8 @@ const DrawReport: React.FC = () => {
   }, []);
 
   const handleInputBlur = useCallback(async (clientId: string) => {
-      // Access value from state when blur occurs. 
-      // Note: We need to access the LATEST clientBalances here. 
-      // Since this callback is recreated when clientBalances changes (in dependencies), it works.
       setClientBalances(currentBalances => {
           const val = currentBalances[clientId];
-          // Only save if it's a valid number
           if (val !== '' && !isNaN(Number(val))) {
               saveDrawBalance(selectedDate, clientId, parseFloat(val));
           } else if (val === '') {
@@ -174,13 +155,33 @@ const DrawReport: React.FC = () => {
   }, [currentMonth]);
 
   // Identify active week based on selectedDate
-  const activeDay = selectedDate ? parseInt(selectedDate.split('-')[2]) : 0;
-  const activeWeekNum = Object.keys(currentMonthWeeks).find(w => currentMonthWeeks[parseInt(w)].includes(activeDay));
+  const activeDay = selectedDate ? new Date(selectedDate).getDate() : 0;
+  // If selectedDate is from next month (overflow), we need to check if it's in the week array of currentMonth
+  // But wait, the `weeks` array contains "virtual days" (e.g. 32). 
+  // We need to map real date back to virtual day for comparison if we are in the "overflow" zone.
+  // Actually, we can just check if the selectedDate (YYYY-MM-DD) matches the computed date of any day in the week.
+  
+  let activeWeekNum: string | undefined;
+  
+  if (selectedDate) {
+      for (const [wNum, days] of Object.entries(currentMonthWeeks)) {
+          // Check if selectedDate matches any day in this week
+          const match = days.some(d => {
+              const dObj = new Date(YEAR, currentMonth, d);
+              const y = dObj.getFullYear();
+              const m = String(dObj.getMonth() + 1).padStart(2, '0');
+              const dayStr = String(dObj.getDate()).padStart(2, '0');
+              return `${y}-${m}-${dayStr}` === selectedDate;
+          });
+          if (match) {
+              activeWeekNum = wNum;
+              break;
+          }
+      }
+  }
+
   const activeWeekDays = activeWeekNum ? currentMonthWeeks[parseInt(activeWeekNum)] : [];
-  
-  // Calculate visual index for "Week X" label
   const activeWeekIndex = activeWeekNum ? Object.keys(currentMonthWeeks).map(Number).sort((a,b) => a-b).indexOf(Number(activeWeekNum)) : 0;
-  
   const sortedWeekNums = Object.keys(currentMonthWeeks).map(Number).sort((a,b) => a-b);
 
   const renderDateButtons = () => {
@@ -197,8 +198,10 @@ const DrawReport: React.FC = () => {
               <div className="space-y-2">
                   {sortedWeekNums.map((weekNum, idx) => {
                       const days = currentMonthWeeks[weekNum];
-                      const daysStr = days.join(', ');
-                      const isActiveWeek = days.includes(activeDay);
+                      const isActiveWeek = weekNum.toString() === activeWeekNum;
+                      
+                      // Convert virtual days (e.g. 32) to real date numbers (e.g. 1) for display
+                      const realDaysStr = days.map(d => new Date(YEAR, currentMonth, d).getDate()).join(', ');
 
                       return (
                         <button
@@ -214,7 +217,7 @@ const DrawReport: React.FC = () => {
                             <span className={`text-xs uppercase tracking-wider opacity-70 ${isActiveWeek ? 'text-blue-100' : 'text-gray-400'}`}>
                                 Week {idx + 1}
                             </span>
-                            <span className="text-xl font-mono mt-1">{daysStr}</span>
+                            <span className="text-xl font-mono mt-1">{realDaysStr}</span>
                         </button>
                       );
                   })}
@@ -228,6 +231,9 @@ const DrawReport: React.FC = () => {
   const rightClients = clients.slice(midPoint);
 
   const total = calculateTotal();
+
+  // Convert active week days to real dates for display header
+  const activeWeekRealDaysStr = activeWeekDays.map(d => new Date(YEAR, currentMonth, d).getDate()).join(', ');
 
   return (
     <div className="flex flex-col lg:flex-row gap-6 min-h-screen pb-20">
@@ -258,8 +264,7 @@ const DrawReport: React.FC = () => {
                                     Weekly Report - Week {activeWeekIndex + 1}
                                 </h2>
                                 <p className="text-gray-500 font-medium text-sm mt-1">
-                                    {/* Dates included in this week */}
-                                    {MONTH_NAMES[currentMonth]}: {activeWeekDays.join(', ')}
+                                    {MONTH_NAMES[currentMonth]}: {activeWeekRealDaysStr}
                                 </p>
                             </div>
                             <div className="flex items-center text-xs text-gray-500 bg-yellow-50 px-3 py-1 rounded-full border border-yellow-200">
@@ -267,12 +272,12 @@ const DrawReport: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Week Selection Pills (Replaces Day Pills) */}
+                        {/* Week Selection Pills */}
                         <div className="flex space-x-2 bg-gray-200 p-1 rounded-lg w-fit overflow-x-auto max-w-full">
                             {sortedWeekNums.map((weekNum, idx) => {
                                 const days = currentMonthWeeks[weekNum];
                                 const firstDay = days[0];
-                                const isActive = days.includes(activeDay);
+                                const isActive = weekNum.toString() === activeWeekNum;
                                 return (
                                     <button
                                         key={weekNum}

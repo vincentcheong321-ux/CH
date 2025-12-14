@@ -69,10 +69,20 @@ const Dashboard: React.FC = () => {
         
         const wData = Object.keys(weeks).sort((a,b)=>Number(a)-Number(b)).map((weekNum, index) => {
             const days = weeks[Number(weekNum)];
-            // Sum all draws that match current year, current month, and the specific days in this week
+            
+            // Sum all draws that match the computed date strings for this week's days
+            // This handles overflow days (e.g. 32 -> Feb 1) correctly
             const weekTotal = allDraws.reduce((acc, r) => {
-                const d = new Date(r.date);
-                if (d.getFullYear() === YEAR && d.getMonth() === currentMonthIndex && days.includes(d.getDate())) {
+                const match = days.some(day => {
+                    const dObj = new Date(YEAR, currentMonthIndex, day);
+                    const y = dObj.getFullYear();
+                    const m = String(dObj.getMonth() + 1).padStart(2, '0');
+                    const d = String(dObj.getDate()).padStart(2, '0');
+                    const targetDateStr = `${y}-${m}-${d}`;
+                    return r.date === targetDateStr;
+                });
+
+                if (match) {
                     return acc + r.balance;
                 }
                 return acc;
