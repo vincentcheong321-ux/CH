@@ -11,7 +11,8 @@ import {
   PieChart,
   Calendar,
   FileText,
-  Banknote
+  Banknote,
+  CreditCard
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -29,6 +30,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
     { path: '/clients', label: 'Client Accounts', icon: Users },
     { path: '/sales', label: 'Sales Opening', icon: FileText },
     { path: '/cash-advance', label: 'Cash Advance', icon: Banknote },
+    { path: '/cash-credit', label: 'Cash Credit', icon: CreditCard },
     { path: '/draw-report', label: 'Draw Reports', icon: Calendar },
     { path: '/cashflow', label: 'Company Cash Flow', icon: ArrowRightLeft },
     { path: '/summary', label: 'Total Balance Summary', icon: PieChart },

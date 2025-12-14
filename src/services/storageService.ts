@@ -301,6 +301,50 @@ export const saveCashAdvance = async (date: string, clientId: string, amount: nu
     }
 };
 
+// --- F. Cash Credit Adapters (Mapped to 'CREDIT' type) ---
+
+export const getCashCredits = async (date: string): Promise<Record<string, number>> => {
+    if (supabase) {
+        const { data } = await supabase
+            .from('financial_journal')
+            .select('client_id, amount')
+            .eq('entry_date', date)
+            .eq('entry_type', 'CREDIT');
+            
+        const map: Record<string, number> = {};
+        data?.forEach((row: any) => {
+            map[row.client_id] = row.amount;
+        });
+        return map;
+    }
+    return {};
+};
+
+export const saveCashCredit = async (date: string, clientId: string, amount: number) => {
+    if (supabase) {
+        const { data: existing } = await supabase.from('financial_journal')
+            .select('id')
+            .eq('client_id', clientId)
+            .eq('entry_date', date)
+            .eq('entry_type', 'CREDIT')
+            .maybeSingle();
+
+        if (existing) {
+             await supabase.from('financial_journal').update({
+                amount: amount
+             }).eq('id', existing.id);
+        } else {
+             await supabase.from('financial_journal').insert({
+                client_id: clientId,
+                entry_date: date,
+                entry_type: 'CREDIT',
+                amount: amount,
+                data: {}
+             });
+        }
+    }
+};
+
 // --- D. Draw Balance Adapters (Mapped to 'DRAW' type) ---
 
 export const getDrawBalances = async (date: string): Promise<Record<string, number>> => {
@@ -410,7 +454,7 @@ export const getTotalDrawReceivables = async (): Promise<number> => {
         const { data } = await supabase
             .from('financial_journal')
             .select('amount')
-            .in('entry_type', ['DRAW', 'MANUAL', 'SALE', 'ADVANCE']);
+            .in('entry_type', ['DRAW', 'MANUAL', 'SALE', 'ADVANCE', 'CREDIT']);
             
         return data?.reduce((acc, r) => acc + r.amount, 0) || 0;
     }
