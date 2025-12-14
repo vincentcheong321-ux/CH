@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useLocation } from 'react-router-dom';
 import { ArrowLeft, Printer, Trash2, Plus, Minus, Pencil, X, Check, AlertTriangle, ExternalLink, GripHorizontal, Hash, Zap, Download, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 // @ts-ignore
 import html2canvas from 'html2canvas';
@@ -23,6 +23,7 @@ type LedgerColumn = 'main' | 'col1' | 'col2';
 
 const ClientLedger: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const location = useLocation();
   const [client, setClient] = useState<Client | null>(null);
   const [allRecords, setAllRecords] = useState<LedgerRecord[]>([]); // Store ALL records
   const [categories, setCategories] = useState<TransactionCategory[]>([]);
@@ -70,18 +71,28 @@ const ClientLedger: React.FC = () => {
     };
     fetchData();
     
-    // Auto-select current week
-    const now = new Date();
-    let y = now.getFullYear();
-    if(y < 2025) y = 2025;
-    if(y > 2026) y = 2026;
-    setCurrentYear(y);
+    // Check if passed state from ClientList exists
+    if (location.state && typeof (location.state as any).year === 'number') {
+        const s = location.state as any;
+        setCurrentYear(s.year);
+        setCurrentMonth(s.month);
+        setSelectedWeekNum(s.week);
+    } else {
+        // Fallback: Auto-select current week
+        const now = new Date();
+        let y = now.getFullYear();
+        if(y < 2025) y = 2025;
+        if(y > 2026) y = 2026;
+        setCurrentYear(y);
 
-    const m = now.getMonth();
-    const weeks = getWeeksForMonth(y, m);
-    const todayNum = now.getDate();
-    const foundWeek = Object.keys(weeks).find(w => weeks[parseInt(w)].includes(todayNum));
-    if(foundWeek) setSelectedWeekNum(parseInt(foundWeek));
+        const m = now.getMonth();
+        setCurrentMonth(m);
+        
+        const weeks = getWeeksForMonth(y, m);
+        const todayNum = now.getDate();
+        const foundWeek = Object.keys(weeks).find(w => weeks[parseInt(w)].includes(todayNum));
+        if(foundWeek) setSelectedWeekNum(parseInt(foundWeek));
+    }
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);

@@ -162,6 +162,7 @@ const ClientList: React.FC = () => {
         >
             <Link 
                 to={`/clients/${client.id}`}
+                state={{ year: currentYear, month: currentMonth, week: selectedWeekNum }}
                 className="grid grid-cols-[auto_1fr_140px_40px] gap-4 items-center p-4"
             >
                 {/* 1. Selection Checkbox */}
