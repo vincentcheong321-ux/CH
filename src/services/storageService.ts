@@ -248,9 +248,14 @@ export const getNetAmount = (r: LedgerRecord): number => {
 };
 
 // Internal Helper to get sales records synchronously from localStorage
-// Used for merging sales into ledger records for display logic
 const getLocalSaleRecords = (): SaleRecord[] => {
     const data = localStorage.getItem(SALES_KEY);
+    return data ? JSON.parse(data) : [];
+};
+
+// Internal Helper to get cash advances synchronously from localStorage
+const getLocalCashAdvanceRecords = (): CashAdvanceRecord[] => {
+    const data = localStorage.getItem(CASH_ADVANCE_KEY);
     return data ? JSON.parse(data) : [];
 };
 
@@ -267,20 +272,36 @@ export const getLedgerRecords = (clientId: string): LedgerRecord[] => {
       const total = (s.b || 0) + (s.s || 0) + (s.a || 0) + (s.c || 0);
       if (total === 0) return null;
       return {
-          id: `sale_${s.id || s.date}`, // Unique ID for display
+          id: `sale_${s.clientId}_${s.date}`,
           clientId: s.clientId,
           date: s.date,
           description: 'Sales Opening',
-          typeLabel: 'Sales', // "收" in English context of app but functions as "Sales"
+          typeLabel: 'Sales', 
           amount: total,
           operation: 'add', // Green / Receive
           column: 'col1', // Panel 1
           isVisible: true,
-          // Add a flag if we want to prevent deletion in UI (needs type update or just handle by prefix)
       } as LedgerRecord;
   }).filter((r): r is LedgerRecord => r !== null);
 
-  return [...manualRecords, ...salesAsLedger];
+  // Merge Cash Advance Records as Read-Only Ledger Entries
+  const advances = getLocalCashAdvanceRecords().filter(a => a.clientId === clientId);
+  const advancesAsLedger: LedgerRecord[] = advances.map(a => {
+      if (!a.amount) return null;
+      return {
+          id: `adv_${a.clientId}_${a.date}`,
+          clientId: a.clientId,
+          date: a.date,
+          description: 'Cash Advance',
+          typeLabel: 'Cash Adv',
+          amount: a.amount,
+          operation: 'add', // Receivables (Green)
+          column: 'col1', // Panel 1 (Grouped with Sales)
+          isVisible: true
+      } as LedgerRecord;
+  }).filter((r): r is LedgerRecord => r !== null);
+
+  return [...manualRecords, ...salesAsLedger, ...advancesAsLedger];
 };
 
 export const getAllLedgerRecords = (): LedgerRecord[] => {
@@ -294,7 +315,7 @@ export const getAllLedgerRecords = (): LedgerRecord[] => {
       const total = (s.b || 0) + (s.s || 0) + (s.a || 0) + (s.c || 0);
       if (total === 0) return null;
       return {
-          id: `sale_${s.id || s.date}`,
+          id: `sale_${s.clientId}_${s.date}`,
           clientId: s.clientId,
           date: s.date,
           description: 'Sales Opening',
@@ -306,7 +327,24 @@ export const getAllLedgerRecords = (): LedgerRecord[] => {
       } as LedgerRecord;
   }).filter((r): r is LedgerRecord => r !== null);
 
-  return [...manualRecords, ...salesAsLedger];
+  // Merge all advances
+  const advances = getLocalCashAdvanceRecords();
+  const advancesAsLedger: LedgerRecord[] = advances.map(a => {
+      if (!a.amount) return null;
+      return {
+          id: `adv_${a.clientId}_${a.date}`,
+          clientId: a.clientId,
+          date: a.date,
+          description: 'Cash Advance',
+          typeLabel: 'Cash Adv',
+          amount: a.amount,
+          operation: 'add',
+          column: 'col1',
+          isVisible: true
+      } as LedgerRecord;
+  }).filter((r): r is LedgerRecord => r !== null);
+
+  return [...manualRecords, ...salesAsLedger, ...advancesAsLedger];
 };
 
 // Updated: Supports optional 'untilDate' (inclusive)
@@ -611,7 +649,4 @@ export const saveAssetRecord = (record: Omit<AssetRecord, 'id'>): AssetRecord =>
 
 export const seedData = async () => {
   getCategories();
-  // We don't force seed clients every refresh anymore to rely on Supabase,
-  // but call this if you need to re-init local data
-  // await seedInitialClients(); 
 };

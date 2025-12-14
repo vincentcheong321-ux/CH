@@ -72,7 +72,6 @@ const ClientLedger: React.FC = () => {
     
     // Auto-select current week
     const now = new Date();
-    // Default to config range if year is out of bounds
     let y = now.getFullYear();
     if(y < 2025) y = 2025;
     if(y > 2026) y = 2026;
@@ -90,17 +89,14 @@ const ClientLedger: React.FC = () => {
   const loadRecords = () => {
     if (id) {
       const recs = getLedgerRecords(id);
-      // Sort by date ascending for calculation
       recs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
       setAllRecords(recs);
     }
   };
 
-  // --- Date Calculation Logic ---
   const weeksData = useMemo(() => getWeeksForMonth(currentYear, currentMonth), [currentYear, currentMonth]);
   const activeDays = weeksData[selectedWeekNum] || [];
   
-  // Generate YYYY-MM-DD strings for the selected week
   const activeDateStrings = useMemo(() => 
       activeDays.map(d => {
         const dateObj = new Date(currentYear, currentMonth, d);
@@ -111,26 +107,16 @@ const ClientLedger: React.FC = () => {
       }),
   [activeDays, currentYear, currentMonth]);
 
-  // Derived Data for Display
   const { weekRecords, weekTotal } = useMemo(() => {
     if (activeDateStrings.length === 0) return { weekRecords: [], openingBalance: 0, weekTotal: 0 };
-    
     const current = [];
-    
-    // Iterate all records (assumed sorted by date)
     for (const r of allRecords) {
         if (activeDateStrings.includes(r.date)) {
             current.push(r);
         }
     }
-    
-    // Just week total for header (still calculated but rows removed from view)
     const weekChange = current.reduce((acc, r) => acc + getNetAmount(r), 0);
-
-    return {
-        weekRecords: current,
-        weekTotal: weekChange
-    };
+    return { weekRecords: current, weekTotal: weekChange };
   }, [allRecords, activeDateStrings]);
 
   const formattedWeekRange = useMemo(() => {
@@ -140,8 +126,6 @@ const ClientLedger: React.FC = () => {
       return `${first.getDate()} ${MONTH_NAMES[first.getMonth()].slice(0,3)} - ${last.getDate()} ${MONTH_NAMES[last.getMonth()].slice(0,3)}`;
   }, [activeDateStrings]);
 
-
-  // --- Event Handlers (Resize, Categories, Drag, etc. - largely unchanged) ---
   const onMouseMove = useCallback((e: MouseEvent) => {
     if (!dragInfo.current) return;
     if (dragInfo.current.type === 'col' && dragInfo.current.startWidths && dragInfo.current.containerWidth && dragInfo.current.startX !== undefined && dragInfo.current.index !== undefined) {
@@ -205,12 +189,8 @@ const ClientLedger: React.FC = () => {
     const val = parseFloat(amount);
     if (isNaN(val)) return;
     
-    // Determine date for new entry:
-    // If today is in current week view, use Today.
-    // If we are looking at a past/future week, use last day of that week.
     let dateToUse = new Date().toISOString().split('T')[0];
     const todayStr = dateToUse;
-    
     if (activeDateStrings.length > 0 && !activeDateStrings.includes(todayStr)) {
         dateToUse = activeDateStrings[activeDateStrings.length - 1];
     }
@@ -273,7 +253,6 @@ const ClientLedger: React.FC = () => {
 
   const requestDeleteRecord = (id: string) => setConfirmModal({isOpen:true, type:'DELETE_RECORD', targetId:id, title:'Delete', message:'Delete this record?'});
 
-  // --- Printing/Download ---
   const handlePrint = () => window.print();
   const handleDownloadImage = async () => {
       setIsDownloading(true);
@@ -289,10 +268,6 @@ const ClientLedger: React.FC = () => {
   };
   const openNewTab = () => window.open(window.location.href, '_blank');
 
-
-  // --- Render Helpers ---
-
-  // Calculate Columns based on WEEK RECORDS only
   const calculateColumn = (columnKey: LedgerColumn) => {
       const colRecords = weekRecords.filter(r => r.column === columnKey);
       const processed = colRecords.map(r => ({ ...r, netChange: getNetAmount(r) }));
@@ -305,14 +280,7 @@ const ClientLedger: React.FC = () => {
   const col1Ledger = useMemo(() => calculateColumn('col1'), [weekRecords]);
   const col2Ledger = useMemo(() => calculateColumn('col2'), [weekRecords]);
 
-  const allTimeBalance = useMemo(() => {
-     // Recalculate full balance from allRecords to show in header
-     return allRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
-  }, [allRecords]);
-
-
   const LedgerColumnView = ({ data, footerLabel = "收" }: { data: ReturnType<typeof calculateColumn>, footerLabel?: string }) => {
-      // Empty state
       if (data.processed.length === 0) return <div className="flex-1 min-h-[50px]" />;
 
       const isNegative = data.finalBalance < 0;
@@ -322,25 +290,26 @@ const ClientLedger: React.FC = () => {
       return (
       <div className="flex flex-col items-center">
           <div className="flex flex-col space-y-0.5 w-fit items-end">
-                {data.processed.map((r) => (
-                <div key={r.id} className={`group flex justify-end items-center py-0.5 relative gap-1 md:gap-2 ${!r.isVisible ? 'opacity-30 grayscale no-print' : ''}`}>
-                    <div className="no-print opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1 absolute -left-16 z-10 bg-white shadow-sm rounded border border-gray-100 p-1">
-                        <button onClick={() => setEditingRecord(r)} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Pencil size={12} /></button>
-                        <button onClick={() => requestDeleteRecord(r.id)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 size={12} /></button>
-                    </div>
-                    <div className="text-sm md:text-xl font-bold uppercase tracking-wide text-gray-600">{r.typeLabel}</div>
-                    {r.description && <div className="text-xs md:text-sm text-gray-600 font-medium mr-1 md:mr-2 max-w-[100px] md:max-w-[150px] truncate">{r.description}</div>}
-                    <div className={`text-base md:text-2xl font-mono font-bold w-20 md:w-36 text-right ${r.operation === 'add' ? 'text-green-700' : r.operation === 'subtract' ? 'text-red-700' : 'text-gray-600'}`}>
-                        {r.operation === 'none' ? r.amount.toLocaleString(undefined, {minimumFractionDigits: 2}) : Math.abs(r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2})}
-                    </div>
-                </div>
-            ))}
+                {data.processed.map((r) => {
+                    const isReflected = r.id.startsWith('sale_') || r.id.startsWith('adv_');
+                    return (
+                        <div key={r.id} className={`group flex justify-end items-center py-0.5 relative gap-1 md:gap-2 ${!r.isVisible ? 'opacity-30 grayscale no-print' : ''}`}>
+                            {/* Disable Edit/Delete for Reflected Records */}
+                            {!isReflected && (
+                                <div className="no-print opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1 absolute -left-16 z-10 bg-white shadow-sm rounded border border-gray-100 p-1">
+                                    <button onClick={() => setEditingRecord(r)} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Pencil size={12} /></button>
+                                    <button onClick={() => requestDeleteRecord(r.id)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 size={12} /></button>
+                                </div>
+                            )}
+                            <div className="text-sm md:text-xl font-bold uppercase tracking-wide text-gray-600">{r.typeLabel}</div>
+                            {r.description && <div className="text-xs md:text-sm text-gray-600 font-medium mr-1 md:mr-2 max-w-[100px] md:max-w-[150px] truncate">{r.description}</div>}
+                            <div className={`text-base md:text-2xl font-mono font-bold w-20 md:w-36 text-right ${r.operation === 'add' ? 'text-green-700' : r.operation === 'subtract' ? 'text-red-700' : 'text-gray-600'}`}>
+                                {r.operation === 'none' ? r.amount.toLocaleString(undefined, {minimumFractionDigits: 2}) : Math.abs(r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                            </div>
+                        </div>
+                    );
+                })}
           </div>
-          {/* Footer Total - REMOVED per user request for simpler view, but column totals inside component could be kept if needed? 
-              User said "do not show week closing/opening". The column total is technically "week total" for that column. 
-              Usually "Closing Balance" refers to the bottom summary row. 
-              I will keep column total as it is "specific data".
-          */}
           <div className="mt-2 pt-1 flex flex-col items-end w-fit border-t-2 border-gray-900">
                 <div className="flex items-center gap-1 md:gap-2 justify-end">
                     <span className="text-sm md:text-xl font-bold text-gray-900 uppercase">{displayLabel}</span>
@@ -376,7 +345,6 @@ const ClientLedger: React.FC = () => {
 
   const sortedWeekKeys = Object.keys(weeksData).map(Number).sort((a,b) => a-b);
   
-  // Reset week selection if month changes
   useEffect(() => {
      if(sortedWeekKeys.length > 0 && !sortedWeekKeys.includes(selectedWeekNum)) {
          setSelectedWeekNum(sortedWeekKeys[0]);
@@ -387,7 +355,6 @@ const ClientLedger: React.FC = () => {
 
   return (
     <div className="bg-gray-100 min-h-screen pb-20">
-      {/* Header */}
       <div className="no-print bg-white sticky top-0 z-20 shadow-md">
         <div className="flex items-center justify-between p-3 md:p-4 max-w-5xl mx-auto">
           <div className="flex items-center space-x-2 md:space-x-3">
@@ -400,7 +367,6 @@ const ClientLedger: React.FC = () => {
             </div>
           </div>
           
-          {/* Week Selector In Header */}
           <div className="flex items-center bg-gray-100 rounded-lg p-1 mx-2">
                 <button onClick={handlePrevMonth} disabled={currentYear === 2025 && currentMonth === 0} className="p-1 hover:bg-white rounded shadow-sm disabled:opacity-30"><ChevronLeft size={16}/></button>
                 <div className="flex flex-col items-center px-2 w-28">
@@ -412,8 +378,6 @@ const ClientLedger: React.FC = () => {
 
           <div className="flex items-center space-x-2">
              <div className="text-right mr-2 hidden md:block">
-                {/* Note: Showing only week balance here might be misleading if we removed closing balance? 
-                    Actually, Week Balance is useful context. Keep it. */}
                 <p className={`text-lg font-bold leading-tight ${weekTotal >= 0 ? 'text-green-600' : 'text-red-600'}`}>${Math.abs(weekTotal).toLocaleString()}</p>
                 <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Week Balance</p>
              </div>
@@ -427,7 +391,6 @@ const ClientLedger: React.FC = () => {
           </div>
         </div>
         
-        {/* Week Buttons Row */}
         <div className="bg-gray-50 border-b border-gray-200 px-4 py-2 flex justify-center space-x-2 overflow-x-auto">
              {sortedWeekKeys.map(wk => (
                 <button 
@@ -443,9 +406,7 @@ const ClientLedger: React.FC = () => {
       
       <div className="max-w-5xl mx-auto px-2 md:px-8 py-4 md:py-6">
         
-        {/* Input Area (No Print) */}
         <div className="no-print mb-6 md:mb-8 space-y-4">
-             {/* ... Input Components same as before ... */}
             <div className="flex justify-center">
                 <div className="bg-white rounded-lg p-1 shadow-sm border border-gray-200 flex w-full md:w-auto overflow-x-auto">
                     <button onClick={() => setActiveColumn('col1')} className={`flex-1 md:flex-none px-3 py-2 text-xs md:text-sm font-bold rounded-md transition-all ${activeColumn === 'col1' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-50'}`}>Panel 1</button>
@@ -497,14 +458,10 @@ const ClientLedger: React.FC = () => {
             )}
         </div>
 
-        {/* Paper Statement View */}
         <div id="printable-area" className="relative max-w-5xl mx-auto">
             <div className="bg-white border border-gray-200 shadow-sm min-h-[600px] relative text-lg font-serif">
-                
-                {/* Vertical Resizer Top */}
                 <div style={{ height: `${verticalPadding.top}px` }} className="relative group w-full no-print-bg"><div className="absolute bottom-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResize('top', undefined, e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div></div>
 
-                {/* Header Info */}
                 <div className="px-4 md:px-8 pb-2 md:pb-4 flex justify-between items-end mb-2 md:mb-4">
                     <div>
                         <h2 className="text-2xl md:text-4xl font-bold text-gray-900 uppercase tracking-widest">{client.name}</h2>
@@ -516,9 +473,6 @@ const ClientLedger: React.FC = () => {
                     </div>
                 </div>
 
-                {/* NOTE: Opening Balance Row REMOVED as per request */}
-
-                {/* Main Content: 3 Columns */}
                 <div className="flex w-full min-h-[400px] relative" ref={containerRef}>
                     <div style={{ width: `${colWidths[0]}%` }} className="relative flex flex-col p-1 md:p-2 border-r border-transparent group">
                         <LedgerColumnView data={col1Ledger} footerLabel="收"/>
@@ -533,16 +487,12 @@ const ClientLedger: React.FC = () => {
                     </div>
                 </div>
                 
-                {/* NOTE: Closing Balance Row REMOVED as per request */}
-
-                {/* Vertical Resizer Bottom */}
                 <div style={{ height: `${verticalPadding.bottom}px` }} className="relative group w-full mt-auto no-print-bg"><div className="absolute top-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResize('bottom', undefined, e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div></div>
 
             </div>
         </div>
       </div>
 
-       {/* Add Category Modal */}
        {isAddCatModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 no-print font-sans">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
@@ -556,7 +506,6 @@ const ClientLedger: React.FC = () => {
         </div>
       )}
 
-      {/* Confirmation Modal */}
       {confirmModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4 no-print font-sans">
               <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
@@ -570,7 +519,6 @@ const ClientLedger: React.FC = () => {
           </div>
       )}
 
-      {/* Edit Modal (Existing logic) */}
       {editingRecord && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 no-print font-sans">
             <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
