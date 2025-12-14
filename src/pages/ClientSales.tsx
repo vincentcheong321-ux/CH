@@ -160,25 +160,32 @@ const ClientSales: React.FC = () => {
             days.push(d);
         }
 
-        const rowData: DayRowData[] = days.map(day => {
-            const dObj = new Date(year, m, day);
-            const y = dObj.getFullYear();
-            const mo = String(dObj.getMonth() + 1).padStart(2, '0');
-            const da = String(dObj.getDate()).padStart(2, '0');
-            const dateStr = `${y}-${mo}-${da}`;
+        const rowData: DayRowData[] = days
+            .filter(day => {
+                const dObj = new Date(year, m, day);
+                const dayOfWeek = dObj.getDay();
+                // 0=Sun, 2=Tue, 3=Wed, 6=Sat
+                return [0, 2, 3, 6].includes(dayOfWeek);
+            })
+            .map(day => {
+                const dObj = new Date(year, m, day);
+                const y = dObj.getFullYear();
+                const mo = String(dObj.getMonth() + 1).padStart(2, '0');
+                const da = String(dObj.getDate()).padStart(2, '0');
+                const dateStr = `${y}-${mo}-${da}`;
 
-            // Determine display date (e.g. "01-Feb")
-            const displayDate = `${da}-${MONTH_NAMES[dObj.getMonth()].slice(0, 3)}`;
+                // Determine display date (e.g. "01-Feb")
+                const displayDate = `${da}-${MONTH_NAMES[dObj.getMonth()].slice(0, 3)}`;
 
-            const record = records.find(r => r.date === dateStr);
-            return {
-                dateStr,
-                dayNum: day,
-                monthIndex: m,
-                displayDate,
-                record
-            };
-        });
+                const record = records.find(r => r.date === dateStr);
+                return {
+                    dateStr,
+                    dayNum: day,
+                    monthIndex: m,
+                    displayDate,
+                    record
+                };
+            });
 
         groups.push({
             monthIndex: m,

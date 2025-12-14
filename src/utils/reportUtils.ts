@@ -43,3 +43,16 @@ export const getWeeksForMonth = (year: number, monthIndex: number) => {
     
     return weeks;
 };
+
+export const getWeekRangeString = (year: number, monthIndex: number, days: number[]) => {
+    if (!days || days.length === 0) return '';
+    
+    const startDay = days[0];
+    const endDay = days[days.length - 1];
+    const mon = MONTH_NAMES[monthIndex].slice(0, 3);
+    
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    
+    // Example: 01 DEC - 07 DEC
+    return `${pad(startDay)} ${mon} - ${pad(endDay)} ${mon}`;
+};

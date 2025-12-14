@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getClients, getDrawBalances, saveDrawBalance } from '../services/storageService';
 import { Client } from '../types';
 import { Calendar, ChevronLeft, ChevronRight, Filter, Save, Layers } from 'lucide-react';
-import { MONTH_NAMES, getWeeksForMonth } from '../utils/reportUtils';
+import { MONTH_NAMES, getWeeksForMonth, getWeekRangeString } from '../utils/reportUtils';
 
 // Extracted Component to prevent re-mounting on every render
 const ClientInputRow = React.memo(({ client, value, onChange, onBlur }: { 
@@ -87,8 +87,8 @@ const DrawReport: React.FC = () => {
 
   const fetchClients = async () => {
     const list = await getClients();
-    // Filter to exclude mobile clients
-    const paperClients = list.filter(c => c.category !== 'mobile');
+    // Filter to strictly show only paper clients
+    const paperClients = list.filter(c => (c.category || 'paper') === 'paper');
     setClients(paperClients);
   };
 
@@ -211,10 +211,7 @@ const DrawReport: React.FC = () => {
                   {sortedWeekNums.map((weekNum, idx) => {
                       const days = currentMonthWeeks[weekNum];
                       const isActiveWeek = weekNum.toString() === activeWeekNum;
-                      
-                      const firstDay = days[0];
-                      const lastDay = days[days.length - 1];
-                      const rangeStr = `${firstDay} - ${lastDay}`;
+                      const rangeStr = getWeekRangeString(currentYear, currentMonth, days);
 
                       return (
                         <button
@@ -230,7 +227,7 @@ const DrawReport: React.FC = () => {
                             <span className={`text-xs uppercase tracking-wider opacity-70 ${isActiveWeek ? 'text-blue-100' : 'text-gray-400'}`}>
                                 Week {idx + 1}
                             </span>
-                            <span className="text-xl font-mono mt-1">{rangeStr}</span>
+                            <span className="text-sm font-mono mt-1 whitespace-nowrap">{rangeStr}</span>
                         </button>
                       );
                   })}
@@ -247,7 +244,7 @@ const DrawReport: React.FC = () => {
 
   // Create string for display
   const activeWeekDateRange = activeWeekDays.length > 0 
-    ? `${activeWeekDays[0]} ${MONTH_NAMES[currentMonth].slice(0,3)} - ${activeWeekDays[activeWeekDays.length-1]} ${MONTH_NAMES[currentMonth].slice(0,3)}`
+    ? getWeekRangeString(currentYear, currentMonth, activeWeekDays)
     : '';
 
   return (
@@ -276,10 +273,10 @@ const DrawReport: React.FC = () => {
                             <div>
                                 <h2 className="text-xl font-bold text-gray-900 flex items-center">
                                     <Layers size={20} className="mr-2 text-blue-600" />
-                                    Weekly Report - Week {activeWeekIndex + 1}
+                                    {activeWeekDateRange}
                                 </h2>
                                 <p className="text-gray-500 font-medium text-sm mt-1">
-                                    {MONTH_NAMES[currentMonth]} {currentYear}: {activeWeekDateRange}
+                                    {MONTH_NAMES[currentMonth]} {currentYear} • Week {activeWeekIndex + 1}
                                 </p>
                             </div>
                             <div className="flex items-center text-xs text-gray-500 bg-yellow-50 px-3 py-1 rounded-full border border-yellow-200">

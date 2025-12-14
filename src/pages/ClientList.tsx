@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { Plus, Search, User, ChevronRight, Trash2, AlertTriangle, CheckSquare, Square, Printer, ArrowLeft, RefreshCw, ChevronLeft } from 'lucide-react';
 import { getClients, saveClient, getClientBalance, deleteClient, getLedgerRecords, getNetAmount, seedInitialClients } from '../services/storageService';
 import { Client, LedgerRecord } from '../types';
-import { MONTH_NAMES, getWeeksForMonth } from '../utils/reportUtils';
+import { MONTH_NAMES, getWeeksForMonth, getWeekRangeString } from '../utils/reportUtils';
 
 const ClientList: React.FC = () => {
   const [clients, setClients] = useState<Client[]>([]);
@@ -366,15 +366,21 @@ const ClientList: React.FC = () => {
             </div>
             
             <div className="flex space-x-1 overflow-x-auto max-w-full md:max-w-none pb-1 md:pb-0">
-                {sortedWeekKeys.map(wk => (
-                    <button
-                        key={wk}
-                        onClick={() => setSelectedWeekNum(wk)}
-                        className={`px-3 py-1.5 rounded-md text-xs font-bold transition-colors whitespace-nowrap border ${selectedWeekNum === wk ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
-                    >
-                        Week {Object.keys(weeksData).indexOf(String(wk)) + 1}
-                    </button>
-                ))}
+                {sortedWeekKeys.map(wk => {
+                    const days = weeksData[wk];
+                    const label = getWeekRangeString(currentYear, currentMonth, days);
+                    return (
+                        <button
+                            key={wk}
+                            onClick={() => setSelectedWeekNum(wk)}
+                            className={`px-3 py-1.5 rounded-md text-xs font-bold transition-colors whitespace-nowrap border flex flex-col items-center justify-center min-w-[100px]
+                                ${selectedWeekNum === wk ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                        >
+                            <span className="uppercase tracking-wider text-[10px] opacity-75">Week {Object.keys(weeksData).indexOf(String(wk)) + 1}</span>
+                            <span>{label}</span>
+                        </button>
+                    );
+                })}
             </div>
 
             <div className="relative flex-1 w-full md:w-auto">

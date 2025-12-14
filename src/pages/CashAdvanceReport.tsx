@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getClients, getCashAdvances, saveCashAdvance } from '../services/storageService';
 import { Client } from '../types';
 import { Calendar, ChevronLeft, ChevronRight, Filter, Save, Banknote } from 'lucide-react';
-import { MONTH_NAMES, getWeeksForMonth } from '../utils/reportUtils';
+import { MONTH_NAMES, getWeeksForMonth, getWeekRangeString } from '../utils/reportUtils';
 
 // Component for Individual Client Input
 const CashAdvanceInputRow = React.memo(({ client, value, onChange, onBlur }: { 
@@ -191,6 +191,11 @@ const CashAdvanceReport: React.FC = () => {
   const activeWeekIndex = activeWeekNum ? Object.keys(currentMonthWeeks).map(Number).sort((a,b) => a-b).indexOf(Number(activeWeekNum)) : 0;
   const sortedWeekNums = Object.keys(currentMonthWeeks).map(Number).sort((a,b) => a-b);
 
+  const activeDays = activeWeekNum ? currentMonthWeeks[parseInt(activeWeekNum)] : [];
+  const rangeTitle = activeDays.length > 0 
+    ? getWeekRangeString(currentYear, currentMonth, activeDays) 
+    : `Week ${activeWeekIndex + 1}`;
+
   const renderDateButtons = () => {
       return (
           <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
@@ -204,7 +209,7 @@ const CashAdvanceReport: React.FC = () => {
                   {sortedWeekNums.map((weekNum, idx) => {
                       const days = currentMonthWeeks[weekNum];
                       const isActiveWeek = weekNum.toString() === activeWeekNum;
-                      const realDaysStr = days.map(d => new Date(currentYear, currentMonth, d).getDate()).join(', ');
+                      const rangeStr = getWeekRangeString(currentYear, currentMonth, days);
 
                       return (
                         <button
@@ -220,7 +225,7 @@ const CashAdvanceReport: React.FC = () => {
                             <span className={`text-xs uppercase tracking-wider opacity-70 ${isActiveWeek ? 'text-blue-100' : 'text-gray-400'}`}>
                                 Week {idx + 1}
                             </span>
-                            <span className="text-xl font-mono mt-1">{realDaysStr}</span>
+                            <span className="text-sm font-mono mt-1 whitespace-nowrap">{rangeStr}</span>
                         </button>
                       );
                   })}
@@ -261,10 +266,10 @@ const CashAdvanceReport: React.FC = () => {
                             <div>
                                 <h2 className="text-xl font-bold text-gray-900 flex items-center">
                                     <Banknote size={20} className="mr-2 text-blue-600" />
-                                    Cash Advances - Week {activeWeekIndex + 1}
+                                    {rangeTitle}
                                 </h2>
                                 <p className="text-gray-500 font-medium text-sm mt-1">
-                                    {MONTH_NAMES[currentMonth]} {currentYear}
+                                    {MONTH_NAMES[currentMonth]} {currentYear} • Week {activeWeekIndex + 1}
                                 </p>
                             </div>
                             <div className="flex items-center text-xs text-gray-500 bg-yellow-50 px-3 py-1 rounded-full border border-yellow-200">
