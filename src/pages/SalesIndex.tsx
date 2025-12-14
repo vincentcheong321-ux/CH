@@ -123,8 +123,8 @@ const ClientWeeklyCard = React.memo(({
                     <thead className="bg-gray-50/50 text-xs text-gray-500 font-semibold uppercase tracking-wider">
                         <tr>
                             <th className="py-2 pl-4 text-left font-medium w-24">Date</th>
-                            <th className="py-2 text-blue-700 font-bold border-l border-gray-100">Wan <span className="opacity-40 text-[9px] font-normal">B/S</span></th>
-                            <th className="py-2 text-red-700 font-bold border-l border-gray-100">Qian <span className="opacity-40 text-[9px] font-normal">A/C</span></th>
+                            <th className="py-2 text-blue-700 font-bold border-l border-gray-100 text-sm">万 <span className="opacity-40 text-[9px] font-normal">B/S</span></th>
+                            <th className="py-2 text-red-700 font-bold border-l border-gray-100 text-sm">千 <span className="opacity-40 text-[9px] font-normal">A/C</span></th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-sm">
@@ -182,18 +182,28 @@ const SalesIndex: React.FC = () => {
       setCurrentMonth(now.getMonth());
   }, []);
 
+  const weeksData = useMemo(() => getWeeksForMonth(currentMonth), [currentMonth]);
+  const activeDays = weeksData[selectedWeekNum] || [];
+  
+  // Convert day numbers (potentially > days in month) to valid YYYY-MM-DD strings
+  const activeDateStrings = useMemo(() => 
+      activeDays.map(d => {
+        const dateObj = new Date(YEAR, currentMonth, d);
+        const y = dateObj.getFullYear();
+        const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const day = String(dateObj.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      }),
+  [activeDays, currentMonth]);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
         const loadedClients = await getClients();
         setClients(loadedClients);
         
-        const weeks = getWeeksForMonth(currentMonth);
-        const days = weeks[selectedWeekNum] || [];
-        
-        if (days.length > 0) {
-            const dateStrings = days.map(d => `${YEAR}-${String(currentMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`);
-            const records = await getSalesForDates(dateStrings);
+        if (activeDateStrings.length > 0) {
+            const records = await getSalesForDates(activeDateStrings);
             setSalesData(records);
         } else {
             setSalesData([]);
@@ -203,17 +213,11 @@ const SalesIndex: React.FC = () => {
     } finally {
         setLoading(false);
     }
-  }, [currentMonth, selectedWeekNum]);
+  }, [activeDateStrings]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
-
-  const weeksData = useMemo(() => getWeeksForMonth(currentMonth), [currentMonth]);
-  const activeDays = weeksData[selectedWeekNum] || [];
-  const activeDateStrings = useMemo(() => 
-      activeDays.map(d => `${YEAR}-${String(currentMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`),
-  [activeDays, currentMonth]);
 
   const handleUpdate = useCallback(async (
       clientId: string, 

@@ -7,6 +7,7 @@ export const MONTH_NAMES = [
 ];
 
 // Data Structure: [Month Index 0-11]: { type: [days] }
+// NOTE: Overflow days (e.g. 32, 33) are used to group dates from the start of the next month into the current month's weeks.
 export const DRAW_DATES: Record<number, { w: number[], s1: number[], s2: number[], t: number[] }> = {
   0: { w: [1,8,15,22,29], s1: [4,11,18,25], s2: [5,12,19,26], t: [28] }, // JAN
   1: { w: [5,12,19,26], s1: [1,8,15,22], s2: [2,9,16,23], t: [4,11] }, // FEB
@@ -17,8 +18,8 @@ export const DRAW_DATES: Record<number, { w: number[], s1: number[], s2: number[
   6: { w: [2,9,16,23,30], s1: [5,12,19,26], s2: [6,13,20,27], t: [29] }, // JUL
   7: { w: [6,13,20,27], s1: [2,9,16,23,30], s2: [3,10,17,24,31], t: [] }, // AUG
   8: { w: [3,10,17,24], s1: [6,13,20,27], s2: [7,14,21,28], t: [] }, // SEP
-  9: { w: [1,8,15,22,29], s1: [4,11,18,25], s2: [5,12,19,26], t: [28] }, // OCT
-  10: { w: [5,12,19,26], s1: [1,8,15,22,29], s2: [2,9,16,23,30], t: [] }, // NOV
+  9: { w: [1,8,15,22,29], s1: [4,11,18,25,32], s2: [5,12,19,26,33], t: [28] }, // OCT (Added 32=Nov1, 33=Nov2)
+  10: { w: [5,12,19,26], s1: [8,15,22,29], s2: [9,16,23,30], t: [] }, // NOV (Removed 1, 2)
   11: { w: [3,10,17,24,31], s1: [6,13,20,27], s2: [7,14,21,28], t: [] }, // DEC
 };
 
@@ -36,6 +37,7 @@ export const getWeeksForMonth = (monthIndex: number) => {
       const allDays = Array.from(new Set([...currentMonthData.w, ...currentMonthData.s1, ...currentMonthData.s2, ...currentMonthData.t])).sort((a,b) => a-b);
       const weeks: Record<number, number[]> = {};
       allDays.forEach(day => {
+          // Construct date using the day. Overflow days (32, 33) automatically roll over to next month.
           const date = new Date(YEAR, monthIndex, day);
           const weekNum = getWeekNumber(date);
           if (!weeks[weekNum]) weeks[weekNum] = [];
