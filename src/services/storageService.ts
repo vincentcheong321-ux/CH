@@ -86,11 +86,6 @@ export const seedData = () => {
 
 // A. Helper to map DB row to LedgerRecord
 const mapJournalToLedgerRecord = (row: any): LedgerRecord => {
-    // Ledger Logic: 
-    // If Amount > 0, it's 'add' (Client Owes).
-    // If Amount < 0, it's 'subtract' (Company Owes).
-    // 'none' operation is usually stored as 0 amount but we check metadata.
-    
     const isAdd = row.amount >= 0; 
     
     return {
@@ -112,7 +107,7 @@ export const getLedgerRecords = async (clientId: string): Promise<LedgerRecord[]
             .from('financial_journal')
             .select('*')
             .eq('client_id', clientId)
-            .eq('entry_type', 'MANUAL'); // Only fetch manual ledger entries
+            .eq('entry_type', 'MANUAL'); 
             
         if (data) return data.map(mapJournalToLedgerRecord);
     }
@@ -132,11 +127,10 @@ export const getAllLedgerRecords = async (): Promise<LedgerRecord[]> => {
 
 export const saveLedgerRecord = async (record: Omit<LedgerRecord, 'id'>): Promise<LedgerRecord> => {
     if (supabase) {
-        // Logic: Calculate Signed Amount
         let signedAmount = 0;
         if (record.operation === 'add') signedAmount = record.amount;
         else if (record.operation === 'subtract') signedAmount = -record.amount;
-        else signedAmount = 0; // 'none'
+        else signedAmount = 0;
 
         const { data } = await supabase.from('financial_journal').insert([{
             client_id: record.clientId,
@@ -160,10 +154,7 @@ export const updateLedgerRecord = async (id: string, updates: Partial<LedgerReco
     if (supabase) {
         const payload: any = { data: {} };
         
-        // We need to merge existing data potentially, but simplified for now:
         if (updates.amount !== undefined || updates.operation !== undefined) {
-             // We need full context to recalc signed amount. Assuming 'updates' has enough info or we'd need to fetch first.
-             // For this app, update usually sends the whole object.
              let signedAmount = 0;
              if (updates.operation === 'add') signedAmount = updates.amount!;
              else if (updates.operation === 'subtract') signedAmount = -updates.amount!;
@@ -171,16 +162,9 @@ export const updateLedgerRecord = async (id: string, updates: Partial<LedgerReco
              payload.amount = signedAmount;
         }
         
-        // Update Data JSONB
-        if (updates.description !== undefined) payload.data = { description: updates.description };
-        // Ideally we do a deep merge on 'data' or fetch-modify-save. 
-        // For this specific app flow, we can just update the fields we know.
-        
-        // Better approach: Since `updateLedgerRecord` in app usually passes full obj state in `updates` for critical fields
         const { data: existing } = await supabase.from('financial_journal').select('data').eq('id', id).single();
         const mergedData = { ...existing?.data, ...updates };
         
-        // Clean up root level props from mergedData
         delete mergedData.id;
         delete mergedData.clientId;
         delete mergedData.date;
@@ -248,23 +232,28 @@ export const getSalesForDates = async (dates: string[]): Promise<SaleRecord[]> =
 
 export const saveSaleRecord = async (record: Omit<SaleRecord, 'id'>) => {
     if (supabase) {
-        // Calculate Net Amount for the Journal
-        // (b + s) - (a + c)
-        // If result > 0, Client Owes (Positive).
         const netAmount = (record.b + record.s) - (record.a + record.c);
+        const { data: existing } = await supabase.from('financial_journal')
+            .select('id')
+            .eq('client_id', record.clientId)
+            .eq('entry_date', record.date)
+            .eq('entry_type', 'SALE')
+            .maybeSingle();
 
-        const { error } = await supabase.from('financial_journal').upsert({
-            client_id: record.clientId,
-            entry_date: record.date,
-            entry_type: 'SALE',
-            amount: netAmount,
-            data: {
-                b: record.b,
-                s: record.s,
-                a: record.a,
-                c: record.c
-            }
-        }, { onConflict: 'client_id, entry_date, entry_type' });
+        if (existing) {
+             await supabase.from('financial_journal').update({
+                amount: netAmount,
+                data: { b: record.b, s: record.s, a: record.a, c: record.c }
+             }).eq('id', existing.id);
+        } else {
+             await supabase.from('financial_journal').insert({
+                client_id: record.clientId,
+                entry_date: record.date,
+                entry_type: 'SALE',
+                amount: netAmount,
+                data: { b: record.b, s: record.s, a: record.a, c: record.c }
+             });
+        }
     }
 };
 
@@ -289,13 +278,26 @@ export const getCashAdvances = async (date: string): Promise<Record<string, numb
 
 export const saveCashAdvance = async (date: string, clientId: string, amount: number) => {
     if (supabase) {
-        await supabase.from('financial_journal').upsert({
-            client_id: clientId,
-            entry_date: date,
-            entry_type: 'ADVANCE',
-            amount: amount, // Positive = Client Owes
-            data: {}
-        }, { onConflict: 'client_id, entry_date, entry_type' });
+        const { data: existing } = await supabase.from('financial_journal')
+            .select('id')
+            .eq('client_id', clientId)
+            .eq('entry_date', date)
+            .eq('entry_type', 'ADVANCE')
+            .maybeSingle();
+
+        if (existing) {
+             await supabase.from('financial_journal').update({
+                amount: amount
+             }).eq('id', existing.id);
+        } else {
+             await supabase.from('financial_journal').insert({
+                client_id: clientId,
+                entry_date: date,
+                entry_type: 'ADVANCE',
+                amount: amount,
+                data: {}
+             });
+        }
     }
 };
 
@@ -336,17 +338,30 @@ export const getAllDrawRecords = async (): Promise<DrawBalance[]> => {
 
 export const saveDrawBalance = async (date: string, clientId: string, balance: number) => {
     if (supabase) {
-        await supabase.from('financial_journal').upsert({
-            client_id: clientId,
-            entry_date: date,
-            entry_type: 'DRAW',
-            amount: balance,
-            data: {}
-        }, { onConflict: 'client_id, entry_date, entry_type' });
+        const { data: existing } = await supabase.from('financial_journal')
+            .select('id')
+            .eq('client_id', clientId)
+            .eq('entry_date', date)
+            .eq('entry_type', 'DRAW')
+            .maybeSingle();
+
+        if (existing) {
+             await supabase.from('financial_journal').update({
+                amount: balance
+             }).eq('id', existing.id);
+        } else {
+             await supabase.from('financial_journal').insert({
+                client_id: clientId,
+                entry_date: date,
+                entry_type: 'DRAW',
+                amount: balance,
+                data: {}
+             });
+        }
     }
 };
 
-// --- E. Mobile Report History (New) ---
+// --- E. Mobile Report History ---
 
 export const saveMobileReportHistory = async (date: string, rawData: any[]) => {
     if (supabase) {
@@ -357,6 +372,17 @@ export const saveMobileReportHistory = async (date: string, rawData: any[]) => {
     }
 };
 
+export const getMobileReportHistory = async () => {
+    if (supabase) {
+        const { data } = await supabase
+            .from('mobile_report_history')
+            .select('*')
+            .order('created_at', { ascending: false });
+        return data || [];
+    }
+    return [];
+};
+
 // --- 4. Global Balance & Utils ---
 
 export const getClientBalance = (clientId: string): number => {
@@ -364,7 +390,6 @@ export const getClientBalance = (clientId: string): number => {
     return 0;
 };
 
-// NEW: Highly Efficient Aggregator
 export const fetchClientTotalBalance = async (clientId: string): Promise<number> => {
     if (supabase) {
         const { data, error } = await supabase.rpc('get_client_balance', { cid: clientId });
@@ -380,13 +405,12 @@ export const fetchClientTotalBalance = async (clientId: string): Promise<number>
     return 0;
 };
 
-// Helper for Dashboard total
 export const getTotalDrawReceivables = async (): Promise<number> => {
     if (supabase) {
         const { data } = await supabase
             .from('financial_journal')
             .select('amount')
-            .in('entry_type', ['DRAW', 'MANUAL', 'SALE', 'ADVANCE']); // Sum EVERYTHING
+            .in('entry_type', ['DRAW', 'MANUAL', 'SALE', 'ADVANCE']);
             
         return data?.reduce((acc, r) => acc + r.amount, 0) || 0;
     }
