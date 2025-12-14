@@ -285,6 +285,19 @@ const ClientLedger: React.FC = () => {
           <div className="flex flex-col w-fit items-end">
                 {data.processed.map((r) => {
                     const isReflected = r.id.startsWith('sale_') || r.id.startsWith('adv_');
+                    
+                    // Formatting Logic: Negative numbers (including negative adds) get brackets and red color
+                    const isNetNegative = r.operation !== 'none' && r.netChange < 0;
+                    const absValue = Math.abs(r.operation === 'none' ? r.amount : r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2});
+                    const displayValue = isNetNegative ? `(${absValue})` : absValue;
+                    
+                    let textColor = 'text-gray-600';
+                    if (r.operation === 'add') {
+                        textColor = isNetNegative ? 'text-red-700' : 'text-green-700';
+                    } else if (r.operation === 'subtract') {
+                        textColor = 'text-red-700';
+                    }
+
                     return (
                         <div key={r.id} className={`group flex justify-end items-center leading-none relative gap-1 md:gap-1.5 ${!r.isVisible ? 'opacity-30 grayscale no-print' : ''}`}>
                             {/* Disable Edit/Delete for Reflected Records */}
@@ -296,8 +309,8 @@ const ClientLedger: React.FC = () => {
                             )}
                             <div className="text-sm md:text-lg font-bold uppercase tracking-wide text-gray-700">{r.typeLabel}</div>
                             {r.description && <div className="text-xs md:text-sm text-gray-500 font-medium mr-1 md:mr-2 max-w-[80px] md:max-w-[120px] truncate">{r.description}</div>}
-                            <div className={`text-base md:text-xl font-mono font-bold w-16 md:w-28 text-right ${r.operation === 'add' ? 'text-green-700' : r.operation === 'subtract' ? 'text-red-700' : 'text-gray-600'}`}>
-                                {r.operation === 'none' ? r.amount.toLocaleString(undefined, {minimumFractionDigits: 2}) : Math.abs(r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                            <div className={`text-base md:text-xl font-mono font-bold w-16 md:w-28 text-right ${textColor}`}>
+                                {displayValue}
                             </div>
                         </div>
                     );
@@ -462,7 +475,6 @@ const ClientLedger: React.FC = () => {
                     </div>
                     <div className="text-right">
                         <p className="text-sm text-gray-500 font-sans uppercase tracking-wider">{MONTH_NAMES[currentMonth]} {currentYear}</p>
-                        {/* Week Range Removed from Header */}
                     </div>
                 </div>
 

@@ -257,15 +257,27 @@ const ClientList: React.FC = () => {
         return (
             <div className="flex flex-col items-center">
                 <div className="flex flex-col space-y-0.5 w-fit items-end">
-                    {data.processed.map((r) => (
+                    {data.processed.map((r) => {
+                        const isNetNegative = r.operation !== 'none' && r.netChange < 0;
+                        const valStr = Math.abs(r.operation === 'none' ? r.amount : r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2});
+                        const displayVal = isNetNegative ? `(${valStr})` : valStr;
+                        
+                        let textColor = 'text-gray-600';
+                        if (r.operation === 'add') {
+                            textColor = isNetNegative ? 'text-red-700' : 'text-green-700';
+                        } else if (r.operation === 'subtract') {
+                            textColor = 'text-red-700';
+                        }
+
+                        return (
                         <div key={r.id} className={`flex justify-end items-center py-0.5 relative gap-1 md:gap-2 ${!r.isVisible ? 'hidden' : ''}`}>
                             <div className="text-xl font-bold uppercase tracking-wide text-gray-600">{r.typeLabel}</div>
                             {r.description && <div className="text-sm text-gray-600 font-medium mr-2 max-w-[150px] truncate">{r.description}</div>}
-                            <div className={`text-2xl font-mono font-bold w-36 text-right ${r.operation === 'add' ? 'text-green-700' : r.operation === 'subtract' ? 'text-red-700' : 'text-gray-600'}`}>
-                                {r.operation === 'none' ? r.amount.toLocaleString(undefined, {minimumFractionDigits: 2}) : Math.abs(r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                            <div className={`text-2xl font-mono font-bold w-36 text-right ${textColor}`}>
+                                {displayVal}
                             </div>
                         </div>
-                    ))}
+                    )})}
                 </div>
                 {hasCalculableRecords && (
                     <div className="mt-2 pt-1 flex flex-col items-end w-fit border-t-2 border-gray-900">
