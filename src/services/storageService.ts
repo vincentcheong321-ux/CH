@@ -139,7 +139,7 @@ export const getClients = async (): Promise<Client[]> => {
     if (!error && data) {
         return data.map(mapSupabaseClient);
     }
-    console.error('Supabase fetch error:', error);
+    console.warn('Supabase fetch error (using local):', error?.message);
   }
   
   // Fallback to LocalStorage
@@ -287,7 +287,7 @@ export const getDrawBalances = async (date: string): Promise<Record<string, numb
       });
       return balances;
     }
-    console.error('Supabase fetch draw balances error:', error);
+    console.warn('Supabase fetch draw balances error (using local):', error?.message);
   }
 
   // Fallback to LocalStorage
@@ -392,7 +392,7 @@ export const getSaleRecords = async (clientId: string): Promise<SaleRecord[]> =>
           c: Number(r.c)
       }));
     }
-    console.error('Supabase fetch sales error:', error);
+    console.warn('Supabase fetch sales error (using local):', error?.message);
   }
 
   const data = localStorage.getItem(SALES_KEY);
@@ -423,6 +423,7 @@ export const getSalesForDates = async (dates: string[]): Promise<SaleRecord[]> =
                 c: Number(r.c)
             }));
         }
+        console.warn('Supabase fetch sales dates error (using local):', error?.message);
     }
 
     const data = localStorage.getItem(SALES_KEY);
