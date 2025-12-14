@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { getClients, getDrawBalances, saveDrawBalance } from '../services/storageService';
+import { getClients, getDrawBalances, saveDrawBalance, getClientBalancesPriorToDate } from '../services/storageService';
 import { Client } from '../types';
-import { Calendar, ChevronLeft, ChevronRight, Filter, Save, Layers } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Filter, Save, Layers, RefreshCw, Loader2 } from 'lucide-react';
 import { MONTH_NAMES, getWeeksForMonth, getWeekRangeString } from '../utils/reportUtils';
 
 // Extracted Component to prevent re-mounting on every render
@@ -52,6 +52,7 @@ const DrawReport: React.FC = () => {
   // Use string for input values to allow empty/typing state, parse to number on save
   const [clientBalances, setClientBalances] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
     fetchClients();
@@ -139,6 +140,33 @@ const DrawReport: React.FC = () => {
           return currentBalances;
       });
   }, [selectedDate]);
+
+  const handleGenerateBalance = async () => {
+      if (!selectedDate) return;
+      if (!window.confirm("This will fetch the total net balance of all clients from previous weeks and overwrite the current week's draw report. Continue?")) return;
+
+      setGenerating(true);
+      try {
+          // Fetch balances prior to the currently selected date
+          const prevBalances = await getClientBalancesPriorToDate(selectedDate);
+          
+          const newBalances: Record<string, string> = {};
+          
+          for (const client of clients) {
+              const bal = prevBalances[client.id] || 0;
+              newBalances[client.id] = bal.toString();
+              // Save each to DB as current draw
+              await saveDrawBalance(selectedDate, client.id, bal);
+          }
+          
+          setClientBalances(newBalances);
+      } catch (e) {
+          console.error("Failed to generate balances", e);
+          alert("Error generating balances. Please try again.");
+      } finally {
+          setGenerating(false);
+      }
+  };
 
   const calculateTotal = () => {
       return Object.values(clientBalances).reduce((acc, val) => {
@@ -268,22 +296,29 @@ const DrawReport: React.FC = () => {
             ) : (
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col flex-1 relative">
                     {/* Header */}
-                    <div className="bg-gray-50 p-4 border-b border-gray-200 sticky top-0 z-10">
-                        <div className="flex justify-between items-center">
-                            <div>
-                                <h2 className="text-xl font-bold text-gray-900 flex items-center">
-                                    <Layers size={20} className="mr-2 text-blue-600" />
-                                    {activeWeekDateRange}
-                                </h2>
-                                <p className="text-gray-500 font-medium text-sm mt-1">
-                                    {MONTH_NAMES[currentMonth]} {currentYear} • Week {activeWeekIndex + 1}
-                                </p>
-                            </div>
-                            <div className="flex items-center text-xs text-gray-500 bg-yellow-50 px-3 py-1 rounded-full border border-yellow-200">
-                                <Save size={14} className="mr-1" /> Auto-saves on exit
+                    <div className="bg-gray-50 p-4 border-b border-gray-200 sticky top-0 z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                            <h2 className="text-xl font-bold text-gray-900 flex items-center">
+                                <Layers size={20} className="mr-2 text-blue-600" />
+                                {activeWeekDateRange}
+                            </h2>
+                            <p className="text-gray-500 font-medium text-sm mt-1">
+                                {MONTH_NAMES[currentMonth]} {currentYear} • Week {activeWeekIndex + 1}
+                            </p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <button 
+                                onClick={handleGenerateBalance}
+                                disabled={generating}
+                                className="flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-sm text-sm font-bold disabled:opacity-50 transition-colors"
+                            >
+                                {generating ? <Loader2 size={16} className="animate-spin mr-2"/> : <RefreshCw size={16} className="mr-2" />}
+                                Generate Last Week Balance
+                            </button>
+                            <div className="hidden md:flex items-center text-xs text-gray-500 bg-yellow-50 px-3 py-1 rounded-full border border-yellow-200">
+                                <Save size={14} className="mr-1" /> Auto-saves
                             </div>
                         </div>
-                        {/* Note: Week pills removed from here as requested. Use sidebar for selection. */}
                     </div>
 
                     {loading ? (

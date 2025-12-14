@@ -525,6 +525,26 @@ export const fetchClientTotalBalance = async (clientId: string): Promise<number>
     return 0;
 };
 
+// NEW: Helper to calculate balance STRICTLY before a certain date
+export const getClientBalancesPriorToDate = async (dateLimit: string): Promise<Record<string, number>> => {
+    if (supabase) {
+        const { data } = await supabase
+            .from('financial_journal')
+            .select('client_id, amount')
+            .lt('entry_date', dateLimit);
+
+        const balances: Record<string, number> = {};
+        if (data) {
+            data.forEach((row: any) => {
+                const cid = row.client_id;
+                balances[cid] = (balances[cid] || 0) + row.amount;
+            });
+        }
+        return balances;
+    }
+    return {};
+};
+
 export const getTotalDrawReceivables = async (): Promise<number> => {
     if (supabase) {
         // Logic updated: fetches all financial impact on the company from all types

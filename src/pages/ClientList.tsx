@@ -278,35 +278,8 @@ const ClientList: React.FC = () => {
             r.column === columnKey
         );
 
-        // --- Balance Forward Calculation ---
-        let openingBalance = 0;
-        if (selectedWeekStartDate) {
-            const previousRecords = allRecords.filter(r => 
-                r.date < selectedWeekStartDate && 
-                (r.column === columnKey || (!r.column && columnKey === 'main'))
-            );
-            openingBalance = previousRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
-        }
-
         const processed = colRecords.map(r => ({ ...r, netChange: getNetAmount(r) }));
         
-        // Inject Balance Forward if needed
-        if (openingBalance !== 0) {
-            processed.unshift({
-                id: `opening_${columnKey}`,
-                clientId: client.id,
-                date: selectedWeekStartDate || '',
-                typeLabel: 'BAL FWD',
-                description: 'Previous Balance',
-                amount: Math.abs(openingBalance),
-                operation: openingBalance >= 0 ? 'add' : 'subtract',
-                netChange: openingBalance,
-                column: columnKey,
-                isVisible: true,
-                isVirtual: true // Custom flag
-            } as any);
-        }
-
         const visibleProcessed = processed.filter(r => r.isVisible);
         const finalBalance = visibleProcessed.reduce((acc, curr) => acc + curr.netChange, 0);
         return { processed, finalBalance };
