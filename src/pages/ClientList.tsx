@@ -148,28 +148,28 @@ const ClientList: React.FC = () => {
   const leftClients = filteredClients.slice(0, midPoint);
   const rightClients = filteredClients.slice(midPoint);
 
-  const renderClientRow = (client: Client) => {
+  // Grid Row Component for perfect alignment
+  const ClientGridRow = ({ client }: { client: Client }) => {
     const isSelected = selectedClientIds.has(client.id);
     const balance = balances[client.id] || 0;
     
     return (
         <div 
-            key={client.id}
             className={`
-                group relative border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors
+                group border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors
                 ${isSelected ? 'bg-blue-50/50' : ''}
             `}
         >
             <Link 
                 to={`/clients/${client.id}`}
-                className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-4 p-4"
+                className="grid grid-cols-[auto_1fr_140px_40px] gap-4 items-center p-4"
             >
                 {/* 1. Selection Checkbox */}
-                <div onClick={(e) => toggleSelectOne(e, client.id)} className="cursor-pointer text-gray-400 hover:text-gray-600">
+                <div onClick={(e) => toggleSelectOne(e, client.id)} className="cursor-pointer text-gray-400 hover:text-gray-600 flex items-center justify-center w-8">
                     {isSelected ? <CheckSquare size={20} className="text-blue-600" /> : <Square size={20} />}
                 </div>
 
-                {/* 2. Name & Avatar */}
+                {/* 2. Name & Info */}
                 <div className="flex items-center space-x-3 overflow-hidden">
                     <div className="flex-shrink-0 h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-bold text-sm">
                         {client.name.substring(0,2).toUpperCase()}
@@ -187,22 +187,22 @@ const ClientList: React.FC = () => {
                     </div>
                 </div>
                 
-                {/* 3. Balance (Fixed alignment area) */}
-                <div className="text-right flex items-center justify-end min-w-[120px]">
+                {/* 3. Balance (Fixed width column) */}
+                <div className="text-right flex items-center justify-end">
                     <span className={`font-mono font-bold text-lg tracking-tight ${balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                         {balance > 0 ? '+' : ''}{balance.toLocaleString(undefined, {minimumFractionDigits: 2})}
                     </span>
                 </div>
                 
                 {/* 4. Actions / Chevron */}
-                <div className="flex items-center justify-end w-8">
-                    <div className="hidden group-hover:block absolute right-2 bg-white shadow-sm rounded-full p-1 border border-gray-100 animate-in fade-in zoom-in duration-200">
+                <div className="flex items-center justify-end relative h-8">
+                    <div className="hidden group-hover:flex absolute right-0 top-1/2 -translate-y-1/2 bg-white shadow-sm rounded-full border border-gray-100 p-1 animate-in fade-in zoom-in duration-200">
                          <button 
                             onClick={(e) => requestDelete(e, client.id)}
-                            className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                            className="p-1.5 text-red-500 hover:bg-red-50 rounded-full transition-colors"
                             title="Delete Client"
                         >
-                            <Trash2 size={16} />
+                            <Trash2 size={14} />
                         </button>
                     </div>
                     <ChevronRight className="text-gray-300 group-hover:invisible" size={20} />
@@ -444,10 +444,10 @@ const ClientList: React.FC = () => {
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-0 md:gap-x-8">
                         <div className="flex flex-col border-r-0 md:border-r border-gray-100">
-                            {leftClients.map(renderClientRow)}
+                            {leftClients.map(c => <ClientGridRow key={c.id} client={c} />)}
                         </div>
                         <div className="flex flex-col">
-                            {rightClients.map(renderClientRow)}
+                            {rightClients.map(c => <ClientGridRow key={c.id} client={c} />)}
                         </div>
                     </div>
                 )}

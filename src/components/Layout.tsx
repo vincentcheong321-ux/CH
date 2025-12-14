@@ -83,7 +83,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
                     : 'text-gray-400 hover:bg-slate-800 hover:text-white'}
                 `}
               >
-                {/* If chineseChar exists, render it as a badge/icon replacement */}
+                {/* If chineseChar exists, render it as text replacement for icon */}
                 {item.chineseChar ? (
                     <div className={`
                         mr-3 flex items-center justify-center w-5 h-5 
