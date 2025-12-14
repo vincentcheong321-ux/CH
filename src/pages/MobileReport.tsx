@@ -1,11 +1,10 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { ArrowLeft, RefreshCw, Save, CheckCircle, AlertCircle, History, FileText, Loader2, Image as ImageIcon, Upload } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Save, CheckCircle, AlertCircle, History, FileText, Loader2, Image as ImageIcon } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getClients, saveSaleRecord, saveMobileReportHistory, getMobileReportHistory } from '../services/storageService';
 import { Client } from '../types';
 import { getWeeksForMonth, MONTH_NAMES } from '../utils/reportUtils';
-import { GoogleGenAI } from "@google/genai";
 
 const MobileReport: React.FC = () => {
   const navigate = useNavigate();
@@ -18,7 +17,6 @@ const MobileReport: React.FC = () => {
   const [history, setHistory] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'import' | 'history'>('import');
   const [isSaving, setIsSaving] = useState(false);
-  const [isProcessingImage, setIsProcessingImage] = useState(false);
   
   // Date Selection State for Saving
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -89,67 +87,6 @@ const MobileReport: React.FC = () => {
     }
     setParsedData(data);
     setSaveStatus({ type: null, message: '' });
-  };
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (!e.target.files || e.target.files.length === 0) return;
-      
-      const file = e.target.files[0];
-      setIsProcessingImage(true);
-      setSaveStatus({ type: null, message: '' });
-
-      try {
-          // Convert to Base64
-          const reader = new FileReader();
-          reader.readAsDataURL(file);
-          reader.onload = async () => {
-              const base64String = (reader.result as string).split(',')[1];
-              
-              const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-              const prompt = `
-                Analyze this image of a financial report table.
-                Extract all data rows into a strictly valid JSON array of objects.
-                Each object must have:
-                - "id": The client code found in the first column (e.g. "2839").
-                - "name": The client name found in the first column (e.g. "印").
-                - "values": An array of strings containing all the numerical values in the row, in exact order from left to right (Member stats, Company stats, Shareholder stats, Agent stats). Preserve commas and formatting.
-                
-                Exclude header rows. Return ONLY the JSON.
-              `;
-
-              const response = await ai.models.generateContent({
-                  model: 'gemini-2.5-flash',
-                  contents: {
-                      parts: [
-                          { inlineData: { mimeType: file.type, data: base64String } },
-                          { text: prompt }
-                      ]
-                  }
-              });
-
-              let jsonText = response.text || '';
-              // Clean up markdown code blocks if present
-              jsonText = jsonText.replace(/```json/g, '').replace(/```/g, '').trim();
-              
-              try {
-                  const jsonData = JSON.parse(jsonText);
-                  if (Array.isArray(jsonData)) {
-                      setParsedData(jsonData);
-                      setSaveStatus({ type: 'success', message: `Successfully extracted ${jsonData.length} rows from image.` });
-                  } else {
-                      throw new Error("Response is not an array");
-                  }
-              } catch (parseError) {
-                  console.error("JSON Parse Error:", parseError, jsonText);
-                  setSaveStatus({ type: 'error', message: 'Failed to parse AI response. Please try again or use text paste.' });
-              }
-              setIsProcessingImage(false);
-          };
-      } catch (error) {
-          console.error("AI Error:", error);
-          setSaveStatus({ type: 'error', message: 'Image processing failed.' });
-          setIsProcessingImage(false);
-      }
   };
 
   const handleClear = () => {
@@ -241,7 +178,7 @@ const MobileReport: React.FC = () => {
                     </Link>
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900">Mobile Report Importer</h1>
-                        <p className="text-gray-500 text-sm">Import via Copy-Paste or Image Analysis.</p>
+                        <p className="text-gray-500 text-sm">Import via Copy-Paste.</p>
                     </div>
                 </div>
                 
@@ -292,13 +229,6 @@ const MobileReport: React.FC = () => {
                             <RefreshCw size={16} className="mr-2" /> Text Parse
                         </button>
 
-                        {/* Image Upload Button */}
-                        <label className={`px-4 py-2 text-sm font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-lg flex items-center cursor-pointer transition-all ${isProcessingImage ? 'opacity-70 pointer-events-none' : ''}`}>
-                            {isProcessingImage ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Upload size={16} className="mr-2" />}
-                            {isProcessingImage ? 'Analyzing...' : 'Upload Image'}
-                            <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
-                        </label>
-
                         {parsedData.length > 0 && (
                             <button 
                                 onClick={handleSaveToSystem} 
@@ -319,29 +249,16 @@ const MobileReport: React.FC = () => {
                     )}
 
                     {parsedData.length === 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200 text-center flex flex-col items-center justify-center">
-                                <div className="w-16 h-16 bg-purple-50 rounded-full flex items-center justify-center text-purple-600 mb-4">
-                                    <ImageIcon size={32} />
-                                </div>
-                                <h3 className="text-lg font-bold text-gray-800">Upload Screenshot</h3>
-                                <p className="text-gray-500 text-sm max-w-xs mx-auto mt-2 mb-4">
-                                    Take a screenshot of the report table and upload it. AI will automatically extract the data for you.
-                                </p>
-                                <label className="px-6 py-3 bg-purple-100 text-purple-700 font-bold rounded-lg cursor-pointer hover:bg-purple-200 transition-colors">
-                                    Choose Image
-                                    <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
-                                </label>
-                            </div>
-
+                        <div className="grid grid-cols-1">
                             <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200 flex flex-col">
-                                <h3 className="text-sm font-bold text-gray-800 mb-2 uppercase tracking-wide">Or Paste Text</h3>
+                                <h3 className="text-sm font-bold text-gray-800 mb-2 uppercase tracking-wide">Paste Report Text</h3>
+                                <p className="text-xs text-gray-400 mb-4">Copy the table from your spreadsheet or report and paste it here.</p>
                                 <textarea 
                                     className="flex-1 w-full p-4 border border-gray-300 rounded-lg font-mono text-xs focus:ring-2 focus:ring-purple-500 focus:outline-none bg-gray-50 resize-none"
                                     placeholder="Paste excel/text content here..."
                                     value={inputText}
                                     onChange={(e) => setInputText(e.target.value)}
-                                    style={{ minHeight: '200px' }}
+                                    style={{ minHeight: '300px' }}
                                 />
                             </div>
                         </div>

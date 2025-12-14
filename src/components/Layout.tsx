@@ -71,6 +71,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
+            
             return (
               <Link
                 key={item.path}
@@ -83,18 +84,17 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
                     : 'text-gray-400 hover:bg-slate-800 hover:text-white'}
                 `}
               >
-                {/* If chineseChar exists, render it as text replacement for icon */}
                 {item.chineseChar ? (
-                    <div className={`
+                   <div className={`
                         mr-3 flex items-center justify-center w-5 h-5 
                         font-bold leading-none transition-colors
-                        ${item.chineseChar.length > 1 ? 'text-[10px]' : 'text-lg'}
+                        ${item.chineseChar.length > 1 ? 'text-[11px]' : 'text-lg'}
                         ${isActive ? 'text-white' : 'text-gray-400 group-hover:text-white'}
-                    `}>
-                        {item.chineseChar}
-                    </div>
+                   `}>
+                       {item.chineseChar}
+                   </div>
                 ) : (
-                    <Icon size={20} className="mr-3" />
+                   <Icon size={20} className="mr-3" />
                 )}
                 <span className="font-medium">{item.label}</span>
               </Link>
