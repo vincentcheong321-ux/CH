@@ -121,7 +121,7 @@ const MobileReport: React.FC = () => {
               const lastValStr = row.values[row.values.length - 1];
               const val = parseFloat(lastValStr.replace(/,/g, ''));
 
-              // Extract extra details
+              // Extract extra details (Keep legacy for now)
               const mobileRaw = {
                   memberBet: row.values[0] || '0',
                   companyTotal: row.values[7] || '0',
@@ -135,7 +135,8 @@ const MobileReport: React.FC = () => {
                       date: targetDate,
                       b: val, 
                       s: 0, a: 0, c: 0,
-                      mobileRaw // Save detailed data
+                      mobileRaw, // Save detailed legacy data
+                      mobileRawData: row.values // Save FULL raw data array
                   });
                   matchedCount++;
               }

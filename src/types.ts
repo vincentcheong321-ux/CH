@@ -65,12 +65,15 @@ export interface SaleRecord {
   s: number;
   a: number;
   c: number;
+  // Specific extracted fields (Legacy support)
   mobileRaw?: {
       memberBet: string;
       companyTotal: string;
       shareholderTotal: string;
       agentTotal: string;
   };
+  // Full raw row data from the report for detailed display
+  mobileRawData?: any[];
 }
 
 export interface CashAdvanceRecord {

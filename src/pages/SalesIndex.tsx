@@ -77,33 +77,56 @@ const CompositeInput = React.memo(({
     );
 });
 
-// --- Mobile Table Row Component ---
-const MobileTableRow = React.memo(({ 
+// --- Detailed Mobile Table Row ---
+const DetailedMobileTableRow = React.memo(({ 
     client, 
-    record,
-    total 
+    record
 }: { 
     client: Client, 
-    record?: SaleRecord,
-    total: number 
+    record?: SaleRecord
 }) => {
-    // Determine detailed values (Use Raw if available, otherwise 0/empty)
-    const memBet = record?.mobileRaw?.memberBet || '-';
-    const compTotal = record?.mobileRaw?.companyTotal || '-';
-    const shareTotal = record?.mobileRaw?.shareholderTotal || '-';
-    // Use the calculated 'total' for the Net column which maps to Agent Total usually
-    const agentTotal = total !== 0 ? total.toLocaleString(undefined, {minimumFractionDigits: 2}) : '-';
+    // Determine values from FULL raw array if available
+    const raw = record?.mobileRawData;
+    
+    // Fallback to legacy structure or empty if no raw data
+    // Raw indices based on typical import format seen in MobileReport.tsx
+    const memBet = raw ? raw[0] : (record?.mobileRaw?.memberBet || '-');
+    const compTotal = raw ? raw[7] : (record?.mobileRaw?.companyTotal || '-');
+    const shareTotal = raw ? raw[13] : (record?.mobileRaw?.shareholderTotal || '-');
+    const agentTotal = raw ? raw[raw.length - 1] : (record?.mobileRaw?.agentTotal || '-');
+
+    const getVal = (idx: number) => raw ? raw[idx] : '';
 
     return (
-        <tr className="hover:bg-purple-50/50 transition-colors border-b border-gray-100 last:border-0">
-            <td className="px-4 py-3">
+        <tr className="hover:bg-purple-50/50 transition-colors border-b border-gray-100 last:border-0 font-mono text-[10px] md:text-xs">
+            {/* 1. Client */}
+            <td className="px-2 py-3 text-left bg-white sticky left-0 z-10 border-r border-gray-200">
                 <div className="font-bold text-gray-900">{client.name}</div>
-                <div className="text-xs text-gray-500 font-mono">{client.code}</div>
+                <div className="text-[9px] text-gray-500">{client.code}</div>
             </td>
-            <td className="px-2 py-3 text-right text-gray-600 font-mono text-xs">{memBet}</td>
-            <td className="px-2 py-3 text-right text-blue-600 font-mono text-xs font-bold">{compTotal}</td>
-            <td className="px-2 py-3 text-right text-blue-600 font-mono text-xs font-bold">{shareTotal}</td>
-            <td className={`px-4 py-3 text-right font-mono font-bold ${total >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            {/* 2. Member */}
+            <td className="px-2 py-3 text-right bg-gray-50/30">{memBet}</td>
+            <td className="px-2 py-3 text-right text-gray-400">{getVal(1)}</td>
+            <td className="px-2 py-3 text-right border-r border-gray-100">{getVal(2)}</td>
+            {/* 3. Company */}
+            <td className="px-2 py-3 text-right">{getVal(3)}</td>
+            <td className="px-2 py-3 text-right">{getVal(4)}</td>
+            <td className="px-2 py-3 text-right">{getVal(5)}</td>
+            <td className="px-2 py-3 text-right">{getVal(6)}</td>
+            <td className="px-2 py-3 text-right font-bold text-blue-700 bg-blue-50/30 border-r border-gray-200">{compTotal}</td>
+            {/* 4. Shareholder */}
+            <td className="px-2 py-3 text-right">{getVal(8)}</td>
+            <td className="px-2 py-3 text-right">{getVal(9)}</td>
+            <td className="px-2 py-3 text-right">{getVal(10)}</td>
+            <td className="px-2 py-3 text-right">{getVal(11)}</td>
+            <td className="px-2 py-3 text-right">{getVal(12)}</td>
+            <td className="px-2 py-3 text-right font-bold text-blue-700 bg-blue-50/30 border-r border-gray-200">{shareTotal}</td>
+            {/* 5. Agent */}
+            <td className="px-2 py-3 text-right">{getVal(14)}</td>
+            <td className="px-2 py-3 text-right">{getVal(15)}</td>
+            <td className="px-2 py-3 text-right">{getVal(16)}</td>
+            <td className="px-2 py-3 text-right">{getVal(17)}</td>
+            <td className={`px-2 py-3 text-right font-extrabold bg-green-50 border-l-2 border-green-100 ${parseFloat(agentTotal?.replace(/,/g,'')) >= 0 ? 'text-green-700' : 'text-red-600'}`}>
                 {agentTotal}
             </td>
         </tr>
@@ -281,14 +304,13 @@ const SalesIndex: React.FC = () => {
     loadData();
   }, [loadData]);
 
-  // Handle updates for Paper Clients (Detailed B/S/A/C)
+  // Handle updates for Paper Clients
   const handleUpdate = useCallback(async (
       clientId: string, 
       dateStr: string, 
       f1: 'b'|'a', v1: number, 
       f2: 's'|'c', v2: number
     ) => {
-      
       setSalesData(prev => {
           const idx = prev.findIndex(r => r.clientId === clientId && r.date === dateStr);
           if (idx >= 0) {
@@ -342,22 +364,17 @@ const SalesIndex: React.FC = () => {
       }
   };
 
-  // Base Data Grouping
   const paperClients = useMemo(() => clients.filter(c => (c.category || 'paper') === 'paper'), [clients]);
   const mobileClients = useMemo(() => clients.filter(c => c.category === 'mobile'), [clients]);
 
-  // Split Logic for Side-by-Side View
   const { zClients, cClients } = useMemo(() => {
       const zList = paperClients.filter(c => PAPER_Z_CODES.includes(c.code.toUpperCase()));
       const cList = paperClients.filter(c => PAPER_C_CODES.includes(c.code.toUpperCase()));
-      
       zList.sort((a,b) => PAPER_Z_CODES.indexOf(a.code.toUpperCase()) - PAPER_Z_CODES.indexOf(b.code.toUpperCase()));
       cList.sort((a,b) => PAPER_C_CODES.indexOf(a.code.toUpperCase()) - PAPER_C_CODES.indexOf(b.code.toUpperCase()));
-
       return { zClients: zList, cClients: cList };
   }, [paperClients]);
 
-  // Mobile Filtered list
   const filteredMobileClients = mobileClients.filter(c => 
       c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
       c.code.toLowerCase().includes(searchTerm.toLowerCase())
@@ -381,14 +398,11 @@ const SalesIndex: React.FC = () => {
      }
   }, [sortedWeekKeys, selectedWeekNum]);
 
-  // Helper to get formatted week date range
   const getWeekRangeLabel = (weekNum: number) => {
       const days = weeksData[weekNum];
       if (!days || days.length === 0) return '';
-      
       const firstDay = new Date(currentYear, currentMonth, days[0]);
       const lastDay = new Date(currentYear, currentMonth, days[days.length - 1]);
-      
       const formatDate = (d: Date) => `${String(d.getDate()).padStart(2, '0')} ${MONTH_NAMES[d.getMonth()].slice(0,3)}`;
       return `${formatDate(firstDay)} - ${formatDate(lastDay)}`;
   };
@@ -418,7 +432,6 @@ const SalesIndex: React.FC = () => {
                     </button>
                  </div>
                  
-                 {/* Distinct Total Displays based on Tab */}
                  <div className="hidden lg:flex items-center space-x-6 ml-6 pl-6 border-l border-gray-200">
                     <div className={`transition-opacity duration-300 ${activeTab === 'paper' ? 'opacity-100' : 'opacity-40'}`}>
                         <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Paper Week Total</p>
@@ -482,7 +495,6 @@ const SalesIndex: React.FC = () => {
                     ))}
                 </div>
                 
-                {/* Refresh Button */}
                 <button onClick={loadData} className="ml-auto p-2 text-gray-400 hover:text-blue-600 hover:bg-gray-100 rounded-full" title="Refresh Data">
                     <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
                 </button>
@@ -497,9 +509,8 @@ const SalesIndex: React.FC = () => {
             <div className="max-w-[1600px] mx-auto pb-20">
                 
                 {activeTab === 'paper' ? (
-                    // Paper View: Split Layout
+                    // Paper View
                     <div className="flex flex-col lg:flex-row gap-6">
-                        {/* Z Series Column */}
                         <div className="flex-1 bg-white/50 p-4 rounded-xl border border-dashed border-gray-300">
                             <h2 className="text-lg font-bold text-gray-700 mb-4 px-2 border-b border-gray-200 pb-2">Z Series</h2>
                             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -516,7 +527,6 @@ const SalesIndex: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* C Series Column */}
                         <div className="flex-1 bg-white/50 p-4 rounded-xl border border-dashed border-gray-300">
                             <h2 className="text-lg font-bold text-gray-700 mb-4 px-2 border-b border-gray-200 pb-2">C Series</h2>
                             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -534,42 +544,50 @@ const SalesIndex: React.FC = () => {
                         </div>
                     </div>
                 ) : (
-                    // Mobile View: Detailed Table
+                    // Mobile View: Fully Detailed Table
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                         <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse">
-                                <thead className="bg-gray-100 text-xs font-bold text-gray-600 uppercase tracking-wider border-b border-gray-200">
+                            <table className="w-full text-left border-collapse text-xs whitespace-nowrap">
+                                <thead className="bg-gray-100 font-bold text-gray-700">
                                     <tr>
-                                        <th className="px-4 py-3">Client</th>
-                                        <th className="px-2 py-3 text-right">Member Bet</th>
-                                        <th className="px-2 py-3 text-right">Company Total</th>
-                                        <th className="px-2 py-3 text-right">Shareholder Total</th>
-                                        <th className="px-4 py-3 text-right">Agent (Net) Total</th>
+                                        <th className="px-2 py-3 sticky left-0 bg-gray-100 z-10 border-r border-gray-200">登陆帐号 / 名字</th>
+                                        <th className="px-2 py-3 bg-gray-50/50">会员总投注</th>
+                                        <th className="px-2 py-3 bg-gray-50/50">会员总数</th>
+                                        <th className="px-2 py-3 bg-gray-50/50 border-r border-gray-200">tgmts</th>
+                                        <th className="px-2 py-3">公司 营业额</th>
+                                        <th className="px-2 py-3">公司 佣金</th>
+                                        <th className="px-2 py-3">公司 赔出</th>
+                                        <th className="px-2 py-3">公司 补费用</th>
+                                        <th className="px-2 py-3 font-extrabold bg-blue-50 text-blue-800 border-r border-gray-200">公司 总额</th>
+                                        <th className="px-2 py-3">股东 营业额</th>
+                                        <th className="px-2 py-3">股东 佣金</th>
+                                        <th className="px-2 py-3">股东 赔出</th>
+                                        <th className="px-2 py-3">股东 赢彩</th>
+                                        <th className="px-2 py-3">股东 补费用</th>
+                                        <th className="px-2 py-3 font-extrabold bg-blue-50 text-blue-800 border-r border-gray-200">股东 总额</th>
+                                        <th className="px-2 py-3">总代理 营业额</th>
+                                        <th className="px-2 py-3">总代理 佣金</th>
+                                        <th className="px-2 py-3">总代理 赔出</th>
+                                        <th className="px-2 py-3">总代理 抽费用</th>
+                                        <th className="px-2 py-3 font-extrabold bg-green-100 text-green-900 border-l-2 border-green-200">总代理 总额</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-100 text-sm">
+                                <tbody className="divide-y divide-gray-100">
                                     {filteredMobileClients.map(client => {
                                         const clientRecords = salesData.filter(r => r.clientId === client.id);
-                                        // Usually only one record per week for mobile, but if multiple, we take the latest or sum if logic dictates. 
-                                        // Assuming one main record per week for mobile report import.
-                                        // If there are multiple, 'total' sums them, but detailed columns need a single source of truth or careful summing.
-                                        // For now, let's take the LAST record of the week which likely holds the report data.
                                         const record = clientRecords[clientRecords.length - 1]; 
                                         
-                                        const total = clientRecords.reduce((acc, r) => acc + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
-                                        
                                         return (
-                                            <MobileTableRow
+                                            <DetailedMobileTableRow
                                                 key={client.id}
                                                 client={client}
                                                 record={record}
-                                                total={total}
                                             />
                                         );
                                     })}
                                     {filteredMobileClients.length === 0 && (
                                         <tr>
-                                            <td colSpan={5} className="text-center py-8 text-gray-400">No mobile clients found.</td>
+                                            <td colSpan={20} className="text-center py-8 text-gray-400">No mobile clients found.</td>
                                         </tr>
                                     )}
                                 </tbody>
@@ -581,7 +599,7 @@ const SalesIndex: React.FC = () => {
         )}
       </div>
 
-      {/* Sticky Mobile Footer Total (Visible only on Mobile Tab) */}
+      {/* Sticky Mobile Footer */}
       {activeTab === 'mobile' && (
         <div className="bg-purple-900 text-white p-4 sticky bottom-0 z-30 shadow-lg flex justify-between items-center lg:hidden">
             <div>

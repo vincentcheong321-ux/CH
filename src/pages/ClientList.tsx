@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Search, User, ChevronRight, Trash2, AlertTriangle, CheckSquare, Square, Printer, ArrowLeft, RefreshCw, ChevronLeft } from 'lucide-react';
-import { getClients, saveClient, getClientBalance, deleteClient, getLedgerRecords, getNetAmount, seedInitialClients } from '../services/storageService';
+import { getClients, saveClient, deleteClient, getLedgerRecords, getNetAmount, fetchClientTotalBalance } from '../services/storageService';
 import { Client, LedgerRecord } from '../types';
 import { MONTH_NAMES, getWeeksForMonth, getWeekRangeString } from '../utils/reportUtils';
 
@@ -72,14 +72,14 @@ const ClientList: React.FC = () => {
         const paperClients = loadedClients.filter(c => (c.category || 'paper') === 'paper');
         setClients(paperClients);
 
-        // Fetch balances logic here is tricky with mixed Sync/Async.
-        // For now, we will skip pre-fetching expensive balances or update it later.
-        // Or we iterate and fetch (slow).
-        // Optimization: Let individual rows load balance or fetch bulk?
-        // Given current architecture, let's just fetch clients. Balance display might need separate handling or removal if too slow.
-        // For now, setting balances to 0 or skipping to avoid heavy async loop on main thread.
-        // If critical, implement getBalancesForClients(ids) in backend.
-        setBalances({}); 
+        // Fetch balances asynchronously
+        const balanceMap: Record<string, number> = {};
+        await Promise.all(paperClients.map(async (c) => {
+            const bal = await fetchClientTotalBalance(c.id);
+            balanceMap[c.id] = bal;
+        }));
+        setBalances(balanceMap);
+
     } catch (e) {
         console.error("Failed to load clients", e);
     } finally {
@@ -149,6 +149,7 @@ const ClientList: React.FC = () => {
 
   const renderClientRow = (client: Client) => {
     const isSelected = selectedClientIds.has(client.id);
+    const balance = balances[client.id] || 0;
     
     return (
         <div 
@@ -182,7 +183,15 @@ const ClientList: React.FC = () => {
                 {client.phone && <p className="text-sm text-gray-500 truncate">{client.phone}</p>}
                 </div>
             </div>
-            <div className="flex items-center space-x-2 md:space-x-4 mr-8 flex-shrink-0">
+            
+            <div className="flex flex-col items-end mr-8">
+                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Balance</span>
+                <span className={`font-mono font-bold ${balance >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    {balance >= 0 ? '$' : '-$'}{Math.abs(balance).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                </span>
+            </div>
+            
+            <div className="flex items-center space-x-2 md:space-x-4 flex-shrink-0">
                 <ChevronRight className="text-gray-300 group-hover:text-blue-500 transition-colors" size={20} />
             </div>
             </Link>

@@ -88,7 +88,7 @@ export const seedData = () => {
 // Updated to handle ALL types and map them to requested labels
 const mapJournalToLedgerRecord = (row: any): LedgerRecord => {
     const isAdd = row.amount >= 0; 
-    let baseRecord = {
+    let baseRecord: LedgerRecord = {
         id: row.id,
         clientId: row.client_id,
         date: row.entry_date,
@@ -105,34 +105,34 @@ const mapJournalToLedgerRecord = (row: any): LedgerRecord => {
         case 'SALE':
             // Sales Opening = 收
             baseRecord.typeLabel = '收';
-            baseRecord.id = `sale_${row.id}`; // Prefix to prevent ID collision if any
-            // If amount is positive (Client Lost), it's Add (Debt). If negative (Client Won), it's Subtract.
+            baseRecord.id = `sale_${row.id}`; // Prefix to identify system records
+            // If amount is positive (Client Lost/Owes), it's Add. If negative (Client Won), it's Subtract.
             baseRecord.operation = row.amount >= 0 ? 'add' : 'subtract';
+            baseRecord.column = 'main';
             break;
         
         case 'ADVANCE':
-            // Cash Advance = 支 (Usually means payout to client, increasing their debt)
+            // Cash Advance = 支 (Payout to client -> Increases Debt)
             baseRecord.typeLabel = '支';
             baseRecord.id = `adv_${row.id}`;
             baseRecord.operation = 'add';
-            baseRecord.column = 'col1'; // Force advances to Panel 1 usually
+            baseRecord.column = 'col1'; // Advances often in Panel 1
             break;
 
         case 'CREDIT':
-            // Cash Credit = 来 (Income from client, reducing their debt)
+            // Cash Credit = 来 (Income from client -> Reduces Debt)
             baseRecord.typeLabel = '来';
             baseRecord.id = `cred_${row.id}`;
             baseRecord.operation = 'subtract';
-            baseRecord.column = 'col1'; // Force credits to Panel 1 usually
+            baseRecord.column = 'col1'; // Credits often in Panel 1
             break;
 
         case 'DRAW':
-            // Draw Report = 上欠 (Previous Balance brought forward)
+            // Draw Report = 上欠 (Balance Forward)
             baseRecord.typeLabel = '上欠';
             baseRecord.id = `draw_${row.id}`;
-            // Draws are usually absolute balances, so we treat positive as debt (Add)
             baseRecord.operation = row.amount >= 0 ? 'add' : 'subtract'; 
-            baseRecord.column = 'main'; // Usually main ledger
+            baseRecord.column = 'main';
             break;
             
         case 'MANUAL':
@@ -146,7 +146,7 @@ const mapJournalToLedgerRecord = (row: any): LedgerRecord => {
 
 export const getLedgerRecords = async (clientId: string): Promise<LedgerRecord[]> => {
     if (supabase) {
-        // Fetch ALL types for this client
+        // Fetch ALL types for this client (Removed entry_type filter)
         const { data } = await supabase
             .from('financial_journal')
             .select('*')
@@ -194,10 +194,9 @@ export const saveLedgerRecord = async (record: Omit<LedgerRecord, 'id'>): Promis
 
 export const updateLedgerRecord = async (id: string, updates: Partial<LedgerRecord>) => {
     if (supabase) {
-        // Only allow updating MANUAL records via this method generally
-        // Check if ID is prefixed (system record)
+        // Prevent updating system records via ledger
         if (id.startsWith('sale_') || id.startsWith('adv_') || id.startsWith('draw_') || id.startsWith('cred_')) {
-            console.warn("Cannot update system record via generic ledger update");
+            console.warn("System record update blocked in ledger view");
             return;
         }
 
@@ -233,9 +232,9 @@ export const updateLedgerRecord = async (id: string, updates: Partial<LedgerReco
 
 export const deleteLedgerRecord = async (id: string) => {
     if (supabase) {
-        // Prevent deleting system records via ledger view
+        // Prevent deleting system records via ledger
         if (id.startsWith('sale_') || id.startsWith('adv_') || id.startsWith('draw_') || id.startsWith('cred_')) {
-             console.warn("Cannot delete system record via generic ledger delete");
+             console.warn("System record delete blocked in ledger view");
              return;
         }
         await supabase.from('financial_journal').delete().eq('id', id);
@@ -260,7 +259,8 @@ export const getSaleRecords = async (clientId: string): Promise<SaleRecord[]> =>
             s: row.data?.s || 0,
             a: row.data?.a || 0,
             c: row.data?.c || 0,
-            mobileRaw: row.data?.mobileRaw
+            mobileRaw: row.data?.mobileRaw,
+            mobileRawData: row.data?.mobileRawData // Retrieve full array
         }));
     }
     return [];
@@ -282,7 +282,8 @@ export const getSalesForDates = async (dates: string[]): Promise<SaleRecord[]> =
             s: row.data?.s || 0,
             a: row.data?.a || 0,
             c: row.data?.c || 0,
-            mobileRaw: row.data?.mobileRaw
+            mobileRaw: row.data?.mobileRaw,
+            mobileRawData: row.data?.mobileRawData
         }));
     }
     return [];
@@ -303,9 +304,13 @@ export const saveSaleRecord = async (record: Omit<SaleRecord, 'id'>) => {
                  ...existing.data, // Preserve existing data 
                  b: record.b, s: record.s, a: record.a, c: record.c 
              };
-             // Only update mobileRaw if provided (not undefined)
+             // Only update mobileRaw if provided
              if (record.mobileRaw !== undefined) {
                  newData.mobileRaw = record.mobileRaw;
+             }
+             // Update full raw data array if provided
+             if (record.mobileRawData !== undefined) {
+                 newData.mobileRawData = record.mobileRawData;
              }
 
              await supabase.from('financial_journal').update({
@@ -320,7 +325,8 @@ export const saveSaleRecord = async (record: Omit<SaleRecord, 'id'>) => {
                 amount: netAmount,
                 data: { 
                     b: record.b, s: record.s, a: record.a, c: record.c,
-                    mobileRaw: record.mobileRaw
+                    mobileRaw: record.mobileRaw,
+                    mobileRawData: record.mobileRawData
                 }
              });
         }
