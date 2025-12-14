@@ -364,25 +364,50 @@ export const getSaleRecords = async (clientId: string): Promise<SaleRecord[]> =>
     .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 };
 
+// New: Bulk fetch for weekly view
+export const getSalesForDates = async (dates: string[]): Promise<SaleRecord[]> => {
+    if (dates.length === 0) return [];
+
+    if (supabase) {
+        const { data, error } = await supabase
+            .from('sales')
+            .select('*')
+            .in('date', dates);
+        
+        if (!error && data) {
+            return data.map((r: any) => ({
+                id: r.id,
+                clientId: r.client_id,
+                date: r.date,
+                b: Number(r.b),
+                s: Number(r.s),
+                a: Number(r.a),
+                c: Number(r.c)
+            }));
+        }
+    }
+
+    const data = localStorage.getItem(SALES_KEY);
+    const allRecords: SaleRecord[] = data ? JSON.parse(data) : [];
+    return allRecords.filter(r => dates.includes(r.date));
+};
+
 export const saveSaleRecord = async (record: Omit<SaleRecord, 'id'>): Promise<SaleRecord> => {
   const newRecordPart = { ...record };
   
   if (supabase) {
-      // Check if record exists for this date/client first? 
-      // Or relies on ID?
-      // Since the UI doesn't pass ID for new records, we might want to check overlap or just insert.
-      // But typically for daily records we might want upsert by date?
-      // For now, simple insert as per requirement.
+      // Upsert logic for Supabase (requires unique constraint on client_id + date)
+      // If no unique constraint, manual check is needed, but let's assume one exists or simple insert
       const { data, error } = await supabase
         .from('sales')
-        .insert([{
+        .upsert({
             client_id: record.clientId,
             date: record.date,
             b: record.b,
             s: record.s,
             a: record.a,
             c: record.c
-        }])
+        }, { onConflict: 'client_id,date' }) // Assumes composite key
         .select();
 
       if (!error && data && data[0]) {
@@ -403,10 +428,6 @@ export const saveSaleRecord = async (record: Omit<SaleRecord, 'id'>): Promise<Sa
   const data = localStorage.getItem(SALES_KEY);
   const allRecords: SaleRecord[] = data ? JSON.parse(data) : [];
   
-  // Check if record exists for this date, if so, overwrite/update
-  // Note: The UI in ClientSales currently treats "Save" as "Add New" mostly, 
-  // but if we want to prevent duplicates for same day, we should check.
-  // The local implementation does a check.
   const existingIndex = allRecords.findIndex(r => r.clientId === record.clientId && r.date === record.date);
   
   let newRecord: SaleRecord;
