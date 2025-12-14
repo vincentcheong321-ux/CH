@@ -269,7 +269,7 @@ const DrawReport: React.FC = () => {
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col flex-1 relative">
                     {/* Header */}
                     <div className="bg-gray-50 p-4 border-b border-gray-200 sticky top-0 z-10">
-                        <div className="flex justify-between items-center mb-4">
+                        <div className="flex justify-between items-center">
                             <div>
                                 <h2 className="text-xl font-bold text-gray-900 flex items-center">
                                     <Layers size={20} className="mr-2 text-blue-600" />
@@ -283,29 +283,7 @@ const DrawReport: React.FC = () => {
                                 <Save size={14} className="mr-1" /> Auto-saves on exit
                             </div>
                         </div>
-
-                        {/* Week Selection Pills */}
-                        <div className="flex space-x-2 bg-gray-200 p-1 rounded-lg w-fit overflow-x-auto max-w-full">
-                            {sortedWeekNums.map((weekNum, idx) => {
-                                const days = currentMonthWeeks[weekNum];
-                                const firstDay = days[0];
-                                const isActive = weekNum.toString() === activeWeekNum;
-                                return (
-                                    <button
-                                        key={weekNum}
-                                        onClick={() => handleDateClick(firstDay)}
-                                        className={`
-                                            px-4 py-1.5 rounded-md text-sm font-bold transition-all whitespace-nowrap
-                                            ${isActive 
-                                                ? 'bg-white text-blue-600 shadow-sm' 
-                                                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}
-                                        `}
-                                    >
-                                        Week {idx + 1}
-                                    </button>
-                                );
-                            })}
-                        </div>
+                        {/* Note: Week pills removed from here as requested. Use sidebar for selection. */}
                     </div>
 
                     {loading ? (

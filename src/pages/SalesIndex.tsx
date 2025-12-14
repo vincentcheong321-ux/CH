@@ -259,14 +259,22 @@ const SalesIndex: React.FC = () => {
   const weeksData = useMemo(() => getWeeksForMonth(currentYear, currentMonth), [currentYear, currentMonth]);
   const activeDays = weeksData[selectedWeekNum] || [];
   
+  // Strict Filtering for 4 days: Tue(2), Wed(3), Sat(6), Sun(0)
   const activeDateStrings = useMemo(() => 
-      activeDays.map(d => {
-        const dateObj = new Date(currentYear, currentMonth, d);
-        const y = dateObj.getFullYear();
-        const m = String(dateObj.getMonth() + 1).padStart(2, '0');
-        const day = String(dateObj.getDate()).padStart(2, '0');
-        return `${y}-${m}-${day}`;
-      }),
+      activeDays
+        .filter(d => {
+            const dateObj = new Date(currentYear, currentMonth, d);
+            const day = dateObj.getDay();
+            // FILTER: Only Tuesday, Wednesday, Saturday, Sunday
+            return [0, 2, 3, 6].includes(day);
+        })
+        .map(d => {
+            const dateObj = new Date(currentYear, currentMonth, d);
+            const y = dateObj.getFullYear();
+            const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            return `${y}-${m}-${day}`;
+        }),
   [activeDays, currentYear, currentMonth]);
 
   const loadData = useCallback(async () => {
