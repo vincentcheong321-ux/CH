@@ -107,6 +107,69 @@ const ClientList: React.FC = () => {
     c.code.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // --- Layout Calculation ---
+  const midPoint = Math.ceil(filteredClients.length / 2);
+  const leftClients = filteredClients.slice(0, midPoint);
+  const rightClients = filteredClients.slice(midPoint);
+
+  const renderClientRow = (client: Client) => {
+    const isSelected = selectedClientIds.has(client.id);
+    return (
+        <div 
+            key={client.id}
+            className={`flex items-center justify-between p-4 hover:bg-gray-50 transition-colors group relative ${isSelected ? 'bg-blue-50/50' : ''}`}
+        >
+            {/* Row Checkbox */}
+            <button 
+                onClick={(e) => toggleSelectOne(e, client.id)} 
+                className="p-2 mr-2 text-gray-400 hover:text-gray-600 z-10"
+            >
+                {isSelected ? <CheckSquare size={20} className="text-blue-600" /> : <Square size={20} />}
+            </button>
+
+            <Link 
+            to={`/clients/${client.id}`}
+            className="flex-1 flex items-center justify-between min-w-0" // min-w-0 ensures flex child shrinks correctly
+            >
+            <div className="flex items-center space-x-3 min-w-0">
+                <div className="flex-shrink-0 h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600">
+                <User size={20} />
+                </div>
+                <div className="min-w-0">
+                <div className="flex items-center space-x-2">
+                    <h3 className="font-semibold text-gray-900 truncate">{client.name}</h3>
+                    {client.code && (
+                    <span className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600 font-mono flex-shrink-0">
+                        {client.code}
+                    </span>
+                    )}
+                </div>
+                {client.phone && <p className="text-sm text-gray-500 truncate">{client.phone}</p>}
+                </div>
+            </div>
+            <div className="flex items-center space-x-2 md:space-x-4 mr-8 flex-shrink-0">
+                <div className="text-right">
+                <p className="text-[10px] text-gray-500 uppercase">Balance</p>
+                <p className={`font-bold text-sm md:text-base ${balances[client.id] >= 0 ? 'text-blue-600' : 'text-green-600'}`}>
+                    {balances[client.id] >= 0 ? 'Owes' : 'Cr'}: ${Math.abs(balances[client.id] || 0).toLocaleString()}
+                </p>
+                </div>
+                <ChevronRight className="text-gray-300 group-hover:text-blue-500 transition-colors" size={20} />
+            </div>
+            </Link>
+            
+            {/* Delete Button */}
+            <button 
+            onClick={(e) => requestDelete(e, client.id)}
+            className="absolute right-2 p-2 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-full transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
+            title="Delete Client"
+            >
+            <Trash2 size={18} />
+            </button>
+        </div>
+    );
+  };
+
   // --- Bulk Print View Logic ---
 
   const handlePrint = () => {
@@ -281,68 +344,23 @@ const ClientList: React.FC = () => {
         {loading ? (
              <div className="p-8 text-center text-gray-500">Loading clients...</div>
         ) : (
-            <div className="divide-y divide-gray-100">
-            {filteredClients.length === 0 ? (
-                <div className="p-8 text-center text-gray-500">No clients found.</div>
-            ) : (
-                filteredClients.map(client => {
-                const isSelected = selectedClientIds.has(client.id);
-                return (
-                <div 
-                    key={client.id}
-                    className={`flex items-center justify-between p-4 hover:bg-gray-50 transition-colors group relative ${isSelected ? 'bg-blue-50/50' : ''}`}
-                >
-                    {/* Row Checkbox */}
-                    <button 
-                        onClick={(e) => toggleSelectOne(e, client.id)} 
-                        className="p-2 mr-2 text-gray-400 hover:text-gray-600 z-10"
-                    >
-                        {isSelected ? <CheckSquare size={20} className="text-blue-600" /> : <Square size={20} />}
-                    </button>
-
-                    <Link 
-                    to={`/clients/${client.id}`}
-                    className="flex-1 flex items-center justify-between"
-                    >
-                    <div className="flex items-center space-x-4">
-                        <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600">
-                        <User size={20} />
+            <>
+                {filteredClients.length === 0 ? (
+                    <div className="p-8 text-center text-gray-500">No clients found.</div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-0">
+                        {/* Column 1 */}
+                        <div className="flex flex-col divide-y divide-gray-100">
+                            {leftClients.map(renderClientRow)}
                         </div>
-                        <div>
-                        <div className="flex items-center space-x-2">
-                            <h3 className="font-semibold text-gray-900">{client.name}</h3>
-                            {client.code && (
-                            <span className="px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600 font-mono">
-                                {client.code}
-                            </span>
-                            )}
-                        </div>
-                        {client.phone && <p className="text-sm text-gray-500">{client.phone}</p>}
+                        
+                        {/* Column 2 */}
+                        <div className="flex flex-col divide-y divide-gray-100 border-t md:border-t-0 border-gray-100 pt-4 md:pt-0">
+                            {rightClients.map(renderClientRow)}
                         </div>
                     </div>
-                    <div className="flex items-center space-x-6 mr-10">
-                        <div className="text-right">
-                        <p className="text-xs text-gray-500 uppercase">Current Balance</p>
-                        <p className={`font-bold ${balances[client.id] >= 0 ? 'text-blue-600' : 'text-green-600'}`}>
-                            {balances[client.id] >= 0 ? 'Owes' : 'Credit'}: ${Math.abs(balances[client.id] || 0).toLocaleString()}
-                        </p>
-                        </div>
-                        <ChevronRight className="text-gray-300 group-hover:text-blue-500 transition-colors" size={20} />
-                    </div>
-                    </Link>
-                    
-                    {/* Delete Button */}
-                    <button 
-                    onClick={(e) => requestDelete(e, client.id)}
-                    className="absolute right-4 p-2 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-full transition-all"
-                    title="Delete Client"
-                    >
-                    <Trash2 size={18} />
-                    </button>
-                </div>
-                )})
-            )}
-            </div>
+                )}
+            </>
         )}
       </div>
 
