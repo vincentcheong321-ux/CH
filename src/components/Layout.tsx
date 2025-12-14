@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
@@ -31,7 +30,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
     { path: '/sales', label: 'Sales Opening', icon: FileText, chineseChar: '收' },
     { path: '/cash-advance', label: 'Cash Advance', icon: Banknote, chineseChar: '支' },
     { path: '/cash-credit', label: 'Cash Credit', icon: CreditCard, chineseChar: '来' },
-    { path: '/draw-report', label: 'Draw Reports', icon: Calendar, chineseChar: '上欠' },
+    { path: '/draw-report', label: 'Draw Reports', icon: Calendar, chineseChar: '欠' },
     { path: '/cashflow', label: 'Company Cash Flow', icon: ArrowRightLeft },
     { path: '/summary', label: 'Total Balance Summary', icon: PieChart },
   ];
