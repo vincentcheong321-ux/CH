@@ -27,7 +27,7 @@ export const DRAW_DATES: Record<number, { w: number[], s1: number[], s2: number[
 
 // 2026 Configuration
 export const DRAW_DATES_2026: Record<number, { w: number[], s1: number[], s2: number[], t: number[] }> = {
-  0: { w: [7,14,21,28], s1: [3,10,17,24,31], s2: [4,11,18,25,32], t: [] }, // JAN (32=Feb1)
+  0: { w: [7,14,21,28], s1: [3,10,17,24,31], s2: [4,11,18,25,32], t: [1, 27] }, // JAN (1=NewYear, 27=Tue, 32=Feb1)
   1: { w: [4,11,18,25], s1: [7,14,21,28], s2: [8,15,22,29], t: [] }, // FEB (1 removed. 29=Mar1)
   2: { w: [4,11,18,25], s1: [7,14,21,28], s2: [8,15,22,29], t: [] }, // MAR (1 removed. Ends cleanly)
   3: { w: [1,8,15,22,29], s1: [4,11,18,25,32], s2: [5,12,19,26,33], t: [] }, // APR (32=May2, 33=May3)
