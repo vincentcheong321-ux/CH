@@ -18,7 +18,7 @@ const CashAdvanceInputRow = React.memo(({ client, value, onChange, onBlur }: {
     return (
         <div className="flex items-center justify-between p-3 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
             <div className="flex-1">
-                <div className="font-bold text-gray-800 text-sm">{client.name}</div>
+                <div className="font-bold text-gray-800 text-base">{client.name}</div>
                 <div className="text-xs text-gray-500 font-mono">{client.code}</div>
             </div>
             <div className="w-40 relative">

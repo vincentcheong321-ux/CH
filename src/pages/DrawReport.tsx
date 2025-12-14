@@ -19,7 +19,7 @@ const ClientInputRow = React.memo(({ client, value, onChange, onBlur }: {
     return (
         <div className="flex items-center justify-between p-3 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
             <div className="flex-1">
-                <div className="font-bold text-gray-800 text-sm">{client.name}</div>
+                <div className="font-bold text-gray-800 text-base">{client.name}</div>
                 <div className="text-xs text-gray-500 font-mono">{client.code}</div>
             </div>
             <div className="w-40">
@@ -164,7 +164,7 @@ const DrawReport: React.FC = () => {
           // Allow spinner to show for at least 800ms so user sees it
           await new Promise(r => setTimeout(r, 800));
           
-          window.alert("Balances generated successfully!");
+          // Alert removed as requested - overlay will just close
       } catch (e) {
           console.error("Failed to generate balances", e);
           alert("Error generating balances. Please try again.");
