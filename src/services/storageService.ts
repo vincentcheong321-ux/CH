@@ -335,20 +335,78 @@ export const updateLedgerRecord = (id: string, updates: Partial<LedgerRecord>) =
 
 // --- Sale Records (New Feature) ---
 
-export const getSaleRecords = (clientId: string): SaleRecord[] => {
+export const getSaleRecords = async (clientId: string): Promise<SaleRecord[]> => {
   if (supabase) {
-    // Supabase implementation placeholder
+    const { data, error } = await supabase
+      .from('sales')
+      .select('*')
+      .eq('client_id', clientId)
+      .order('date', { ascending: false });
+
+    if (!error && data) {
+      return data.map((r: any) => ({
+          ...r,
+          clientId: r.client_id,
+          // Ensure numbers are numbers, not strings from DB
+          b: Number(r.b),
+          s: Number(r.s),
+          a: Number(r.a),
+          c: Number(r.c)
+      }));
+    }
+    console.error('Supabase fetch sales error:', error);
   }
+
   const data = localStorage.getItem(SALES_KEY);
   const allRecords: SaleRecord[] = data ? JSON.parse(data) : [];
-  return allRecords.filter(r => r.clientId === clientId).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  return allRecords
+    .filter(r => r.clientId === clientId)
+    .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 };
 
-export const saveSaleRecord = (record: Omit<SaleRecord, 'id'>): SaleRecord => {
+export const saveSaleRecord = async (record: Omit<SaleRecord, 'id'>): Promise<SaleRecord> => {
+  const newRecordPart = { ...record };
+  
+  if (supabase) {
+      // Check if record exists for this date/client first? 
+      // Or relies on ID?
+      // Since the UI doesn't pass ID for new records, we might want to check overlap or just insert.
+      // But typically for daily records we might want upsert by date?
+      // For now, simple insert as per requirement.
+      const { data, error } = await supabase
+        .from('sales')
+        .insert([{
+            client_id: record.clientId,
+            date: record.date,
+            b: record.b,
+            s: record.s,
+            a: record.a,
+            c: record.c
+        }])
+        .select();
+
+      if (!error && data && data[0]) {
+          const r = data[0];
+          return {
+              id: r.id,
+              clientId: r.client_id,
+              date: r.date,
+              b: Number(r.b),
+              s: Number(r.s),
+              a: Number(r.a),
+              c: Number(r.c)
+          };
+      }
+      console.error('Supabase save sales error:', error);
+  }
+
   const data = localStorage.getItem(SALES_KEY);
   const allRecords: SaleRecord[] = data ? JSON.parse(data) : [];
   
   // Check if record exists for this date, if so, overwrite/update
+  // Note: The UI in ClientSales currently treats "Save" as "Add New" mostly, 
+  // but if we want to prevent duplicates for same day, we should check.
+  // The local implementation does a check.
   const existingIndex = allRecords.findIndex(r => r.clientId === record.clientId && r.date === record.date);
   
   let newRecord: SaleRecord;
@@ -364,7 +422,12 @@ export const saveSaleRecord = (record: Omit<SaleRecord, 'id'>): SaleRecord => {
   return newRecord;
 };
 
-export const deleteSaleRecord = (id: string) => {
+export const deleteSaleRecord = async (id: string) => {
+  if (supabase) {
+      const { error } = await supabase.from('sales').delete().eq('id', id);
+      if (error) console.error('Supabase delete sales error:', error);
+  }
+
   const data = localStorage.getItem(SALES_KEY);
   const allRecords: SaleRecord[] = data ? JSON.parse(data) : [];
   const filtered = allRecords.filter(r => r.id !== id);

@@ -30,13 +30,14 @@ const ClientSales: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  const loadRecords = () => {
+  const loadRecords = async () => {
     if (id) {
-      setRecords(getSaleRecords(id));
+      const recs = await getSaleRecords(id);
+      setRecords(recs);
     }
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!id) return;
     
@@ -46,7 +47,7 @@ const ClientSales: React.FC = () => {
     const valA = a === '' ? 0 : parseFloat(a);
     const valC = c === '' ? 0 : parseFloat(c);
 
-    saveSaleRecord({
+    await saveSaleRecord({
         clientId: id,
         date: date,
         b: valB,
@@ -55,8 +56,7 @@ const ClientSales: React.FC = () => {
         c: valC
     });
 
-    // Reset inputs but keep date same for quick fixes or move to next day? 
-    // Usually moving to next entry is better, but let's just clear values.
+    // Reset inputs but keep date same for quick fixes
     setB('');
     setS('');
     setA('');
@@ -64,9 +64,9 @@ const ClientSales: React.FC = () => {
     loadRecords();
   };
 
-  const handleDelete = (recordId: string) => {
+  const handleDelete = async (recordId: string) => {
       if (confirm('Delete this record?')) {
-          deleteSaleRecord(recordId);
+          await deleteSaleRecord(recordId);
           loadRecords();
       }
   };
