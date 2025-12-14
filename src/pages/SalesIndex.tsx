@@ -103,42 +103,60 @@ const DetailedMobileTableRow = React.memo(({
         return '';
     };
 
-    // Calculate Agent Total Color (Last index 16)
-    const agentTotalVal = getVal(raw ? raw.length - 1 : 16);
-    const isPositive = parseFloat(String(agentTotalVal).replace(/,/g,'')) >= 0;
+    // Helper to format currency/number
+    const fmt = (val: string | number) => {
+        if (!val) return '';
+        const s = String(val);
+        // If it looks like a number, try to clean it? 
+        // The raw data usually comes pre-formatted from the input, but we can trust it for now.
+        return s;
+    };
+
+    // Calculate Colors for Totals
+    const get colorClass() {
+        return (val: string | number) => {
+            const num = parseFloat(String(val).replace(/,/g,''));
+            if (isNaN(num)) return 'text-gray-900';
+            return num >= 0 ? 'text-green-700' : 'text-red-600';
+        };
+    }
 
     return (
         <tr className="hover:bg-purple-50/50 transition-colors border-b border-gray-100 last:border-0 font-mono text-[10px] md:text-xs">
             {/* 1. Client */}
-            <td className="px-2 py-3 text-left bg-white sticky left-0 z-10 border-r border-gray-200">
+            <td className="px-2 py-3 text-left bg-white sticky left-0 z-10 border-r border-gray-200 shadow-sm">
                 <div className="font-bold text-gray-900">{client.name}</div>
                 <div className="text-[9px] text-gray-500">{client.code}</div>
             </td>
             {/* 2. Member (3 cols) */}
-            <td className="px-2 py-3 text-right bg-gray-50/30 font-semibold">{getVal(0)}</td>
-            <td className="px-2 py-3 text-right text-gray-400">{getVal(1)}</td>
-            <td className="px-2 py-3 text-right border-r border-gray-100">{getVal(2)}</td>
+            <td className="px-2 py-3 text-right bg-gray-50/20 font-semibold">{fmt(getVal(0))}</td>
+            <td className="px-2 py-3 text-right text-gray-400">{fmt(getVal(1))}</td>
+            <td className="px-2 py-3 text-right border-r border-gray-100">{fmt(getVal(2))}</td>
             
             {/* 3. Company (5 cols) */}
-            <td className="px-2 py-3 text-right">{getVal(3)}</td>
-            <td className="px-2 py-3 text-right">{getVal(4)}</td>
-            <td className="px-2 py-3 text-right">{getVal(5)}</td>
-            <td className="px-2 py-3 text-right">{getVal(6)}</td>
-            <td className="px-2 py-3 text-right font-bold text-blue-700 bg-blue-50/30 border-r border-gray-200">{getVal(7)}</td>
+            <td className="px-2 py-3 text-right">{fmt(getVal(3))}</td>
+            <td className="px-2 py-3 text-right">{fmt(getVal(4))}</td>
+            <td className="px-2 py-3 text-right">{fmt(getVal(5))}</td>
+            <td className="px-2 py-3 text-right">{fmt(getVal(6))}</td>
+            <td className={`px-2 py-3 text-right font-extrabold bg-blue-50/50 border-x border-blue-100 ${colorClass(getVal(7))}`}>
+                {fmt(getVal(7))}
+            </td>
             
-            {/* 4. Shareholder (4 cols - Adjusted) */}
-            <td className="px-2 py-3 text-right">{getVal(8)}</td>
-            <td className="px-2 py-3 text-right">{getVal(9)}</td>
-            <td className="px-2 py-3 text-right">{getVal(10)}</td>
-            <td className="px-2 py-3 text-right font-bold text-blue-700 bg-blue-50/30 border-r border-gray-200">{getVal(11)}</td>
+            {/* 4. Shareholder (4 cols) */}
+            <td className="px-2 py-3 text-right">{fmt(getVal(8))}</td>
+            <td className="px-2 py-3 text-right">{fmt(getVal(9))}</td>
+            <td className="px-2 py-3 text-right">{fmt(getVal(10))}</td>
+            <td className={`px-2 py-3 text-right font-extrabold bg-indigo-50/50 border-x border-indigo-100 ${colorClass(getVal(11))}`}>
+                {fmt(getVal(11))}
+            </td>
             
             {/* 5. Agent (5 cols) */}
-            <td className="px-2 py-3 text-right">{getVal(12)}</td>
-            <td className="px-2 py-3 text-right">{getVal(13)}</td>
-            <td className="px-2 py-3 text-right">{getVal(14)}</td>
-            <td className="px-2 py-3 text-right">{getVal(15)}</td>
-            <td className={`px-2 py-3 text-right font-extrabold bg-green-50 border-l-2 border-green-100 ${isPositive ? 'text-green-700' : 'text-red-600'}`}>
-                {agentTotalVal}
+            <td className="px-2 py-3 text-right">{fmt(getVal(12))}</td>
+            <td className="px-2 py-3 text-right">{fmt(getVal(13)}</td>
+            <td className="px-2 py-3 text-right">{fmt(getVal(14))}</td>
+            <td className="px-2 py-3 text-right">{fmt(getVal(15))}</td>
+            <td className={`px-2 py-3 text-right font-extrabold bg-green-50/50 border-l border-green-100 ${colorClass(getVal(16))}`}>
+                {fmt(getVal(16))}
             </td>
         </tr>
     );
@@ -401,9 +419,21 @@ const SalesIndex: React.FC = () => {
       return acc + (rawSum * 0.86);
   }, 0);
 
+  // ADJUSTMENT: Mobile Week Total based on Shareholder Total (Index 11)
   const totalMobile = mobileClients.reduce((acc, client) => {
       const clientRecs = salesData.filter(r => r.clientId === client.id);
-      return acc + clientRecs.reduce((sum, r) => sum + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
+      return acc + clientRecs.reduce((sum, r) => {
+          // Check Raw Data Array first (Index 11 is Shareholder Total)
+          let valStr = '';
+          if (r.mobileRawData && r.mobileRawData.length > 11) {
+              valStr = r.mobileRawData[11];
+          } else if (r.mobileRaw) {
+              valStr = r.mobileRaw.shareholderTotal;
+          }
+          
+          const val = parseFloat(String(valStr).replace(/,/g, ''));
+          return sum + (isNaN(val) ? 0 : val);
+      }, 0);
   }, 0);
 
   const sortedWeekKeys = Object.keys(weeksData).map(Number).sort((a,b) => a-b);
@@ -454,7 +484,7 @@ const SalesIndex: React.FC = () => {
                         <p className="font-mono font-bold text-gray-800 text-lg">${totalPaper.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
                     </div>
                     <div className={`transition-opacity duration-300 ${activeTab === 'mobile' ? 'opacity-100' : 'opacity-40'}`}>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Mobile Week Total</p>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Mobile Week Total (Shareholder)</p>
                         <p className="font-mono font-bold text-purple-600 text-lg">${totalMobile.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
                     </div>
                  </div>
@@ -565,25 +595,41 @@ const SalesIndex: React.FC = () => {
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse text-xs whitespace-nowrap">
                                 <thead className="bg-gray-100 font-bold text-gray-700">
-                                    <tr>
-                                        <th className="px-2 py-3 sticky left-0 bg-gray-100 z-10 border-r border-gray-200">登陆帐号 / 名字</th>
-                                        <th className="px-2 py-3 bg-gray-50/50">会员总投注</th>
-                                        <th className="px-2 py-3 bg-gray-50/50">会员总数</th>
-                                        <th className="px-2 py-3 bg-gray-50/50 border-r border-gray-200">tgmts</th>
-                                        <th className="px-2 py-3">公司 营业额</th>
-                                        <th className="px-2 py-3">公司 佣金</th>
-                                        <th className="px-2 py-3">公司 赔出</th>
-                                        <th className="px-2 py-3">公司 补费用</th>
-                                        <th className="px-2 py-3 font-extrabold bg-blue-50 text-blue-800 border-r border-gray-200">公司 总额</th>
-                                        <th className="px-2 py-3">股东 营业额</th>
-                                        <th className="px-2 py-3">股东 佣金</th>
-                                        <th className="px-2 py-3">股东 赔出</th>
-                                        <th className="px-2 py-3 font-extrabold bg-blue-50 text-blue-800 border-r border-gray-200">股东 总额</th>
-                                        <th className="px-2 py-3">总代理 营业额</th>
-                                        <th className="px-2 py-3">总代理 佣金</th>
-                                        <th className="px-2 py-3">总代理 赔出</th>
-                                        <th className="px-2 py-3">总代理 抽费用</th>
-                                        <th className="px-2 py-3 font-extrabold bg-green-100 text-green-900 border-l-2 border-green-200">总代理 总额</th>
+                                    {/* Header Row 1: Groups */}
+                                    <tr className="bg-gray-200 text-gray-800 text-[10px] uppercase tracking-wider border-b border-gray-300">
+                                        <th className="px-2 py-1 sticky left-0 bg-gray-200 z-10 border-r border-gray-300"></th>
+                                        <th colSpan={3} className="px-2 py-1 text-center border-r border-gray-300 bg-gray-200/50">Member / 会员</th>
+                                        <th colSpan={5} className="px-2 py-1 text-center border-r border-gray-300 bg-blue-50 text-blue-800">Company / 公司</th>
+                                        <th colSpan={4} className="px-2 py-1 text-center border-r border-gray-300 bg-indigo-50 text-indigo-800">Shareholder / 股东</th>
+                                        <th colSpan={5} className="px-2 py-1 text-center bg-green-50 text-green-800">Agent / 总代理</th>
+                                    </tr>
+                                    {/* Header Row 2: Columns */}
+                                    <tr className="bg-gray-100 border-b border-gray-200">
+                                        <th className="px-2 py-3 sticky left-0 bg-gray-100 z-10 border-r border-gray-200 shadow-sm">登陆帐号 / 名字</th>
+                                        {/* Member */}
+                                        <th className="px-2 py-3 text-right text-gray-500">投注</th>
+                                        <th className="px-2 py-3 text-right text-gray-500">总数</th>
+                                        <th className="px-2 py-3 text-right text-gray-500 border-r border-gray-200">tgmts</th>
+                                        
+                                        {/* Company */}
+                                        <th className="px-2 py-3 text-right text-gray-600">营业额</th>
+                                        <th className="px-2 py-3 text-right text-gray-600">佣金</th>
+                                        <th className="px-2 py-3 text-right text-gray-600">赔出</th>
+                                        <th className="px-2 py-3 text-right text-gray-600">补费用</th>
+                                        <th className="px-2 py-3 text-right font-extrabold bg-blue-50 text-blue-800 border-x border-blue-100">总额</th>
+                                        
+                                        {/* Shareholder */}
+                                        <th className="px-2 py-3 text-right text-gray-600">营业额</th>
+                                        <th className="px-2 py-3 text-right text-gray-600">佣金</th>
+                                        <th className="px-2 py-3 text-right text-gray-600">赔出</th>
+                                        <th className="px-2 py-3 text-right font-extrabold bg-indigo-50 text-indigo-800 border-x border-indigo-100">总额</th>
+                                        
+                                        {/* Agent */}
+                                        <th className="px-2 py-3 text-right text-gray-600">营业额</th>
+                                        <th className="px-2 py-3 text-right text-gray-600">佣金</th>
+                                        <th className="px-2 py-3 text-right text-gray-600">赔出</th>
+                                        <th className="px-2 py-3 text-right text-gray-600">抽费用</th>
+                                        <th className="px-2 py-3 text-right font-extrabold bg-green-50 text-green-900 border-l border-green-100">总额</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
