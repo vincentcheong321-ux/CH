@@ -93,51 +93,53 @@ const ClientWeeklyCard = React.memo(({
     const clientRecords = salesData.filter(r => r.clientId === client.id);
     const totalWeek = clientRecords.reduce((acc, r) => acc + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
 
+    const formatMonth = (mIndex: number) => {
+        const name = MONTH_NAMES[mIndex] || "";
+        // Convert "JANUARY" -> "Jan"
+        return name.charAt(0) + name.slice(1, 3).toLowerCase();
+    };
+
     return (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden mb-4">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col h-full hover:shadow-md transition-shadow">
             {/* Card Header */}
-            <div className="bg-gray-50 px-4 py-2 border-b border-gray-100 flex justify-between items-center">
-                <Link to={`/clients/${client.id}/sales`} className="flex items-center space-x-2 hover:text-blue-600 transition-colors">
-                    <span className="font-bold text-gray-800">{client.name}</span>
-                    <span className="text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded font-mono">{client.code}</span>
+            <div className="bg-gray-50 px-4 py-3 border-b border-gray-100 flex justify-between items-center">
+                <Link to={`/clients/${client.id}/sales`} className="flex items-center space-x-2 hover:text-blue-600 transition-colors group">
+                    <div>
+                        <div className="font-bold text-gray-800 group-hover:text-blue-600 leading-tight">{client.name}</div>
+                        <div className="text-[10px] text-gray-500 font-mono">{client.code}</div>
+                    </div>
                 </Link>
-                <div className="text-sm">
-                    <span className="text-gray-400 mr-2">Week Total:</span>
-                    <span className={`font-mono font-bold ${totalWeek > 0 ? 'text-blue-600' : 'text-gray-900'}`}>
+                <div className="text-right">
+                    <div className="text-[9px] text-gray-400 uppercase tracking-wider font-semibold">Week Total</div>
+                    <span className={`font-mono font-bold text-sm ${totalWeek > 0 ? 'text-blue-600' : 'text-gray-900'}`}>
                         {totalWeek > 0 ? totalWeek.toLocaleString(undefined, {minimumFractionDigits: 2}) : '-'}
                     </span>
                 </div>
             </div>
 
-            {/* Matrix Table */}
-            <div className="overflow-x-auto">
+            {/* Matrix Table: Transposed (Date x Type) */}
+            <div className="flex-1 overflow-x-auto">
                 <table className="w-full text-center border-collapse">
-                    <thead>
+                    <thead className="bg-gray-50/50 text-xs text-gray-500 font-semibold uppercase tracking-wider">
                         <tr>
-                            <th className="w-16 bg-gray-50 border-b border-r border-gray-100 p-2 text-xs font-bold text-gray-500 uppercase tracking-wider">
-                                Type
-                            </th>
-                            {dateStrings.map(dateStr => {
-                                const [,,day] = dateStr.split('-');
-                                return (
-                                    <th key={dateStr} className="border-b border-r border-gray-100 p-2 min-w-[80px] bg-gray-50/50">
-                                        <div className="text-lg font-bold text-gray-700">{parseInt(day)}</div>
-                                    </th>
-                                );
-                            })}
+                            <th className="py-2 pl-4 text-left font-medium w-24">Date</th>
+                            <th className="py-2 text-blue-700 font-bold border-l border-gray-100">Wan <span className="opacity-40 text-[9px] font-normal">B/S</span></th>
+                            <th className="py-2 text-red-700 font-bold border-l border-gray-100">Qian <span className="opacity-40 text-[9px] font-normal">A/C</span></th>
                         </tr>
                     </thead>
-                    <tbody>
-                        {/* Wan Row (B/S) */}
-                        <tr className="group hover:bg-blue-50/10">
-                            <td className="border-r border-b border-gray-100 p-2 bg-blue-50/20 font-bold text-blue-700 text-sm">
-                                Wan
-                                <div className="text-[9px] font-normal opacity-50 uppercase mt-0.5">Big/Small</div>
-                            </td>
-                            {dateStrings.map(dateStr => {
-                                const record = salesData.find(r => r.clientId === client.id && r.date === dateStr);
-                                return (
-                                    <td key={`wan-${dateStr}`} className="border-r border-b border-gray-100 p-0 h-12 relative">
+                    <tbody className="divide-y divide-gray-100 text-sm">
+                        {dateStrings.map(dateStr => {
+                            const [y, m, d] = dateStr.split('-').map(Number);
+                            // m is 1-based from string split
+                            const displayDate = `${d} ${formatMonth(m-1)}`;
+                            const record = salesData.find(r => r.clientId === client.id && r.date === dateStr);
+                            
+                            return (
+                                <tr key={dateStr} className="hover:bg-gray-50/80 transition-colors">
+                                    <td className="py-2 pl-4 text-left font-bold text-gray-700 whitespace-nowrap bg-gray-50/20">
+                                        {displayDate}
+                                    </td>
+                                    <td className="p-0 h-10 border-l border-gray-100 relative">
                                         <CompositeInput 
                                             val1={record?.b || 0}
                                             val2={record?.s || 0}
@@ -145,20 +147,7 @@ const ClientWeeklyCard = React.memo(({
                                             colorClass="text-blue-700"
                                         />
                                     </td>
-                                );
-                            })}
-                        </tr>
-
-                        {/* Qian Row (A/C) */}
-                        <tr className="group hover:bg-red-50/10">
-                            <td className="border-r border-gray-100 p-2 bg-red-50/20 font-bold text-red-700 text-sm">
-                                Qian
-                                <div className="text-[9px] font-normal opacity-50 uppercase mt-0.5">A / C</div>
-                            </td>
-                            {dateStrings.map(dateStr => {
-                                const record = salesData.find(r => r.clientId === client.id && r.date === dateStr);
-                                return (
-                                    <td key={`qian-${dateStr}`} className="border-r border-gray-100 p-0 h-12 relative">
+                                    <td className="p-0 h-10 border-l border-gray-100 relative">
                                         <CompositeInput 
                                             val1={record?.a || 0}
                                             val2={record?.c || 0}
@@ -166,9 +155,12 @@ const ClientWeeklyCard = React.memo(({
                                             colorClass="text-red-700"
                                         />
                                     </td>
-                                );
-                            })}
-                        </tr>
+                                </tr>
+                            );
+                        })}
+                        {dateStrings.length === 0 && (
+                            <tr><td colSpan={3} className="py-6 text-center text-gray-400 italic text-xs">No dates in this week</td></tr>
+                        )}
                     </tbody>
                 </table>
             </div>
@@ -313,16 +305,19 @@ const SalesIndex: React.FC = () => {
         {loading ? (
             <div className="flex justify-center items-center h-full"><Loader2 className="animate-spin text-gray-400" /></div>
         ) : (
-            <div className="max-w-4xl mx-auto space-y-4 pb-20">
-                {filteredClients.map(client => (
-                    <ClientWeeklyCard 
-                        key={client.id}
-                        client={client}
-                        dateStrings={activeDateStrings}
-                        salesData={salesData}
-                        onUpdate={handleUpdate}
-                    />
-                ))}
+            <div className="max-w-7xl mx-auto pb-20">
+                {/* Grid Layout for Side-by-Side Viewing */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {filteredClients.map(client => (
+                        <ClientWeeklyCard 
+                            key={client.id}
+                            client={client}
+                            dateStrings={activeDateStrings}
+                            salesData={salesData}
+                            onUpdate={handleUpdate}
+                        />
+                    ))}
+                </div>
                 
                 {filteredClients.length === 0 && (
                     <div className="text-center text-gray-400 py-12">
