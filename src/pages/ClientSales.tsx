@@ -4,7 +4,7 @@ import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Printer, Loader2, ChevronDown } from 'lucide-react';
 import { getClients, getSaleRecords, saveSaleRecord } from '../services/storageService';
 import { Client, SaleRecord } from '../types';
-import { MONTH_NAMES, DRAW_DATES, DRAW_DATES_2026 } from '../utils/reportUtils';
+import { MONTH_NAMES } from '../utils/reportUtils';
 
 // --- Types & Helpers ---
 
@@ -150,21 +150,17 @@ const ClientSales: React.FC = () => {
   // --- Data Preparation ---
   const yearData = useMemo(() => {
     const groups: MonthGroup[] = [];
-    const config = year === 2026 ? DRAW_DATES_2026 : DRAW_DATES;
     
+    // Iterate through all months of the selected year
     for (let m = 0; m < 12; m++) {
-        const monthConfig = config[m];
-        if (!monthConfig) continue;
-
-        const days = Array.from(new Set([
-            ...monthConfig.w,
-            ...monthConfig.s1,
-            ...monthConfig.s2,
-            ...monthConfig.t
-        ])).sort((a, b) => a - b);
+        // Calculate days in month
+        const daysInMonth = new Date(year, m + 1, 0).getDate();
+        const days: number[] = [];
+        for (let d = 1; d <= daysInMonth; d++) {
+            days.push(d);
+        }
 
         const rowData: DayRowData[] = days.map(day => {
-            // Correctly handle overflow days (e.g. 32) using JS Date object
             const dObj = new Date(year, m, day);
             const y = dObj.getFullYear();
             const mo = String(dObj.getMonth() + 1).padStart(2, '0');

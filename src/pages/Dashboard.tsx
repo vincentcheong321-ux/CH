@@ -13,7 +13,7 @@ import {
 } from 'recharts';
 import { getAllLedgerRecords, getAssetRecords, getNetAmount, getClients, getClientBalance, getTotalDrawReceivables, getAllDrawRecords } from '../services/storageService';
 import { TrendingUp, TrendingDown, DollarSign, Wallet } from 'lucide-react';
-import { getWeeksForMonth, YEAR, MONTH_NAMES } from '../utils/reportUtils';
+import { getWeeksForMonth, MONTH_NAMES } from '../utils/reportUtils';
 
 const Dashboard: React.FC = () => {
   const [stats, setStats] = useState({
@@ -66,8 +66,7 @@ const Dashboard: React.FC = () => {
         // --- Weekly Draw Chart Data ---
         const currentYear = new Date().getFullYear();
         const currentMonthIndex = new Date().getMonth();
-        // Use currentYear instead of hardcoded 2025/YEAR constant for graph if available, otherwise default
-        const yearToUse = currentYear >= 2025 ? currentYear : YEAR;
+        const yearToUse = currentYear;
         
         const weeks = getWeeksForMonth(yearToUse, currentMonthIndex);
         
@@ -75,7 +74,6 @@ const Dashboard: React.FC = () => {
             const days = weeks[Number(weekNum)];
             
             // Sum all draws that match the computed date strings for this week's days
-            // This handles overflow days (e.g. 32 -> Feb 1) correctly
             const weekTotal = allDraws.reduce((acc, r) => {
                 const match = days.some(day => {
                     const dObj = new Date(yearToUse, currentMonthIndex, day);

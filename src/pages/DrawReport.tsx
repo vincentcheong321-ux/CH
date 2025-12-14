@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { getClients, getDrawBalances, saveDrawBalance, INITIAL_CLIENTS_DATA } from '../services/storageService';
+import { getClients, getDrawBalances, saveDrawBalance } from '../services/storageService';
 import { Client } from '../types';
 import { Calendar, ChevronLeft, ChevronRight, Filter, Save, Layers } from 'lucide-react';
-import { DRAW_DATES, MONTH_NAMES, YEAR, getWeeksForMonth } from '../utils/reportUtils';
+import { MONTH_NAMES, getWeeksForMonth } from '../utils/reportUtils';
 
 // Extracted Component to prevent re-mounting on every render
 const ClientInputRow = React.memo(({ client, value, onChange, onBlur }: { 
@@ -86,15 +86,10 @@ const DrawReport: React.FC = () => {
   }, []);
 
   const fetchClients = async () => {
-    let list = await getClients();
-    if (list.length === 0) {
-        list = INITIAL_CLIENTS_DATA.map((c, i) => ({
-            ...c,
-            id: `demo_${i}`,
-            createdAt: new Date().toISOString()
-        }));
-    }
-    setClients(list);
+    const list = await getClients();
+    // Filter to exclude mobile clients
+    const paperClients = list.filter(c => c.category !== 'mobile');
+    setClients(paperClients);
   };
 
   useEffect(() => {
@@ -217,8 +212,9 @@ const DrawReport: React.FC = () => {
                       const days = currentMonthWeeks[weekNum];
                       const isActiveWeek = weekNum.toString() === activeWeekNum;
                       
-                      // Convert virtual days (e.g. 32) to real date numbers (e.g. 1) for display
-                      const realDaysStr = days.map(d => new Date(currentYear, currentMonth, d).getDate()).join(', ');
+                      const firstDay = days[0];
+                      const lastDay = days[days.length - 1];
+                      const rangeStr = `${firstDay} - ${lastDay}`;
 
                       return (
                         <button
@@ -234,7 +230,7 @@ const DrawReport: React.FC = () => {
                             <span className={`text-xs uppercase tracking-wider opacity-70 ${isActiveWeek ? 'text-blue-100' : 'text-gray-400'}`}>
                                 Week {idx + 1}
                             </span>
-                            <span className="text-xl font-mono mt-1">{realDaysStr}</span>
+                            <span className="text-xl font-mono mt-1">{rangeStr}</span>
                         </button>
                       );
                   })}
@@ -249,8 +245,10 @@ const DrawReport: React.FC = () => {
 
   const total = calculateTotal();
 
-  // Convert active week days to real dates for display header
-  const activeWeekRealDaysStr = activeWeekDays.map(d => new Date(currentYear, currentMonth, d).getDate()).join(', ');
+  // Create string for display
+  const activeWeekDateRange = activeWeekDays.length > 0 
+    ? `${activeWeekDays[0]} ${MONTH_NAMES[currentMonth].slice(0,3)} - ${activeWeekDays[activeWeekDays.length-1]} ${MONTH_NAMES[currentMonth].slice(0,3)}`
+    : '';
 
   return (
     <div className="flex flex-col lg:flex-row gap-6 min-h-screen pb-20">
@@ -281,7 +279,7 @@ const DrawReport: React.FC = () => {
                                     Weekly Report - Week {activeWeekIndex + 1}
                                 </h2>
                                 <p className="text-gray-500 font-medium text-sm mt-1">
-                                    {MONTH_NAMES[currentMonth]} {currentYear}: {activeWeekRealDaysStr}
+                                    {MONTH_NAMES[currentMonth]} {currentYear}: {activeWeekDateRange}
                                 </p>
                             </div>
                             <div className="flex items-center text-xs text-gray-500 bg-yellow-50 px-3 py-1 rounded-full border border-yellow-200">
@@ -345,7 +343,7 @@ const DrawReport: React.FC = () => {
                                         ))}
                                     </div>
                                 </div>
-                                {clients.length === 0 && <div className="text-center text-gray-400 py-8">No clients found.</div>}
+                                {clients.length === 0 && <div className="text-center text-gray-400 py-8">No paper clients found.</div>}
                             </div>
                         </div>
                     )}

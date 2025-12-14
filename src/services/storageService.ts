@@ -293,9 +293,9 @@ export const getLedgerRecords = (clientId: string): LedgerRecord[] => {
           clientId: a.clientId,
           date: a.date,
           description: 'Cash Advance',
-          typeLabel: 'Cash Adv',
+          typeLabel: '支', // Changed to "支" (Pay/Expense/Withdraw)
           amount: a.amount,
-          operation: 'add', // Receivables (Green)
+          operation: 'add', // "支" in this system context is Green/Add (Client owes more)
           column: 'col1', // Panel 1 (Grouped with Sales)
           isVisible: true
       } as LedgerRecord;
@@ -336,9 +336,9 @@ export const getAllLedgerRecords = (): LedgerRecord[] => {
           clientId: a.clientId,
           date: a.date,
           description: 'Cash Advance',
-          typeLabel: 'Cash Adv',
+          typeLabel: '支', // Changed to "支"
           amount: a.amount,
-          operation: 'add',
+          operation: 'add', // Adds to client debt
           column: 'col1',
           isVisible: true
       } as LedgerRecord;
