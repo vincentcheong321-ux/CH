@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { ArrowLeft, RefreshCw, Save, CheckCircle, AlertCircle } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { getClients, saveSaleRecord } from '../services/storageService';
+import { getClients, saveSaleRecord, saveMobileReportHistory } from '../services/storageService';
 import { Client } from '../types';
 import { getWeeksForMonth, MONTH_NAMES } from '../utils/reportUtils';
 
@@ -19,18 +19,6 @@ const MobileReport: React.FC = () => {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedWeekNum, setSelectedWeekNum] = useState<number>(1);
-
-  // Headers based on the user prompt structure
-  // Row 1: Client Info
-  // Row 2: Company Group
-  // Row 3: Shareholder Group (implied structure)
-  // Row 4: General Agent Group (last)
-  const HEADERS = [
-      "登陆帐号", "名字", "会员总投注", "会员总数", "tgmts",
-      "公司 营业额", "公司 佣金", "公司 赔出", "公司 补费用", "公司 总额",
-      "股东 营业额", "股东 佣金", "股东 赔出", "股东 赢彩", "股东 补费用", "股东 总额",
-      "总代理 营业额", "总代理 佣金", "总代理 赔出", "总代理 抽费用", "总代理 总额"
-  ];
 
   useEffect(() => {
       loadClients();
@@ -133,7 +121,7 @@ const MobileReport: React.FC = () => {
       const dStr = String(lastDay).padStart(2, '0');
       const targetDate = `${selectedYear}-${mStr}-${dStr}`;
 
-      // 2. Iterate and Save
+      // 2. Iterate and Save Client Records
       let matchedCount = 0;
       let skippedCount = 0;
 
@@ -142,21 +130,11 @@ const MobileReport: React.FC = () => {
           const client = clients.find(c => c.code.toLowerCase() === row.id.toLowerCase());
           
           if (client) {
-              // Extract the LAST value as the Total (Net Result)
-              // The user said "tgmts 总额", implying the final total or specific tgmts total.
-              // Standard logic: Last column is the final total for the agent/master.
               const lastValStr = row.values[row.values.length - 1];
               // Remove commas
               const val = parseFloat(lastValStr.replace(/,/g, ''));
 
               if (!isNaN(val)) {
-                  // Save using logic: 
-                  // If val > 0, client OWES company (positive in system?)
-                  // Wait, system logic: 
-                  // In Mobile List: Positive = Blue (Owes), Negative = Red (Win? or Company Owes?)
-                  // Let's assume the report follows: Positive = Profit for Company (Client Owes), Negative = Loss for Company (Company Owes)
-                  // We save it to `b` (base) column of the sales record for simplicity as Mobile List uses one total.
-                  
                   await saveSaleRecord({
                       clientId: client.id,
                       date: targetDate,
@@ -170,9 +148,15 @@ const MobileReport: React.FC = () => {
           }
       }
 
+      // 3. Save Raw Historical Record (New Requirement)
+      try {
+        await saveMobileReportHistory(targetDate, parsedData);
+      } catch (e) {
+          console.error("Failed to save history", e);
+      }
+
       if (matchedCount > 0) {
-          setSaveStatus({ type: 'success', message: `Successfully updated ${matchedCount} clients for ${targetDate}. (${skippedCount} skipped)` });
-          // Optionally navigate back after delay? No, let user decide.
+          setSaveStatus({ type: 'success', message: `Updated ${matchedCount} clients & saved history for ${targetDate}.` });
       } else {
           setSaveStatus({ type: 'error', message: `No matching clients found. Ensure Client Codes match.` });
       }

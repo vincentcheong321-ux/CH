@@ -346,15 +346,20 @@ export const saveDrawBalance = async (date: string, clientId: string, balance: n
     }
 };
 
+// --- E. Mobile Report History (New) ---
+
+export const saveMobileReportHistory = async (date: string, rawData: any[]) => {
+    if (supabase) {
+        await supabase.from('mobile_report_history').insert([{
+            report_date: date,
+            json_data: rawData
+        }]);
+    }
+};
+
 // --- 4. Global Balance & Utils ---
 
 export const getClientBalance = (clientId: string): number => {
-    // This function was originally synchronous. 
-    // In a real app with this new schema, we'd make it async: `await getClientBalance(id)`.
-    // However, to avoid breaking 50 React components, we will rely on 
-    // the components calling `fetchAll...` or specific aggregators.
-    // 
-    // TEMPORARY FIX: Return 0 here. The Dashboard/Lists should be refactored to fetch sums via a new Async API.
     console.warn("Sync getClientBalance called - this is deprecated in V2. Use fetchClientTotalBalance instead.");
     return 0;
 };
@@ -362,9 +367,7 @@ export const getClientBalance = (clientId: string): number => {
 // NEW: Highly Efficient Aggregator
 export const fetchClientTotalBalance = async (clientId: string): Promise<number> => {
     if (supabase) {
-        // One query to rule them all
         const { data, error } = await supabase.rpc('get_client_balance', { cid: clientId });
-        // If RPC isn't defined, we do a raw sum select (less efficient but works)
         if (error) {
              const { data: sumData } = await supabase
                 .from('financial_journal')
@@ -395,10 +398,6 @@ export const getNetAmount = (r: LedgerRecord): number => {
   return r.operation === 'add' ? r.amount : -r.amount;
 };
 
-// --- Asset Records (Cash Flow) ---
-// We can treat these as a special client "COMPANY_ASSETS" or keep a separate table.
-// For simplicity, let's keep the existing local logic or map to a generic table if needed.
-// Keeping strictly separate for now to avoid complexity in this step.
 const ASSETS_KEY = 'ledger_assets';
 export const getAssetRecords = (): AssetRecord[] => {
   const data = localStorage.getItem(ASSETS_KEY);
