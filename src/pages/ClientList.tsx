@@ -184,10 +184,10 @@ const ClientList: React.FC = () => {
                 </div>
             </div>
             
-            <div className="flex flex-col items-end mr-8">
-                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Balance</span>
-                <span className={`font-mono font-bold ${balance >= 0 ? 'text-red-600' : 'text-green-600'}`}>
-                    {balance >= 0 ? '$' : '-$'}{Math.abs(balance).toLocaleString(undefined, {minimumFractionDigits: 2})}
+            {/* Balance: Green if positive, Red if negative. Aligned vertically with name via items-center */}
+            <div className="flex items-center mr-4 md:mr-8">
+                <span className={`font-mono font-bold text-base md:text-lg ${balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {balance > 0 ? '+' : ''}{balance.toLocaleString(undefined, {minimumFractionDigits: 2})}
                 </span>
             </div>
             
