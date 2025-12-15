@@ -42,7 +42,7 @@ const PositionBadge = ({ label }: { label: string }) => {
     else if (label.includes('安')) { colorClass = 'bg-green-100 text-green-700 border border-green-300'; text = '安'; }
 
     return (
-        <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${colorClass} shadow-sm ml-1`}>
+        <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${colorClass} shadow-sm ml-1`}>
             {text}
         </span>
     );
@@ -63,43 +63,41 @@ const WinningBreakdown: React.FC<WinningBreakdownProps> = ({ description, totalA
     const entries = rawContent.split(';').map(s => s.trim()).filter(s => s);
 
     return (
-        <div className="w-full bg-white rounded-lg border border-gray-200 p-2 shadow-sm relative group mb-2 hover:border-blue-300 transition-colors">
-             {/* Edit/Delete Actions (Absolute) */}
-             <div className="no-print opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1 absolute -top-2 -right-2 z-20 bg-white shadow-md rounded-full border border-gray-100 p-1">
-                <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-full"><Pencil size={12} /></button>
-                <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1.5 text-red-600 hover:bg-red-50 rounded-full"><Trash2 size={12} /></button>
+        <div className="w-full relative group mb-2 border-b-2 border-gray-100 pb-1">
+             {/* Edit/Delete Actions (Absolute, visible on hover) - Moved to left to avoid overlap */}
+             <div className="no-print opacity-0 group-hover:opacity-100 transition-opacity flex flex-col space-y-1 absolute -left-7 top-0 z-20">
+                <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-1 text-blue-600 hover:bg-blue-50 bg-white shadow-sm rounded border border-gray-200"><Pencil size={10} /></button>
+                <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1 text-red-600 hover:bg-red-50 bg-white shadow-sm rounded border border-gray-200"><Trash2 size={10} /></button>
             </div>
 
             <div className="space-y-1">
                 {entries.map((entry, idx) => {
                     // Expected: "MKT 5990-6-2200 头"
-                    // Parsing Parts: [Sides] [Number]-[Bet]-[Win] [Position]
                     const parts = entry.match(/^([A-Z]+)\s+(\d+)-([\d.]+)-([\d.]+)\s+(.+)$/);
                     
                     if (parts) {
                         const [_, sides, number, bet, win, pos] = parts;
                         return (
-                            <div key={idx} className="grid grid-cols-[2.5rem_3.5rem_1fr_2.5rem_3.5rem_1.5rem] items-center gap-1 text-sm border-b border-gray-50 last:border-0 pb-1 last:pb-0">
-                                {/* Left Side */}
-                                <div className="font-bold text-gray-700 font-mono tracking-tighter text-xs">{sides}</div>
-                                <div className="font-bold text-gray-900 font-mono text-base">{number}</div>
-                                
-                                {/* Spacer */}
-                                <div></div>
-
-                                {/* Right Side - Aligned */}
-                                <div className="text-right text-gray-400 text-xs font-mono">{bet} -</div>
-                                <div className="text-right font-bold text-gray-800 font-mono">{Number(win).toLocaleString()}</div>
-                                <div className="flex justify-end"><PositionBadge label={pos} /></div>
+                            <div key={idx} className="flex items-center justify-between text-xs leading-tight">
+                                {/* Left: Sides + Number */}
+                                <div className="flex items-baseline space-x-1">
+                                    <span className="font-bold text-gray-500 font-mono tracking-tighter text-[10px]">{sides}</span>
+                                    <span className="font-bold text-gray-900 font-mono text-sm">{number}</span>
+                                </div>
+                                {/* Right: Win + Position */}
+                                <div className="flex items-center">
+                                    <span className="font-bold text-gray-800 font-mono mr-1">{Number(win).toLocaleString()}</span>
+                                    <PositionBadge label={pos} />
+                                </div>
                             </div>
                         );
                     }
-                    // Fallback for non-standard formats
-                    return <div key={idx} className="text-xs text-gray-500">{entry}</div>;
+                    return <div key={idx} className="text-[10px] text-gray-500">{entry}</div>;
                 })}
             </div>
-            <div className="mt-2 pt-1 border-t border-gray-100 text-right">
-                <span className="text-lg font-mono font-bold text-red-600">{totalAmount.toLocaleString()}</span>
+            {/* Total Footer */}
+            <div className="mt-1 pt-1 border-t border-gray-200 text-right">
+                <span className="text-lg font-mono font-bold text-red-600 leading-none">{totalAmount.toLocaleString()}</span>
             </div>
         </div>
     );
@@ -137,7 +135,6 @@ const ClientLedger: React.FC = () => {
   const [winningsEntries, setWinningsEntries] = useState<any[]>([]);
 
   // Layout State
-  const [draggedCatIndex, setDraggedCatIndex] = useState<number | null>(null);
   const [colWidths, setColWidths] = useState<number[]>([33.33, 33.33, 33.34]);
   const [verticalPadding, setVerticalPadding] = useState<{top: number, bottom: number}>({ top: 40, bottom: 40 });
   const containerRef = useRef<HTMLDivElement>(null);
@@ -488,12 +485,11 @@ const ClientLedger: React.FC = () => {
 
                     return (
                         <div key={r.id} className={`group flex justify-between md:justify-end items-center leading-none relative gap-1 md:gap-1.5 w-full md:w-auto py-1 ${!r.isVisible ? 'opacity-30 grayscale no-print' : ''}`}>
-                            {!isReflected && (
-                                <div className="no-print opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1 absolute -left-16 z-10 bg-white shadow-sm rounded border border-gray-100 p-1">
-                                    <button onClick={() => openEditModal(r)} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Pencil size={12} /></button>
-                                    <button onClick={() => requestDeleteRecord(r.id)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 size={12} /></button>
-                                </div>
-                            )}
+                            <div className="no-print opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1 absolute -left-12 z-10 bg-white shadow-sm rounded border border-gray-100 p-0.5">
+                                <button onClick={() => openEditModal(r)} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Pencil size={10} /></button>
+                                <button onClick={() => requestDeleteRecord(r.id)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 size={10} /></button>
+                            </div>
+                            
                             <div className={`text-sm md:text-lg font-bold uppercase tracking-wide text-gray-700 w-1/3 md:w-auto text-left md:text-right`}>{r.typeLabel}</div>
                             <div className="flex-1 text-right">
                                 {r.description && <div className="text-sm md:text-base text-gray-700 font-medium mr-1 md:mr-2 truncate inline-block">{r.description}</div>}

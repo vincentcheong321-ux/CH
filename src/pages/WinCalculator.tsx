@@ -1,8 +1,8 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calculator, Trophy, RotateCcw, Plus, Trash2, Save, User, CheckCircle, Calendar } from 'lucide-react';
-import { getClients, saveLedgerRecord } from '../services/storageService';
+import { Calculator, Trophy, RotateCcw, Plus, Trash2, Save, User, CheckCircle, Calendar, Hash, Medal } from 'lucide-react';
+import { getClients, saveLedgerRecord, getWinningsByDate } from '../services/storageService';
 import { Client } from '../types';
 import { getWeeksForMonth } from '../utils/reportUtils';
 
@@ -14,8 +14,8 @@ interface WinningEntry {
   number: string;
   mode: GameMode;
   position: PrizePosition;
-  positionLabel: string; // Chinese char
-  sides: string[]; // ['M', 'K', 'T']
+  positionLabel: string;
+  sides: string[]; 
   betType: 'Big' | 'Small' | '3A' | '3ABC';
   betAmount: number;
   winAmount: number;
@@ -32,6 +32,50 @@ const PRIZE_LABELS_CHINESE: Record<PrizePosition, string> = {
     '1': '头', '2': '二', '3': '三', 'S': '入', 'C': '安'
 };
 
+// Component for Client Win Input Row
+const ClientWinInputRow = React.memo(({ 
+    client, 
+    value, 
+    onChange, 
+    onBlur 
+}: { 
+    client: Client, 
+    value: string, 
+    onChange: (id: string, val: string) => void, 
+    onBlur: (id: string) => void 
+}) => {
+    return (
+        <div className="flex items-center justify-between p-3 border-b border-gray-100 hover:bg-gray-50 transition-colors group">
+            <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center text-red-600 font-bold text-xs">
+                    {client.code.substring(0,2)}
+                </div>
+                <div>
+                    <div className="font-bold text-gray-800">{client.name}</div>
+                    <div className="text-xs text-gray-500 font-mono">{client.code}</div>
+                </div>
+            </div>
+            <div className="w-32 relative">
+                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">$</span>
+                <input 
+                    type="text" 
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    value={value}
+                    onChange={(e) => onChange(client.id, e.target.value)}
+                    onBlur={() => onBlur(client.id)}
+                    onFocus={(e) => e.target.select()}
+                    className={`
+                        w-full pl-5 pr-2 py-1.5 text-right font-mono font-bold rounded-lg border transition-all
+                        focus:outline-none focus:ring-2 focus:ring-red-500
+                        ${parseFloat(value) > 0 ? 'text-red-600 border-red-200 bg-red-50/30' : 'text-gray-400 border-gray-200 bg-white'}
+                    `}
+                />
+            </div>
+        </div>
+    );
+});
+
 const WinCalculator: React.FC = () => {
     const navigate = useNavigate();
     
@@ -47,22 +91,44 @@ const WinCalculator: React.FC = () => {
 
     const [entries, setEntries] = useState<WinningEntry[]>([]);
     
-    // Client selection
+    // Client selection & Global Date
     const [clients, setClients] = useState<Client[]>([]);
     const [selectedClientId, setSelectedClientId] = useState('');
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [isSaving, setIsSaving] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
 
+    // Manual List State
+    const [clientWinnings, setClientWinnings] = useState<Record<string, string>>({});
+    const [loadingList, setLoadingList] = useState(false);
+
     useEffect(() => {
         const fetchClients = async () => {
             const clientList = await getClients();
-            // Filter: Only allow saving to PAPER clients
             const paperClients = clientList.filter(c => (c.category || 'paper') === 'paper');
             setClients(paperClients);
         };
         fetchClients();
     }, []);
+
+    useEffect(() => {
+        if (selectedDate && clients.length > 0) {
+            fetchDailyWinnings();
+        }
+    }, [selectedDate, clients]);
+
+    const fetchDailyWinnings = async () => {
+        setLoadingList(true);
+        const data = await getWinningsByDate(selectedDate);
+        const mapped: Record<string, string> = {};
+        clients.forEach(c => {
+            mapped[c.id] = data[c.id] ? data[c.id].toString() : '';
+        });
+        setClientWinnings(mapped);
+        setLoadingList(false);
+    };
+
+    // --- Calculator Logic ---
 
     const handleSideToggle = (side: string) => {
         setSides(prev => 
@@ -82,15 +148,12 @@ const WinCalculator: React.FC = () => {
             const smallAmt = parseFloat(betSmall) || 0;
 
             if (bigAmt > 0) {
-                // Divide total bet by number of sides to get amount per side
                 const effectiveBet = bigAmt / sideCount;
                 const winAmount = effectiveBet * PAYOUTS_4D.BIG[position];
-                
                 if (winAmount > 0) {
                     newEntries.push({
                         id: Date.now() + 'b', number: winningNumber, mode, position, sides,
-                        positionLabel: PRIZE_LABELS_CHINESE[position], betType: 'Big',
-                        betAmount: bigAmt, winAmount
+                        positionLabel: PRIZE_LABELS_CHINESE[position], betType: 'Big', betAmount: bigAmt, winAmount
                     });
                 }
             }
@@ -100,8 +163,7 @@ const WinCalculator: React.FC = () => {
                 if (winAmount > 0) {
                     newEntries.push({
                         id: Date.now() + 's', number: winningNumber, mode, position, sides,
-                        positionLabel: PRIZE_LABELS_CHINESE[position], betType: 'Small',
-                        betAmount: smallAmt, winAmount
+                        positionLabel: PRIZE_LABELS_CHINESE[position], betType: 'Small', betAmount: smallAmt, winAmount
                     });
                 }
             }
@@ -112,24 +174,12 @@ const WinCalculator: React.FC = () => {
             if (aAmt > 0 && position === '1') {
                 const effectiveBet = aAmt / sideCount;
                 const winAmount = effectiveBet * PAYOUTS_3D['3A'];
-                if(winAmount > 0) {
-                    newEntries.push({
-                        id: Date.now() + 'a', number: winningNumber, mode, position, sides,
-                        positionLabel: PRIZE_LABELS_CHINESE[position], betType: '3A',
-                        betAmount: aAmt, winAmount
-                    });
-                }
+                if(winAmount > 0) newEntries.push({ id: Date.now() + 'a', number: winningNumber, mode, position, sides, positionLabel: PRIZE_LABELS_CHINESE[position], betType: '3A', betAmount: aAmt, winAmount });
             }
             if (abcAmt > 0 && ['1', '2', '3'].includes(position)) {
                 const effectiveBet = abcAmt / sideCount;
                 const winAmount = effectiveBet * PAYOUTS_3D['3ABC'];
-                if(winAmount > 0) {
-                     newEntries.push({
-                        id: Date.now() + 'abc', number: winningNumber, mode, position, sides,
-                        positionLabel: PRIZE_LABELS_CHINESE[position], betType: '3ABC',
-                        betAmount: abcAmt, winAmount
-                    });
-                }
+                if(winAmount > 0) newEntries.push({ id: Date.now() + 'abc', number: winningNumber, mode, position, sides, positionLabel: PRIZE_LABELS_CHINESE[position], betType: '3ABC', betAmount: abcAmt, winAmount });
             }
         }
 
@@ -145,10 +195,7 @@ const WinCalculator: React.FC = () => {
 
     const handleResetForm = () => {
         setWinningNumber('');
-        setBetBig('');
-        setBetSmall('');
-        setBetA('');
-        setBetABC('');
+        setBetBig(''); setBetSmall(''); setBetA(''); setBetABC('');
         setSides([]);
     };
     
@@ -167,211 +214,299 @@ const WinCalculator: React.FC = () => {
             .map(e => `${e.sides.join('')} ${e.number}-${e.betAmount}-${e.winAmount.toFixed(0)} ${e.positionLabel}`)
             .join('; ');
 
+        // Save Record
         await saveLedgerRecord({
             clientId: selectedClientId,
             date: selectedDate,
             description: `Winnings: ${description}`,
             typeLabel: '中',
             amount: totalWinnings,
-            operation: 'subtract', // Company Payout is a subtraction from client's debt
-            column: 'col1', // Save to Panel 1
+            operation: 'subtract', 
+            column: 'col1',
             isVisible: true
+        });
+
+        // Update local list state optimistically with explicit typing
+        setClientWinnings((prev: Record<string, string>) => {
+            const raw = prev[selectedClientId];
+            const currentVal = parseFloat(raw || '0') || 0;
+            return { ...prev, [selectedClientId]: (currentVal + totalWinnings).toString() };
         });
 
         setIsSaving(false);
         setShowSuccess(true);
-        
-        setTimeout(() => {
-            setShowSuccess(false);
-            navigate(`/clients/${selectedClientId}`);
-        }, 1500);
+        setTimeout(() => setShowSuccess(false), 2000);
+        handleClearAll();
     };
+
+    // --- Manual List Logic ---
+
+    const handleListInputChange = useCallback((clientId: string, val: string) => {
+        if (val === '' || /^-?\d*\.?\d*$/.test(val)) {
+            setClientWinnings(prev => ({ ...prev, [clientId]: val }));
+        }
+    }, []);
+
+    const handleListInputBlur = useCallback(async (clientId: string) => {
+        setClientWinnings((current: Record<string, string>) => {
+            const newVal = parseFloat(current[clientId]) || 0;
+            
+            // We need to compare this new Total with what's actually in DB to find the Delta.
+            // Since we don't have the original loaded value stored separately in this simple implementation,
+            // we will re-fetch the DB value for this client to be safe, then calculate difference.
+            
+            // Async wrapper
+            (async () => {
+                const dbData = await getWinningsByDate(selectedDate);
+                const oldVal = dbData[clientId] || 0;
+                
+                if (newVal !== oldVal) {
+                    const diff = newVal - oldVal;
+                    
+                    if (diff < 0) {
+                        // Reducing winnings -> Increasing Debt -> 'add' operation
+                         await saveLedgerRecord({
+                            clientId,
+                            date: selectedDate,
+                            description: 'Win Correction',
+                            typeLabel: '中',
+                            amount: Math.abs(diff),
+                            operation: 'add', // Correction adds back to debt
+                            column: 'col1',
+                            isVisible: true
+                        });
+                    } else {
+                        // Increasing winnings -> Reducing Debt -> 'subtract' operation
+                         await saveLedgerRecord({
+                            clientId,
+                            date: selectedDate,
+                            description: 'Manual Win Adjustment',
+                            typeLabel: '中',
+                            amount: Math.abs(diff),
+                            operation: 'subtract', 
+                            column: 'col1',
+                            isVisible: true
+                        });
+                    }
+                }
+            })();
+
+            return current;
+        });
+    }, [selectedDate]);
 
     const weekInfo = useMemo(() => {
         if (!selectedDate) return '';
         const d = new Date(selectedDate);
         const weeks = getWeeksForMonth(d.getFullYear(), d.getMonth());
-        
-        const selectedDateStr = selectedDate; // YYYY-MM-DD
-        
-        const foundWeek = Object.keys(weeks).find(w => {
-            return weeks[parseInt(w)].some(day => {
-                const yearStr = day.getFullYear();
-                const m = String(day.getMonth() + 1).padStart(2, '0');
-                const dayStr = String(day.getDate()).padStart(2, '0');
-                return `${yearStr}-${m}-${dayStr}` === selectedDateStr;
-            });
-        });
-        
-        if (foundWeek) {
-            const index = Object.keys(weeks).map(Number).sort((a,b)=>a-b).indexOf(Number(foundWeek));
-            return `Week ${index + 1}`;
-        }
+        const dateStr = selectedDate;
+        const foundWeek = Object.keys(weeks).find(w => weeks[parseInt(w)].some(day => 
+            `${day.getFullYear()}-${String(day.getMonth()+1).padStart(2,'0')}-${String(day.getDate()).padStart(2,'0')}` === dateStr
+        ));
+        if (foundWeek) return `Week ${Object.keys(weeks).indexOf(foundWeek) + 1}`;
         return '';
     }, [selectedDate]);
 
+    // Split clients for 2 columns
+    const midPoint = Math.ceil(clients.length / 2);
+    const leftClients = clients.slice(0, midPoint);
+    const rightClients = clients.slice(midPoint);
+
+    const totalDailyWinnings = Object.values(clientWinnings).reduce((acc, val) => acc + (parseFloat(val) || 0), 0);
+
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Left Column: Calculator Form */}
-            <div className="lg:col-span-1">
-                 <div className="flex items-center space-x-3 mb-6">
-                    <div className="bg-gradient-to-r from-yellow-400 to-orange-500 p-3 rounded-xl shadow-lg text-white">
-                        <Calculator size={28} />
-                    </div>
-                    <div>
-                        <h1 className="text-2xl font-bold text-gray-800">Prize Calculator</h1>
-                        <p className="text-gray-500 text-sm">Add multiple winning entries.</p>
-                    </div>
-                </div>
-
-                <form onSubmit={handleAddEntry} className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
-                    <div className="flex border-b border-gray-100">
-                        <button type="button" onClick={() => { setMode('4D'); handleResetForm(); }} className={`flex-1 py-3 text-center font-bold transition-colors ${mode === '4D' ? 'bg-blue-600 text-white' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}>4D</button>
-                        <button type="button" onClick={() => { setMode('3D'); handleResetForm(); }} className={`flex-1 py-3 text-center font-bold transition-colors ${mode === '3D' ? 'bg-purple-600 text-white' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}>3D</button>
-                    </div>
-
-                    <div className="p-6 space-y-6">
+        <div className="max-w-[1600px] mx-auto p-4 md:p-8 space-y-8">
+            
+            {/* Top Section: Calculator */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                {/* Calculator Form */}
+                <div className="lg:col-span-4 xl:col-span-3">
+                     <div className="flex items-center space-x-3 mb-6">
+                        <div className="bg-gradient-to-r from-red-500 to-orange-600 p-3 rounded-xl shadow-lg text-white">
+                            <Calculator size={24} />
+                        </div>
                         <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Sides (M/K/T)</label>
-                            <div className="grid grid-cols-3 gap-2">
-                                {['M', 'K', 'T'].map(side => (
-                                    <button
-                                        type="button" key={side} onClick={() => handleSideToggle(side)}
-                                        className={`py-2 rounded-lg border-2 font-bold transition-all text-sm ${sides.includes(side) ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-gray-200 bg-white'}`}
-                                    >
-                                        {side}
-                                    </button>
-                                ))}
+                            <h1 className="text-2xl font-bold text-gray-800">Win Calculator</h1>
+                            <p className="text-gray-500 text-xs">Calculate prize payouts.</p>
+                        </div>
+                    </div>
+
+                    <form onSubmit={handleAddEntry} className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
+                        <div className="flex border-b border-gray-100">
+                            <button type="button" onClick={() => { setMode('4D'); handleResetForm(); }} className={`flex-1 py-3 text-center font-bold transition-colors ${mode === '4D' ? 'bg-blue-600 text-white' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}>4D</button>
+                            <button type="button" onClick={() => { setMode('3D'); handleResetForm(); }} className={`flex-1 py-3 text-center font-bold transition-colors ${mode === '3D' ? 'bg-purple-600 text-white' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}>3D</button>
+                        </div>
+
+                        <div className="p-5 space-y-5">
+                            {/* Sides */}
+                            <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2">Sides</label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {['M', 'K', 'T'].map(side => (
+                                        <button type="button" key={side} onClick={() => handleSideToggle(side)} className={`py-2 rounded-lg border-2 font-bold transition-all text-sm ${sides.includes(side) ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white'}`}>{side}</button>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
 
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Winning Number</label>
-                            <input type="text" value={winningNumber} onChange={(e) => setWinningNumber(e.target.value.replace(/\D/g,'').slice(0, mode === '4D' ? 4 : 3))} className="w-full text-center text-3xl font-mono tracking-widest font-bold border-2 border-gray-200 rounded-xl py-2 focus:outline-none focus:border-blue-500 transition-all" placeholder={mode === '4D' ? '8888' : '888'} required />
-                        </div>
+                            {/* Number */}
+                            <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2">Number</label>
+                                <input type="text" value={winningNumber} onChange={(e) => setWinningNumber(e.target.value.replace(/\D/g,'').slice(0, mode === '4D' ? 4 : 3))} className="w-full text-center text-3xl font-mono tracking-widest font-bold border-2 border-gray-200 rounded-xl py-2 focus:outline-none focus:border-blue-500 transition-all" placeholder={mode === '4D' ? '8888' : '888'} required />
+                            </div>
 
-                        <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Winning Position</label>
-                            <div className="grid grid-cols-3 gap-2">
-                                <button type="button" onClick={() => setPosition('1')} className={`py-2 rounded-lg border-2 font-bold transition-all text-xs ${position === '1' ? 'border-yellow-500 bg-yellow-50' : 'border-gray-200 bg-white'}`}>{PRIZE_LABELS_CHINESE['1']}</button>
-                                <button type="button" onClick={() => setPosition('2')} className={`py-2 rounded-lg border-2 font-bold transition-all text-xs ${position === '2' ? 'border-gray-400 bg-gray-50' : 'border-gray-200 bg-white'}`}>{PRIZE_LABELS_CHINESE['2']}</button>
-                                <button type="button" onClick={() => setPosition('3')} className={`py-2 rounded-lg border-2 font-bold transition-all text-xs ${position === '3' ? 'border-orange-400 bg-orange-50' : 'border-gray-200 bg-white'}`}>{PRIZE_LABELS_CHINESE['3']}</button>
-                                {mode === '4D' && <>
-                                    <button type="button" onClick={() => setPosition('S')} className={`py-2 rounded-lg border-2 font-bold transition-all text-xs ${position === 'S' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white'}`}>{PRIZE_LABELS_CHINESE['S']}</button>
-                                    <button type="button" onClick={() => setPosition('C')} className={`col-span-2 py-2 rounded-lg border-2 font-bold transition-all text-xs ${position === 'C' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white'}`}>{PRIZE_LABELS_CHINESE['C']}</button>
+                            {/* Position */}
+                            <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2">Position</label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {['1', '2', '3'].map(p => (
+                                        <button key={p} type="button" onClick={() => setPosition(p as PrizePosition)} className={`py-2 rounded-lg border-2 font-bold text-xs ${position === p ? 'border-yellow-500 bg-yellow-50' : 'border-gray-200'}`}>{PRIZE_LABELS_CHINESE[p as PrizePosition]}</button>
+                                    ))}
+                                    {mode === '4D' && ['S', 'C'].map(p => (
+                                        <button key={p} type="button" onClick={() => setPosition(p as PrizePosition)} className={`py-2 rounded-lg border-2 font-bold text-xs ${position === p ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}>{PRIZE_LABELS_CHINESE[p as PrizePosition]}</button>
+                                    ))}
+                                </div>
+                            </div>
+                            
+                            {/* Bets */}
+                            <div className="grid grid-cols-2 gap-3">
+                                {mode === '4D' ? <>
+                                    <div><label className="block text-[10px] font-bold text-gray-500 mb-1">Big (大)</label><input type="number" value={betBig} onChange={(e) => setBetBig(e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg font-mono" placeholder="0" /></div>
+                                    <div><label className={`block text-[10px] font-bold mb-1 ${['S','C'].includes(position) ? 'text-gray-300' : 'text-gray-500'}`}>Small (小)</label><input type="number" value={betSmall} onChange={(e) => setBetSmall(e.target.value)} disabled={['S','C'].includes(position)} className="w-full p-2 border border-gray-300 rounded-lg font-mono disabled:bg-gray-50" placeholder="0" /></div>
+                                </> : <>
+                                    <div><label className={`block text-[10px] font-bold mb-1 ${position !== '1' ? 'text-gray-300' : 'text-gray-500'}`}>3A</label><input type="number" value={betA} onChange={(e) => setBetA(e.target.value)} disabled={position !== '1'} className="w-full p-2 border border-gray-300 rounded-lg font-mono disabled:bg-gray-50" placeholder="0" /></div>
+                                    <div><label className="block text-[10px] font-bold text-gray-500 mb-1">3ABC</label><input type="number" value={betABC} onChange={(e) => setBetABC(e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg font-mono" placeholder="0" /></div>
                                 </>}
                             </div>
-                        </div>
-                        
-                        <div className="grid grid-cols-2 gap-4">
-                            {mode === '4D' ? <>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-700 mb-1">Big (大)</label>
-                                    <input type="number" value={betBig} onChange={(e) => setBetBig(e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg font-mono" placeholder="0" />
-                                </div>
-                                <div>
-                                    <label className={`block text-xs font-bold mb-1 ${['S','C'].includes(position) ? 'text-gray-400' : 'text-gray-700'}`}>Small (小)</label>
-                                    <input type="number" value={betSmall} onChange={(e) => setBetSmall(e.target.value)} disabled={['S','C'].includes(position)} className="w-full p-2 border border-gray-300 rounded-lg font-mono disabled:bg-gray-100" placeholder="0" />
-                                </div>
-                            </> : <>
-                                <div>
-                                    <label className={`block text-xs font-bold mb-1 ${position !== '1' ? 'text-gray-400' : 'text-gray-700'}`}>3A</label>
-                                    <input type="number" value={betA} onChange={(e) => setBetA(e.target.value)} disabled={position !== '1'} className="w-full p-2 border border-gray-300 rounded-lg font-mono disabled:bg-gray-100" placeholder="0" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-700 mb-1">3ABC</label>
-                                    <input type="number" value={betABC} onChange={(e) => setBetABC(e.target.value)} className="w-full p-2 border border-gray-300 rounded-lg font-mono" placeholder="0" />
-                                </div>
-                            </>}
-                        </div>
 
-                        <button type="submit" className="w-full py-3 bg-blue-600 text-white rounded-lg font-bold flex items-center justify-center shadow-lg hover:bg-blue-700 transition-colors">
-                            <Plus size={20} className="mr-2" /> Add to List
-                        </button>
-                    </div>
-                </form>
-            </div>
-
-            {/* Right Column: List and Save */}
-            <div className="lg:col-span-2 space-y-6">
-                <div className="bg-white p-6 rounded-2xl shadow-xl border border-gray-100">
-                    <h2 className="text-xl font-bold text-gray-800 mb-4">Winning Entries ({entries.length})</h2>
-                    {entries.length === 0 ? (
-                        <div className="text-center text-gray-400 py-12">No winnings added yet.</div>
-                    ) : (
-                        <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-                            {entries.map(entry => (
-                                <div key={entry.id} className="bg-gray-50 p-3 rounded-lg flex items-center justify-between animate-in fade-in">
-                                    <div className="flex items-center space-x-4">
-                                        <span className="font-mono font-bold text-lg text-blue-600 bg-white px-2 py-1 rounded border border-gray-200">{entry.number}</span>
-                                        <div>
-                                            <p className="font-semibold text-gray-800">
-                                                <span className="font-bold text-indigo-600">{entry.sides.join('')}</span> - {entry.positionLabel}
-                                            </p>
-                                            <p className="text-xs text-gray-500">
-                                                Bet on <span className="font-bold">{entry.betType}</span>: ${entry.betAmount}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center space-x-4">
-                                        <span className="font-mono font-bold text-green-600 text-lg">${entry.winAmount.toLocaleString(undefined, {minimumFractionDigits:2})}</span>
-                                        <button onClick={() => handleDeleteEntry(entry.id)} className="p-1 text-gray-400 hover:text-red-600"><Trash2 size={16} /></button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-
-                <div className={`rounded-2xl p-6 text-center text-white shadow-lg transition-all transform ${totalWinnings > 0 ? 'bg-gradient-to-br from-green-500 to-emerald-700' : 'bg-gray-800'}`}>
-                    <h2 className="text-sm font-bold uppercase tracking-widest opacity-80 mb-2">Total to Pay Out</h2>
-                    <div className="flex items-center justify-center text-5xl font-bold font-mono"><span className="text-2xl mr-1 self-start mt-2">$</span>{totalWinnings.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-                </div>
-
-                {entries.length > 0 && (
-                     <div className="bg-white p-6 rounded-2xl shadow-xl border border-gray-100 animate-in fade-in space-y-4">
-                        <h3 className="font-bold text-lg text-gray-800">Save to Client Ledger</h3>
-                        <div className="flex flex-col md:flex-row gap-4">
-                            <div className="relative w-full md:w-48">
-                                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
-                                    <Calendar size={18} />
-                                </div>
-                                <input
-                                    type="date"
-                                    value={selectedDate}
-                                    onChange={(e) => setSelectedDate(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-gray-700"
-                                />
-                                {weekInfo && (
-                                    <div className="absolute -top-3 left-2 bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded">
-                                        {weekInfo}
-                                    </div>
-                                )}
-                            </div>
-                            <div className="relative flex-1">
-                                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18}/>
-                                <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg appearance-none bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                    <option value="">-- Select Paper Client --</option>
-                                    {clients.map(c => <option key={c.id} value={c.id}>{c.name} ({c.code})</option>)}
-                                </select>
-                            </div>
-                            <button onClick={handleSaveToLedger} disabled={!selectedClientId || isSaving} className="px-6 py-3 bg-green-600 text-white font-bold rounded-lg shadow-lg hover:bg-green-700 disabled:opacity-50 flex items-center justify-center">
-                                <Save size={18} className="mr-2"/> {isSaving ? 'Saving...' : 'Save Winnings'}
+                            <button type="submit" className="w-full py-3 bg-gray-800 text-white rounded-xl font-bold flex items-center justify-center shadow-lg hover:bg-gray-900 transition-colors">
+                                <Plus size={18} className="mr-2" /> Add Entry
                             </button>
                         </div>
-                        <button onClick={handleClearAll} className="w-full py-2 text-gray-500 hover:bg-gray-100 rounded-lg flex items-center justify-center font-semibold transition-colors mt-4">
-                            <RotateCcw size={16} className="mr-2" /> Clear All
-                        </button>
-                     </div>
+                    </form>
+                </div>
+
+                {/* Right: Results List & Actions */}
+                <div className="lg:col-span-8 xl:col-span-9 flex flex-col h-full">
+                    <div className="bg-white p-6 rounded-2xl shadow-xl border border-gray-100 flex-1 flex flex-col">
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-xl font-bold text-gray-800">Current Calculation</h2>
+                            <div className="text-right">
+                                <span className="text-sm text-gray-400 font-bold uppercase tracking-wider">Total Payout</span>
+                                <div className="text-3xl font-mono font-bold text-red-600">${totalWinnings.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+                            </div>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto bg-gray-50 rounded-xl p-4 mb-6 border border-gray-100 min-h-[200px]">
+                            {entries.length === 0 ? (
+                                <div className="h-full flex flex-col items-center justify-center text-gray-400">
+                                    <Trophy size={48} className="mb-2 opacity-20" />
+                                    <p>No entries added.</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    {entries.map(entry => (
+                                        <div key={entry.id} className="bg-white p-3 rounded-lg border border-gray-200 flex items-center justify-between shadow-sm">
+                                            <div className="flex items-center space-x-4">
+                                                <div className="bg-yellow-100 text-yellow-800 font-bold px-2 py-1 rounded text-xs">{entry.positionLabel}</div>
+                                                <div className="font-mono text-lg font-bold text-gray-800">{entry.number}</div>
+                                                <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">{entry.sides.join('')}</div>
+                                                <div className="text-xs text-gray-400">Bet: ${entry.betAmount} ({entry.betType})</div>
+                                            </div>
+                                            <div className="flex items-center space-x-4">
+                                                <span className="font-mono font-bold text-red-600">+ ${entry.winAmount.toLocaleString()}</span>
+                                                <button onClick={() => handleDeleteEntry(entry.id)} className="text-gray-300 hover:text-red-500"><Trash2 size={16} /></button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {entries.length > 0 && (
+                            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 animate-in slide-in-from-bottom-2">
+                                <div className="flex flex-col md:flex-row gap-4 items-end">
+                                    <div className="w-full md:w-48">
+                                        <label className="block text-xs font-bold text-gray-500 mb-1">Date</label>
+                                        <div className="relative">
+                                            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                                            <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="w-full pl-9 pr-3 py-2 border rounded-lg text-sm font-medium" />
+                                        </div>
+                                        {weekInfo && <div className="text-[10px] text-blue-600 font-bold mt-1 text-right">{weekInfo}</div>}
+                                    </div>
+                                    <div className="flex-1 w-full">
+                                        <label className="block text-xs font-bold text-gray-500 mb-1">Client Account</label>
+                                        <div className="relative">
+                                            <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                                            <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} className="w-full pl-9 pr-3 py-2 border rounded-lg text-sm font-medium appearance-none">
+                                                <option value="">-- Select Client --</option>
+                                                {clients.map(c => <option key={c.id} value={c.id}>{c.name} ({c.code})</option>)}
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <button onClick={handleSaveToLedger} disabled={!selectedClientId || isSaving} className="w-full md:w-auto px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold shadow-md flex items-center justify-center disabled:opacity-50">
+                                        {isSaving ? 'Saving...' : <><Save size={18} className="mr-2" /> Save & Update List</>}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Bottom Section: Daily Summary List */}
+            <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+                <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4 bg-gray-50">
+                    <div>
+                        <h2 className="text-xl font-bold text-gray-800 flex items-center">
+                            <Medal size={20} className="mr-2 text-red-500" />
+                            Daily Winnings Summary
+                        </h2>
+                        <p className="text-sm text-gray-500 mt-1">Total winnings ("中") for {selectedDate}. Changes here update the ledger.</p>
+                    </div>
+                    <div className="text-right">
+                        <div className="text-xs text-gray-400 font-bold uppercase tracking-wider">Total Daily Payout</div>
+                        <div className="text-2xl font-mono font-bold text-red-600">${totalDailyWinnings.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+                    </div>
+                </div>
+
+                {loadingList ? (
+                    <div className="p-12 text-center text-gray-400">Loading daily data...</div>
+                ) : (
+                    <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-0">
+                        <div className="flex flex-col">
+                            {leftClients.map(c => (
+                                <ClientWinInputRow 
+                                    key={c.id} 
+                                    client={c} 
+                                    value={clientWinnings[c.id] || ''} 
+                                    onChange={handleListInputChange} 
+                                    onBlur={handleListInputBlur} 
+                                />
+                            ))}
+                        </div>
+                        <div className="flex flex-col border-t md:border-t-0 md:border-l border-gray-100 pt-4 md:pt-0 md:pl-12">
+                            {rightClients.map(c => (
+                                <ClientWinInputRow 
+                                    key={c.id} 
+                                    client={c} 
+                                    value={clientWinnings[c.id] || ''} 
+                                    onChange={handleListInputChange} 
+                                    onBlur={handleListInputBlur} 
+                                />
+                            ))}
+                        </div>
+                    </div>
                 )}
             </div>
-            
+
+            {/* Success Overlay */}
             {showSuccess && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 animate-in fade-in">
-                    <div className="bg-white p-8 rounded-2xl shadow-2xl flex flex-col items-center text-center">
-                        <CheckCircle size={48} className="text-green-500 mb-4"/>
-                        <h2 className="text-xl font-bold text-gray-800">Saved Successfully!</h2>
-                        <p className="text-gray-500 mt-2">Redirecting to client's ledger...</p>
+                <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 animate-in fade-in duration-200">
+                    <div className="bg-white px-8 py-6 rounded-2xl shadow-2xl flex flex-col items-center">
+                        <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-3">
+                            <CheckCircle size={28} className="text-green-600" />
+                        </div>
+                        <h3 className="text-lg font-bold text-gray-800">Saved!</h3>
                     </div>
                 </div>
             )}
