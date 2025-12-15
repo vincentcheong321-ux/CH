@@ -140,6 +140,9 @@ const MobileReport: React.FC = () => {
       let skippedCount = 0;
 
       for (const row of parsedData) {
+          // Skip the Total row from saving logic if it was parsed
+          if (row.id === '总额') continue;
+
           const client = clients.find(c => c.code.toLowerCase() === row.id.toLowerCase());
           
           if (client) {
@@ -333,42 +336,41 @@ const MobileReport: React.FC = () => {
                                     </thead>
                                     <tbody className="divide-y divide-gray-100 font-mono">
                                         {parsedData.map((row, idx) => {
+                                            const isTotalRow = row.id === '总额';
                                             const isMatched = clients.some(c => c.code.toLowerCase() === row.id.toLowerCase());
                                             const v = row.values;
                                             
                                             return (
-                                            <tr key={idx} className={`hover:bg-gray-50 ${!isMatched ? 'opacity-50 bg-red-50/30' : ''}`}>
-                                                <td className="px-4 py-2 text-left sticky left-0 bg-white hover:bg-gray-50 border-r border-gray-100 z-10">
-                                                    <div className="font-bold text-gray-900">{row.name}</div>
-                                                    <div className="flex items-center">
-                                                        <span className="text-[10px] text-gray-500 mr-2">{row.id}</span>
-                                                        {!isMatched && <span className="text-[9px] text-red-500 font-bold px-1 border border-red-200 rounded">No Match</span>}
-                                                    </div>
+                                            <tr key={idx} className={`hover:bg-gray-50 ${isTotalRow ? 'bg-gray-100 font-bold border-t-2 border-gray-300' : (!isMatched ? 'opacity-50 bg-red-50/30' : '')}`}>
+                                                <td className={`px-4 py-2 text-left sticky left-0 z-10 border-r border-gray-100 ${isTotalRow ? 'bg-gray-100' : 'bg-white'}`}>
+                                                    <div className="font-bold text-gray-900">{row.id}</div>
+                                                    <div className="text-[10px] text-gray-500 mr-2">{row.name}</div>
+                                                    {!isMatched && !isTotalRow && <span className="text-[9px] text-red-500 font-bold px-1 border border-red-200 rounded">No Match</span>}
                                                 </td>
                                                 {/* Member */}
-                                                <td className="px-2 py-2 bg-gray-50/30 border-r border-gray-100">{v[0]}</td>
+                                                <td className="px-2 py-2 border-r border-gray-100">{v[0]}</td>
                                                 
                                                 {/* Company */}
                                                 <td className="px-2 py-2">{v[1]}</td>
                                                 <td className="px-2 py-2">{v[2]}</td>
                                                 <td className="px-2 py-2">{v[3]}</td>
                                                 <td className="px-2 py-2">{v[4]}</td>
-                                                <td className="px-2 py-2 font-bold bg-blue-50 text-blue-800 border-r border-blue-100">{v[5]}</td>
+                                                <td className={`px-2 py-2 ${isTotalRow ? 'bg-blue-100' : 'bg-blue-50'} text-blue-800 border-r border-blue-100`}>{v[5]}</td>
                                                 
                                                 {/* Shareholder */}
                                                 <td className="px-2 py-2">{v[6]}</td>
                                                 <td className="px-2 py-2">{v[7]}</td>
                                                 <td className="px-2 py-2">{v[8]}</td>
-                                                <td className="px-2 py-2 text-orange-600 bg-orange-50/30">{v[9]}</td>
+                                                <td className="px-2 py-2 text-orange-600">{v[9]}</td>
                                                 <td className="px-2 py-2">{v[10]}</td>
-                                                <td className="px-2 py-2 font-bold bg-indigo-50 text-indigo-800 border-r border-indigo-100">{v[11]}</td>
+                                                <td className={`px-2 py-2 ${isTotalRow ? 'bg-indigo-100' : 'bg-indigo-50'} text-indigo-800 border-r border-indigo-100`}>{v[11]}</td>
                                                 
                                                 {/* Agent */}
                                                 <td className="px-2 py-2">{v[12]}</td>
                                                 <td className="px-2 py-2">{v[13]}</td>
                                                 <td className="px-2 py-2">{v[14]}</td>
                                                 <td className="px-2 py-2">{v[15]}</td>
-                                                <td className={`px-2 py-2 font-extrabold bg-green-100 border-l border-green-200 ${parseFloat(String(v[16]).replace(/,/g,'')) >= 0 ? 'text-green-800' : 'text-red-700'}`}>{v[16]}</td>
+                                                <td className={`px-2 py-2 ${isTotalRow ? 'bg-green-200' : 'bg-green-100'} border-l border-green-200 ${parseFloat(String(v[16]).replace(/,/g,'')) >= 0 ? 'text-green-800' : 'text-red-700'}`}>{v[16]}</td>
                                             </tr>
                                         )})}
                                     </tbody>

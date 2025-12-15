@@ -417,29 +417,34 @@ const SalesIndex: React.FC = () => {
       c.code.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Calculate Column Totals for Mobile List
+  const mobileColumnTotals = useMemo(() => {
+      const totals = new Array(17).fill(0);
+      filteredMobileClients.forEach(client => {
+          const clientRecords = salesData.filter(r => r.clientId === client.id);
+          const record = clientRecords[clientRecords.length - 1]; // Latest record
+          
+          if (record?.mobileRawData) {
+              record.mobileRawData.forEach((val, idx) => {
+                  // Only sum first 17 columns (0 to 16)
+                  if (idx < 17) {
+                      const num = parseFloat(String(val).replace(/,/g, '')) || 0;
+                      totals[idx] += num;
+                  }
+              });
+          }
+      });
+      return totals;
+  }, [filteredMobileClients, salesData]);
+
   const totalPaper = [...zClients, ...cClients].reduce((acc, client) => {
       const clientRecs = salesData.filter(r => r.clientId === client.id);
       const rawSum = clientRecs.reduce((sum, r) => sum + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
       return acc + (rawSum * 0.86); // Deduct 14% for display
   }, 0);
 
-  // ADJUSTMENT: Mobile Week Total based on Shareholder Total (Index 11 in new structure)
-  const totalMobile = mobileClients.reduce((acc, client) => {
-      const clientRecs = salesData.filter(r => r.clientId === client.id);
-      return acc + clientRecs.reduce((sum, r) => {
-          // Check Raw Data Array first
-          // New Structure: Shareholder Total is Index 11.
-          let valStr = '';
-          if (r.mobileRawData && r.mobileRawData.length > 11) {
-              valStr = r.mobileRawData[11];
-          } else if (r.mobileRaw) {
-              valStr = r.mobileRaw.shareholderTotal;
-          }
-          
-          const val = parseFloat(String(valStr).replace(/,/g, ''));
-          return sum + (isNaN(val) ? 0 : val);
-      }, 0);
-  }, 0);
+  // ADJUSTMENT: Mobile Week Total based on Shareholder Total (Index 11) for top bar display
+  const totalMobile = mobileColumnTotals[11] || 0;
 
   const sortedWeekKeys = Object.keys(weeksData).map(Number).sort((a,b) => a-b);
   
@@ -457,6 +462,9 @@ const SalesIndex: React.FC = () => {
       const formatDate = (d: Date) => `${String(d.getDate()).padStart(2, '0')} ${MONTH_NAMES[d.getMonth()].slice(0,3)}`;
       return `${formatDate(firstDay)} - ${formatDate(lastDay)}`;
   };
+
+  const formatTotal = (val: number) => val.toLocaleString(undefined, {minimumFractionDigits: 2});
+  const getTotalColor = (val: number) => val >= 0 ? 'text-green-800' : 'text-red-700';
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-gray-50">
@@ -656,6 +664,36 @@ const SalesIndex: React.FC = () => {
                                         </tr>
                                     )}
                                 </tbody>
+                                {/* Footer with Calculated Totals */}
+                                <tfoot className="bg-gray-100 border-t-2 border-gray-300 font-mono font-bold text-[10px] md:text-xs">
+                                    <tr>
+                                        <td className="px-2 py-3 sticky left-0 bg-gray-100 z-10 border-r border-gray-300 text-left">总额</td>
+                                        {/* Member */}
+                                        <td className="px-2 py-3 text-right border-r border-gray-300 text-gray-700">{formatTotal(mobileColumnTotals[0])}</td>
+                                        
+                                        {/* Company */}
+                                        <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[1])}</td>
+                                        <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[2])}</td>
+                                        <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[3])}</td>
+                                        <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[4])}</td>
+                                        <td className={`px-2 py-3 text-right bg-blue-100 border-x border-blue-200 ${getTotalColor(mobileColumnTotals[5])}`}>{formatTotal(mobileColumnTotals[5])}</td>
+                                        
+                                        {/* Shareholder */}
+                                        <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[6])}</td>
+                                        <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[7])}</td>
+                                        <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[8])}</td>
+                                        <td className="px-2 py-3 text-right text-orange-700">{formatTotal(mobileColumnTotals[9])}</td>
+                                        <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[10])}</td>
+                                        <td className={`px-2 py-3 text-right bg-indigo-100 border-x border-indigo-200 ${getTotalColor(mobileColumnTotals[11])}`}>{formatTotal(mobileColumnTotals[11])}</td>
+                                        
+                                        {/* Agent */}
+                                        <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[12])}</td>
+                                        <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[13])}</td>
+                                        <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[14])}</td>
+                                        <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[15])}</td>
+                                        <td className={`px-2 py-3 text-right bg-green-200 border-l border-green-300 ${getTotalColor(mobileColumnTotals[16])}`}>{formatTotal(mobileColumnTotals[16])}</td>
+                                    </tr>
+                                </tfoot>
                             </table>
                         </div>
                     </div>
