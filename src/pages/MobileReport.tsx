@@ -104,7 +104,7 @@ const MobileReport: React.FC = () => {
             // Values are everything from First Stat onwards
             const values = parts.slice(firstStatIndex);
             
-            // Expecting 17+ columns. 
+            // Should have around 17 columns based on new requirement
             if (values.length >= 10) {
                 data.push({ id, name, values });
             }
@@ -145,26 +145,24 @@ const MobileReport: React.FC = () => {
           if (client) {
               const values = row.values;
               
-              // Dynamically find totals based on length
-              // Company Total is always Index 7 (8th value)
-              // Agent Total is always Last Value
-              // Shareholder Total logic:
-              // If 17 cols (Legacy): Index 11.
-              // If 19 cols (Standard): Index 13.
+              // New Structure Indices:
+              // 0: Member Bet
+              // 1-5: Company (Total at 5)
+              // 6-11: Shareholder (Total at 11)
+              // 12-16: Agent (Total at 16)
               
-              const compTotalIdx = 7;
-              const agentTotalIdx = values.length - 1;
-              let shareholderTotalIdx = 11;
-              if (values.length >= 19) shareholderTotalIdx = 13;
+              // Safe access
+              const compTotal = values[5] || '0';
+              const shareholderTotal = values[11] || '0';
+              const agentTotal = values[16] || values[values.length - 1] || '0';
 
-              const lastValStr = values[agentTotalIdx];
-              const val = parseFloat(String(lastValStr).replace(/,/g, ''));
+              const val = parseFloat(String(agentTotal).replace(/,/g, ''));
 
               const mobileRaw = {
                   memberBet: values[0] || '0',
-                  companyTotal: values[compTotalIdx] || '0',
-                  shareholderTotal: values[shareholderTotalIdx] || '0',
-                  agentTotal: values[agentTotalIdx] || '0'
+                  companyTotal: compTotal,
+                  shareholderTotal: shareholderTotal,
+                  agentTotal: agentTotal
               };
 
               if (!isNaN(val)) {
@@ -206,26 +204,10 @@ const MobileReport: React.FC = () => {
       setSaveStatus({ type: 'success', message: 'Loaded historical data into view.' });
   };
 
-  // Helper to normalize row display (pads to 19 columns if short)
-  const normalizeRow = (values: any[]) => {
-      // If 17 cols (Legacy), map to 19 structure
-      // 17 structure: [0-7 Comp, 8-11 Shareholder(4), 12-16 Agent]
-      // 19 structure: [0-7 Comp, 8-13 Shareholder(6), 14-18 Agent]
-      if (values.length === 17) {
-          return [
-              ...values.slice(0, 11), // 0-10 (Comp + Shareholder first 3)
-              '-', '-',               // Insert 2 missing Shareholder cols (Win, Fee)
-              values[11],             // Shareholder Total
-              ...values.slice(12)     // Agent
-          ];
-      }
-      return values;
-  };
-
   return (
     <div className="bg-gray-50 min-h-screen p-4 md:p-8">
         <div className="max-w-[1400px] mx-auto">
-            {/* ... (Header Section same as before) ... */}
+            {/* Header Section */}
             <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
                 <div className="flex items-center space-x-4">
                     <Link to="/sales" className="p-2 hover:bg-gray-200 rounded-full text-gray-600">
@@ -233,7 +215,7 @@ const MobileReport: React.FC = () => {
                     </Link>
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900">Mobile Report Importer</h1>
-                        <p className="text-gray-500 text-sm">Import via Copy-Paste.</p>
+                        <p className="text-gray-500 text-sm">Structure: Member(1) + Comp(5) + Share(6) + Agent(5)</p>
                     </div>
                 </div>
                 
@@ -256,7 +238,6 @@ const MobileReport: React.FC = () => {
             {activeTab === 'import' && (
                 <>
                     <div className="flex flex-wrap items-center gap-3 bg-white p-2 rounded-xl shadow-sm border border-gray-200 mb-6">
-                        {/* ... (Selects and Buttons same as before) ... */}
                         <div className="flex items-center space-x-2 border-r border-gray-200 pr-3">
                             <select 
                                 value={selectedMonth} 
@@ -324,38 +305,36 @@ const MobileReport: React.FC = () => {
                                     <thead className="bg-gray-100 text-gray-700 font-bold">
                                         <tr>
                                             <th className="px-4 py-3 text-left sticky left-0 bg-gray-100 z-10 border-r border-gray-200">登陆帐号 / 名字</th>
-                                            {/* Member (0-2) */}
-                                            <th className="px-2 py-3 bg-gray-50">会员总投注</th>
-                                            <th className="px-2 py-3 bg-gray-50">会员总数</th>
-                                            <th className="px-2 py-3 bg-gray-50">tgmts</th>
+                                            {/* Member (1 col) */}
+                                            <th className="px-2 py-3 bg-gray-50 border-r border-gray-200">会员总投注</th>
                                             
-                                            {/* Company (3-7) */}
-                                            <th className="px-2 py-3 border-l border-gray-200">公司 营业额</th>
+                                            {/* Company (5 cols) */}
+                                            <th className="px-2 py-3">公司 营业额</th>
                                             <th className="px-2 py-3">公司 佣金</th>
                                             <th className="px-2 py-3">公司 赔出</th>
                                             <th className="px-2 py-3">公司 补费用</th>
-                                            <th className="px-2 py-3 font-extrabold bg-blue-50 text-blue-800">公司 总额</th>
+                                            <th className="px-2 py-3 font-extrabold bg-blue-50 text-blue-800 border-r border-gray-200">公司 总额</th>
                                             
-                                            {/* Shareholder (8-13) - Expanded to 6 Cols */}
-                                            <th className="px-2 py-3 border-l border-gray-200">股东 营业额</th>
+                                            {/* Shareholder (6 cols) */}
+                                            <th className="px-2 py-3">股东 营业额</th>
                                             <th className="px-2 py-3">股东 佣金</th>
                                             <th className="px-2 py-3">股东 赔出</th>
                                             <th className="px-2 py-3 text-orange-600 bg-orange-50/20">股东 赢彩</th>
                                             <th className="px-2 py-3">股东 补费用</th>
-                                            <th className="px-2 py-3 font-extrabold bg-blue-50 text-blue-800">股东 总额</th>
+                                            <th className="px-2 py-3 font-extrabold bg-indigo-50 text-indigo-800 border-r border-gray-200">股东 总额</th>
                                             
-                                            {/* Agent (14-18) */}
-                                            <th className="px-2 py-3 border-l border-gray-200">总代理 营业额</th>
+                                            {/* Agent (5 cols) */}
+                                            <th className="px-2 py-3">总代理 营业额</th>
                                             <th className="px-2 py-3">总代理 佣金</th>
                                             <th className="px-2 py-3">总代理 赔出</th>
                                             <th className="px-2 py-3">总代理 抽费用</th>
-                                            <th className="px-2 py-3 font-extrabold bg-green-100 text-green-900 border-l-2 border-green-200">总代理 总额</th>
+                                            <th className="px-2 py-3 font-extrabold bg-green-100 text-green-900 border-l border-green-200">总代理 总额</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100 font-mono">
                                         {parsedData.map((row, idx) => {
                                             const isMatched = clients.some(c => c.code.toLowerCase() === row.id.toLowerCase());
-                                            const displayValues = normalizeRow(row.values);
+                                            const v = row.values;
                                             
                                             return (
                                             <tr key={idx} className={`hover:bg-gray-50 ${!isMatched ? 'opacity-50 bg-red-50/30' : ''}`}>
@@ -366,15 +345,30 @@ const MobileReport: React.FC = () => {
                                                         {!isMatched && <span className="text-[9px] text-red-500 font-bold px-1 border border-red-200 rounded">No Match</span>}
                                                     </div>
                                                 </td>
-                                                {displayValues.map((v: any, i: number) => (
-                                                    <td key={i} className={`px-2 py-2 
-                                                        ${i===7||i===13?'font-bold bg-blue-50/30':''} 
-                                                        ${i===3||i===8||i===14?'border-l border-gray-100':''} 
-                                                        ${i===displayValues.length-1 ? (parseFloat(String(v).replace(/,/g,'')) >= 0 ? 'text-green-700 bg-green-50 font-extrabold border-l-2 border-green-100' : 'text-red-600 bg-green-50 font-extrabold border-l-2 border-green-100') : ''}
-                                                    `}>
-                                                        {v}
-                                                    </td>
-                                                ))}
+                                                {/* Member */}
+                                                <td className="px-2 py-2 bg-gray-50/30 border-r border-gray-100">{v[0]}</td>
+                                                
+                                                {/* Company */}
+                                                <td className="px-2 py-2">{v[1]}</td>
+                                                <td className="px-2 py-2">{v[2]}</td>
+                                                <td className="px-2 py-2">{v[3]}</td>
+                                                <td className="px-2 py-2">{v[4]}</td>
+                                                <td className="px-2 py-2 font-bold bg-blue-50 text-blue-800 border-r border-blue-100">{v[5]}</td>
+                                                
+                                                {/* Shareholder */}
+                                                <td className="px-2 py-2">{v[6]}</td>
+                                                <td className="px-2 py-2">{v[7]}</td>
+                                                <td className="px-2 py-2">{v[8]}</td>
+                                                <td className="px-2 py-2 text-orange-600 bg-orange-50/30">{v[9]}</td>
+                                                <td className="px-2 py-2">{v[10]}</td>
+                                                <td className="px-2 py-2 font-bold bg-indigo-50 text-indigo-800 border-r border-indigo-100">{v[11]}</td>
+                                                
+                                                {/* Agent */}
+                                                <td className="px-2 py-2">{v[12]}</td>
+                                                <td className="px-2 py-2">{v[13]}</td>
+                                                <td className="px-2 py-2">{v[14]}</td>
+                                                <td className="px-2 py-2">{v[15]}</td>
+                                                <td className={`px-2 py-2 font-extrabold bg-green-100 border-l border-green-200 ${parseFloat(String(v[16]).replace(/,/g,'')) >= 0 ? 'text-green-800' : 'text-red-700'}`}>{v[16]}</td>
                                             </tr>
                                         )})}
                                     </tbody>
