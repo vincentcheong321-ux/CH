@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calculator, Trophy, RotateCcw, Plus, Trash2, Save, User, CheckCircle } from 'lucide-react';
+import { Calculator, Trophy, RotateCcw, Plus, Trash2, Save, User, CheckCircle, Calendar } from 'lucide-react';
 import { getClients, saveLedgerRecord } from '../services/storageService';
 import { Client } from '../types';
 
@@ -49,18 +49,20 @@ const WinCalculator: React.FC = () => {
     // Client selection
     const [clients, setClients] = useState<Client[]>([]);
     const [selectedClientId, setSelectedClientId] = useState('');
+    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [isSaving, setIsSaving] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
 
     useEffect(() => {
         const fetchClients = async () => {
             const clientList = await getClients();
-            setClients(clientList);
+            // Filter: Only allow saving to PAPER clients
+            const paperClients = clientList.filter(c => (c.category || 'paper') === 'paper');
+            setClients(paperClients);
         };
         fetchClients();
     }, []);
 
-    // FIX: Corrected variable 's' to 'side' in the array spread.
     const handleSideToggle = (side: string) => {
         setSides(prev => 
             prev.includes(side) ? prev.filter(s => s !== side) : [...prev, side].sort()
@@ -72,13 +74,17 @@ const WinCalculator: React.FC = () => {
         if (!winningNumber || sides.length === 0) return;
 
         const newEntries: WinningEntry[] = [];
+        const sideCount = sides.length;
         
         if (mode === '4D') {
             const bigAmt = parseFloat(betBig) || 0;
             const smallAmt = parseFloat(betSmall) || 0;
 
             if (bigAmt > 0) {
-                const winAmount = bigAmt * PAYOUTS_4D.BIG[position];
+                // Divide total bet by number of sides to get amount per side
+                const effectiveBet = bigAmt / sideCount;
+                const winAmount = effectiveBet * PAYOUTS_4D.BIG[position];
+                
                 if (winAmount > 0) {
                     newEntries.push({
                         id: Date.now() + 'b', number: winningNumber, mode, position, sides,
@@ -88,7 +94,8 @@ const WinCalculator: React.FC = () => {
                 }
             }
             if (smallAmt > 0) {
-                const winAmount = smallAmt * PAYOUTS_4D.SMALL[position];
+                const effectiveBet = smallAmt / sideCount;
+                const winAmount = effectiveBet * PAYOUTS_4D.SMALL[position];
                 if (winAmount > 0) {
                     newEntries.push({
                         id: Date.now() + 's', number: winningNumber, mode, position, sides,
@@ -102,7 +109,8 @@ const WinCalculator: React.FC = () => {
             const abcAmt = parseFloat(betABC) || 0;
 
             if (aAmt > 0 && position === '1') {
-                const winAmount = aAmt * PAYOUTS_3D['3A'];
+                const effectiveBet = aAmt / sideCount;
+                const winAmount = effectiveBet * PAYOUTS_3D['3A'];
                 if(winAmount > 0) {
                     newEntries.push({
                         id: Date.now() + 'a', number: winningNumber, mode, position, sides,
@@ -112,7 +120,8 @@ const WinCalculator: React.FC = () => {
                 }
             }
             if (abcAmt > 0 && ['1', '2', '3'].includes(position)) {
-                const winAmount = abcAmt * PAYOUTS_3D['3ABC'];
+                const effectiveBet = abcAmt / sideCount;
+                const winAmount = effectiveBet * PAYOUTS_3D['3ABC'];
                 if(winAmount > 0) {
                      newEntries.push({
                         id: Date.now() + 'abc', number: winningNumber, mode, position, sides,
@@ -150,7 +159,7 @@ const WinCalculator: React.FC = () => {
     const totalWinnings = useMemo(() => entries.reduce((acc, curr) => acc + curr.winAmount, 0), [entries]);
     
     const handleSaveToLedger = async () => {
-        if (!selectedClientId || entries.length === 0) return;
+        if (!selectedClientId || entries.length === 0 || !selectedDate) return;
         
         setIsSaving(true);
         const description = entries
@@ -159,7 +168,7 @@ const WinCalculator: React.FC = () => {
 
         await saveLedgerRecord({
             clientId: selectedClientId,
-            date: new Date().toISOString().split('T')[0],
+            date: selectedDate,
             description: `Winnings: ${description}`,
             typeLabel: '中',
             amount: totalWinnings,
@@ -299,10 +308,21 @@ const WinCalculator: React.FC = () => {
                      <div className="bg-white p-6 rounded-2xl shadow-xl border border-gray-100 animate-in fade-in space-y-4">
                         <h3 className="font-bold text-lg text-gray-800">Save to Client Ledger</h3>
                         <div className="flex flex-col md:flex-row gap-4">
+                            <div className="relative w-full md:w-48">
+                                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">
+                                    <Calendar size={18} />
+                                </div>
+                                <input
+                                    type="date"
+                                    value={selectedDate}
+                                    onChange={(e) => setSelectedDate(e.target.value)}
+                                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-gray-700"
+                                />
+                            </div>
                             <div className="relative flex-1">
                                 <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18}/>
                                 <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg appearance-none bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                    <option value="">-- Select a Client --</option>
+                                    <option value="">-- Select Paper Client --</option>
                                     {clients.map(c => <option key={c.id} value={c.id}>{c.name} ({c.code})</option>)}
                                 </select>
                             </div>
