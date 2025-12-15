@@ -144,8 +144,9 @@ const CashCredit: React.FC = () => {
   }, [selectedDate]);
 
   const calculateTotal = (): number => {
-    // FIX: Explicitly typing the reduce callback parameters to resolve type inference error.
-    return Object.values(cashCredits).reduce((acc: number, val: string) => {
+    // FIX: Explicitly casting `Object.values` to `string[]` ensures type safety for `reduce`.
+    const values = Object.values(cashCredits) as string[];
+    return values.reduce((acc: number, val: string) => {
         const num = parseFloat(val);
         return acc + (isNaN(num) ? 0 : num);
     }, 0);

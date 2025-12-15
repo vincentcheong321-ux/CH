@@ -230,7 +230,6 @@ const ClientList: React.FC = () => {
   // --- Bulk Print Logic ---
   const handlePrint = () => window.print();
   
-  // FIX: Changed component definition to use React.FC to correctly handle React's special 'key' prop.
   const BulkLedgerSheet: React.FC<{ client: Client }> = ({ client }) => {
       const [allRecords, setAllRecords] = useState<LedgerRecord[]>([]);
       const [isReady, setIsReady] = useState(false);
