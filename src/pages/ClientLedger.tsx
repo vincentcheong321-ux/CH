@@ -55,9 +55,18 @@ const ClientLedger: React.FC = () => {
   const [verticalPadding, setVerticalPadding] = useState<{top: number, bottom: number}>({ top: 40, bottom: 40 });
   const containerRef = useRef<HTMLDivElement>(null);
   const dragInfo = useRef<{ type: 'col'|'top'|'bottom', index?: number, startX?: number, startY?: number, startWidths?: number[], startHeight?: number, containerWidth?: number } | null>(null);
+  
+  // Responsive State
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; type: string; targetId?: string; title: string; message: string; } | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -319,15 +328,16 @@ const ClientLedger: React.FC = () => {
   const col2Ledger = useMemo(() => calculateColumn('col2'), [weekRecords]);
 
   const LedgerColumnView = ({ data, footerLabel = "收" }: { data: ReturnType<typeof calculateColumn>, footerLabel?: string }) => {
-      if (data.processed.length === 0) return <div className="flex-1 min-h-[50px]" />;
+      // Empty state handler
+      if (data.processed.length === 0) return <div className="flex-1 min-h-[50px] flex items-center justify-center text-gray-300 text-sm italic">No records</div>;
 
       const isNegative = data.finalBalance < 0;
       let displayLabel = footerLabel;
       if (isNegative && (footerLabel === '收' || footerLabel === '欠')) displayLabel = '补';
       
       return (
-      <div className="flex flex-col items-center">
-          <div className="flex flex-col w-fit items-end">
+      <div className="flex flex-col items-center w-full">
+          <div className="flex flex-col w-full md:w-fit items-end">
                 {data.processed.map((r) => {
                     const isReflected = r.id.startsWith('sale_') || r.id.startsWith('adv_') || r.id.startsWith('draw_') || r.id === 'agg_sale_week';
                     
@@ -345,7 +355,7 @@ const ClientLedger: React.FC = () => {
                     }
 
                     return (
-                        <div key={r.id} className={`group flex justify-end items-center leading-none relative gap-1 md:gap-1.5 ${!r.isVisible ? 'opacity-30 grayscale no-print' : ''}`}>
+                        <div key={r.id} className={`group flex justify-between md:justify-end items-center leading-none relative gap-1 md:gap-1.5 w-full md:w-auto py-1 ${!r.isVisible ? 'opacity-30 grayscale no-print' : ''}`}>
                             {/* Disable Edit/Delete for Reflected Records */}
                             {!isReflected && (
                                 <div className="no-print opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1 absolute -left-16 z-10 bg-white shadow-sm rounded border border-gray-100 p-1">
@@ -353,20 +363,22 @@ const ClientLedger: React.FC = () => {
                                     <button onClick={() => requestDeleteRecord(r.id)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 size={12} /></button>
                                 </div>
                             )}
-                            <div className={`text-sm md:text-lg font-bold uppercase tracking-wide text-gray-700`}>{r.typeLabel}</div>
+                            <div className={`text-sm md:text-lg font-bold uppercase tracking-wide text-gray-700 w-1/3 md:w-auto text-left md:text-right`}>{r.typeLabel}</div>
                             {/* Note Text Size Increased */}
-                            {r.description && <div className="text-sm md:text-base text-gray-700 font-medium mr-1 md:mr-2 max-w-[100px] md:max-w-[150px] truncate">{r.description}</div>}
-                            <div className={`text-base md:text-xl font-mono font-bold w-16 md:w-28 text-right ${textColor}`}>
+                            <div className="flex-1 text-right">
+                                {r.description && <div className="text-sm md:text-base text-gray-700 font-medium mr-1 md:mr-2 truncate inline-block">{r.description}</div>}
+                            </div>
+                            <div className={`text-base md:text-xl font-mono font-bold w-24 md:w-28 text-right ${textColor}`}>
                                 {displayValue}
                             </div>
                         </div>
                     );
                 })}
           </div>
-          <div className="mt-1 pt-1 flex flex-col items-end w-fit border-t-2 border-gray-900">
-                <div className="flex items-center gap-1 md:gap-2 justify-end">
+          <div className="mt-2 pt-2 flex flex-col items-end w-full md:w-fit border-t-2 border-gray-900">
+                <div className="flex items-center gap-2 justify-between w-full md:justify-end">
                     <span className="text-sm md:text-lg font-bold text-gray-900 uppercase">{displayLabel}</span>
-                    <span className={`text-lg md:text-2xl font-mono font-bold w-20 md:w-32 text-right ${data.finalBalance >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
+                    <span className={`text-lg md:text-2xl font-mono font-bold w-auto md:w-32 text-right ${data.finalBalance >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
                         {data.finalBalance < 0 ? `(${Math.abs(data.finalBalance).toLocaleString(undefined, {minimumFractionDigits: 2})})` : data.finalBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}
                     </span>
                 </div>
@@ -516,8 +528,8 @@ const ClientLedger: React.FC = () => {
             )}
         </div>
 
-        <div className="overflow-x-auto pb-4">
-            <div id="printable-area" className="relative max-w-5xl mx-auto min-w-[700px] md:min-w-0">
+        <div className="pb-4">
+            <div id="printable-area" className="relative max-w-5xl mx-auto md:min-w-0">
                 <div className="bg-white border border-gray-200 shadow-sm min-h-[400px] relative text-lg font-serif">
                     <div style={{ height: `${verticalPadding.top}px` }} className="relative group w-full no-print-bg"><div className="absolute bottom-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResize('top', undefined, e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div></div>
 
@@ -528,16 +540,17 @@ const ClientLedger: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="flex w-full min-h-[400px] relative" ref={containerRef}>
-                        <div style={{ width: `${colWidths[0]}%` }} className="relative flex flex-col p-1 border-r border-transparent group overflow-hidden">
+                    <div className="flex flex-col md:flex-row w-full min-h-[400px] relative" ref={containerRef}>
+                        {/* On Mobile, show only if activeColumn matches. On Desktop, show always */}
+                        <div style={{ width: isMobile ? '100%' : `${colWidths[0]}%` }} className={`relative flex-col p-1 border-r border-transparent group overflow-hidden ${isMobile && activeColumn !== 'col1' ? 'hidden' : 'flex'}`}>
                             <LedgerColumnView data={col1Ledger} footerLabel="收"/>
                             <div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print" onMouseDown={(e) => startResize('col', 0, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div>
                         </div>
-                        <div style={{ width: `${colWidths[1]}%` }} className="relative flex flex-col p-1 border-r border-transparent group overflow-hidden">
+                        <div style={{ width: isMobile ? '100%' : `${colWidths[1]}%` }} className={`relative flex-col p-1 border-r border-transparent group overflow-hidden ${isMobile && activeColumn !== 'col2' ? 'hidden' : 'flex'}`}>
                             <LedgerColumnView data={col2Ledger} footerLabel="收"/>
                             <div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print" onMouseDown={(e) => startResize('col', 1, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div>
                         </div>
-                        <div style={{ width: `${colWidths[2]}%` }} className="relative flex flex-col p-1 bg-gray-50/30 overflow-hidden">
+                        <div style={{ width: isMobile ? '100%' : `${colWidths[2]}%` }} className={`relative flex-col p-1 bg-gray-50/30 overflow-hidden ${isMobile && activeColumn !== 'main' ? 'hidden' : 'flex'}`}>
                             <LedgerColumnView data={mainLedger} footerLabel="欠"/>
                         </div>
                     </div>
