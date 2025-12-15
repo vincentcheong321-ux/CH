@@ -318,12 +318,12 @@ const WinCalculator: React.FC = () => {
         });
 
         // 2. Save to Main Ledger (Summary)
-        // User requested: "main ledger 22/11 Winnings Total remove, show “中” instead"
-        // We set description to dateLabel so context is kept, but the Type Label "中" dominates visually.
+        // User requested: "main ledger remove the date and winings total text"
+        // We set description to empty string '', so only Type Label '中' and amount are shown.
         await saveLedgerRecord({
             clientId: selectedClientId,
             date: selectedDate,
-            description: dateLabel, 
+            description: '', 
             typeLabel: '中',
             amount: totalWinnings,
             operation: 'subtract', 

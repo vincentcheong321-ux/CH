@@ -48,6 +48,10 @@ interface WinningBreakdownProps {
 }
 
 const WinningBreakdown: React.FC<WinningBreakdownProps> = ({ description, totalAmount, recordId, onDelete, onEdit }) => {
+    // Extract date if present (Format: "22/11 Winnings: ...")
+    const dateMatch = description.match(/^(\d{1,2}\/\d{1,2})\s+Winnings:/i);
+    const displayDate = dateMatch ? dateMatch[1] : null;
+
     // Robustly remove prefix like "22/11 Winnings: " or just "Winnings: "
     const rawContent = description.replace(/^.*?Winnings:\s*/i, '');
     const entries = rawContent.split(';').map(s => s.trim()).filter(s => s);
@@ -59,6 +63,15 @@ const WinningBreakdown: React.FC<WinningBreakdownProps> = ({ description, totalA
                 <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-1.5 text-blue-600 hover:bg-blue-50 bg-white shadow-md rounded-lg border border-gray-200"><Pencil size={12} /></button>
                 <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1.5 text-red-600 hover:bg-red-50 bg-white shadow-md rounded-lg border border-gray-200"><Trash2 size={12} /></button>
             </div>
+
+            {/* Date Header */}
+            {displayDate && (
+                <div className="mb-2 flex justify-start">
+                    <span className="text-sm font-bold text-gray-800 bg-gray-100 px-2 py-0.5 rounded border border-gray-200 font-mono">
+                        {displayDate}
+                    </span>
+                </div>
+            )}
 
             <div className="space-y-3">
                 {entries.map((entry, idx) => {
@@ -633,7 +646,7 @@ const ClientLedger: React.FC = () => {
                                     <div className="p-1.5 rounded-full mb-1 bg-black bg-opacity-5">{cat.operation === 'add' ? <Plus size={14}/> : cat.operation === 'subtract' ? <Minus size={14}/> : <Hash size={14}/>}</div>
                                     <span className="text-xs font-bold text-center truncate w-full">{cat.label}</span>
                                 </button>
-                                <button onClick={(e) => { e.stopPropagation(); setConfirmModal({isOpen:true, type:'DELETE_CATEGORY', targetId:cat.id, title:'Delete Button', message:'Remove this button?'}); }} className="absolute -top-1.5 -right-1.5 text-gray-400 hover:text-red-600 bg-white rounded-full p-0.5 shadow-md opacity-0 group-hover:opacity-100 transition-opacity"><X size={12}/></button>
+                                <button onClick={(e) => { e.stopPropagation(); setConfirmModal({isOpen:true, type:'DELETE_CATEGORY', targetId:cat.id, title:'DELETE', message:'Remove this button?'}); }} className="absolute -top-1.5 -right-1.5 text-gray-400 hover:text-red-600 bg-white rounded-full p-0.5 shadow-md opacity-0 group-hover:opacity-100 transition-opacity"><X size={12}/></button>
                             </div>
                         ))}
                         <button onClick={handleQuickEntry} className="flex flex-col items-center justify-center p-3 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-all text-indigo-700 active:scale-95">
