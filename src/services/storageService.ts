@@ -21,11 +21,18 @@ export const getCategories = (): TransactionCategory[] => {
     { id: '5', label: '上欠', operation: 'add', color: 'bg-green-100 text-green-800' },
     { id: '6', label: '%', operation: 'subtract', color: 'bg-red-100 text-red-800' },
     { id: '7', label: '来', operation: 'subtract', color: 'bg-red-100 text-red-800' },
+    { id: '8', label: '电', operation: 'subtract', color: 'bg-red-100 text-red-800' },
   ];
 
   if (categories.length === 0) {
     categories = defaults;
     localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories));
+  } else {
+      // Ensure '电' exists if migrating
+      if (!categories.find(c => c.label === '电')) {
+          categories.push({ id: generateId(), label: '电', operation: 'subtract', color: 'bg-red-100 text-red-800' });
+          localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories));
+      }
   }
   return categories;
 };
@@ -85,14 +92,15 @@ export const seedData = () => {
 // --- 3. Unified Financial Journal Adapters ---
 
 // Helper for sorting by system-defined order
+// Requested Order: 上欠 -> 收 -> 电 -> 中 -> 来 -> 支 -> Manual
 const getRecordSortPriority = (record: LedgerRecord): number => {
-    // Handle manual '上欠' with high priority as well
     if (record.id.startsWith('draw_') || record.typeLabel === '上欠') return 1;
-    if (record.id.startsWith('sale_') || record.id === 'agg_sale_week') return 2; // 收
-    if (record.id.startsWith('cred_')) return 3; // 来
-    if (record.id.startsWith('adv_')) return 4;  // 支
-    if (record.typeLabel === '中') return 6;     // Winnings (User Request: "below of all order")
-    return 5; // Manual entries come last
+    if (record.id.startsWith('sale_') || record.id === 'agg_sale_week' || record.typeLabel === '收') return 2;
+    if (record.typeLabel === '电') return 3;
+    if (record.typeLabel === '中') return 4;
+    if (record.id.startsWith('cred_') || record.typeLabel === '来') return 5;
+    if (record.id.startsWith('adv_') || record.typeLabel === '支' || record.typeLabel === '支钱') return 6;
+    return 7; // Manual entries come last
 };
 
 // A. Helper to map DB row to LedgerRecord

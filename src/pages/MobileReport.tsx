@@ -2,9 +2,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { ArrowLeft, RefreshCw, Save, CheckCircle, AlertCircle, History, FileText, Loader2, Image as ImageIcon } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { getClients, saveSaleRecord, saveMobileReportHistory, getMobileReportHistory } from '../services/storageService';
+import { getClients, saveSaleRecord, saveMobileReportHistory, getMobileReportHistory, saveLedgerRecord } from '../services/storageService';
 import { Client } from '../types';
 import { getWeeksForMonth, MONTH_NAMES } from '../utils/reportUtils';
+
+// Mapping: Mobile Code -> Paper Code (Case Insensitive)
+const MOBILE_TO_PAPER_MAP: Record<string, string> = {
+    'sk3964': 'z07',  // SINGER -> 顺
+    'sk3818': 'z19',  // MOOI -> 妹
+    'sk3619': 'c13',  // ZHONG -> 中
+    'sk8959': 'c17',  // YEE -> 仪
+    'vc9486': '9486'  // vincent -> 张
+};
 
 const MobileReport: React.FC = () => {
   const navigate = useNavigate();
@@ -143,31 +152,32 @@ const MobileReport: React.FC = () => {
           // Skip the Total row from saving logic if it was parsed
           if (row.id === '总额') continue;
 
+          // 1. Standard Mobile Client Matching
           const client = clients.find(c => c.code.toLowerCase() === row.id.toLowerCase());
           
+          const values = row.values;
+          
+          // New Structure Indices:
+          // 0: Member Bet
+          // 1-5: Company (Total at 5)
+          // 6-11: Shareholder (Total at 11)
+          // 12-16: Agent (Total at 16)
+          
+          // Safe access
+          const compTotal = values[5] || '0';
+          const shareholderTotal = values[11] || '0';
+          const agentTotal = values[16] || values[values.length - 1] || '0';
+
+          const val = parseFloat(String(agentTotal).replace(/,/g, ''));
+
+          const mobileRaw = {
+              memberBet: values[0] || '0',
+              companyTotal: compTotal,
+              shareholderTotal: shareholderTotal,
+              agentTotal: agentTotal
+          };
+
           if (client) {
-              const values = row.values;
-              
-              // New Structure Indices:
-              // 0: Member Bet
-              // 1-5: Company (Total at 5)
-              // 6-11: Shareholder (Total at 11)
-              // 12-16: Agent (Total at 16)
-              
-              // Safe access
-              const compTotal = values[5] || '0';
-              const shareholderTotal = values[11] || '0';
-              const agentTotal = values[16] || values[values.length - 1] || '0';
-
-              const val = parseFloat(String(agentTotal).replace(/,/g, ''));
-
-              const mobileRaw = {
-                  memberBet: values[0] || '0',
-                  companyTotal: compTotal,
-                  shareholderTotal: shareholderTotal,
-                  agentTotal: agentTotal
-              };
-
               if (!isNaN(val)) {
                   await saveSaleRecord({
                       clientId: client.id,
@@ -181,6 +191,49 @@ const MobileReport: React.FC = () => {
               }
           } else {
               skippedCount++;
+          }
+
+          // 2. Special Paper Client "Dian" (电) Cross-Posting
+          // Check if this mobile row ID maps to a known Paper Client
+          const mappedPaperCode = MOBILE_TO_PAPER_MAP[row.id.toLowerCase()];
+          
+          if (mappedPaperCode) {
+              // Find the corresponding Paper Client
+              const paperClient = clients.find(c => c.code.toLowerCase() === mappedPaperCode.toLowerCase());
+              
+              if (paperClient) {
+                  // "record down 公司 总额 of the member" (Company Total is at Index 5)
+                  const companyTotalRaw = values[5]; 
+                  const companyAmount = parseFloat(String(companyTotalRaw).replace(/,/g, ''));
+
+                  if (!isNaN(companyAmount) && companyAmount !== 0) {
+                      // Logic: 
+                      // If Company Total > 0 (Company Won), user usually owes.
+                      // If Company Total < 0 (Company Lost), user is credited.
+                      // Label: "电"
+                      // Operation: "deduction" context in prompt usually implies Subtract visually or logically?
+                      // We will store it such that:
+                      // If Amount > 0 -> Add (Increases Balance)
+                      // If Amount < 0 -> Subtract (Decreases Balance)
+                      // But the prompt says "shows '电' deduction". 
+                      // In storageService, '电' is set to `subtract` operation by default (Red).
+                      // However, we want the math to be correct.
+                      // If Company Won (+), Client Balance Increases.
+                      // If Company Lost (-), Client Balance Decreases.
+                      
+                      await saveLedgerRecord({
+                          clientId: paperClient.id,
+                          date: targetDate,
+                          description: '', // Empty description
+                          typeLabel: '电',
+                          amount: Math.abs(companyAmount),
+                          // If positive, it adds to debt. If negative, it reduces debt.
+                          operation: companyAmount >= 0 ? 'add' : 'subtract',
+                          column: 'main',
+                          isVisible: true
+                      });
+                  }
+              }
           }
       }
 
@@ -338,6 +391,7 @@ const MobileReport: React.FC = () => {
                                         {parsedData.map((row, idx) => {
                                             const isTotalRow = row.id === '总额';
                                             const isMatched = clients.some(c => c.code.toLowerCase() === row.id.toLowerCase());
+                                            const mappedPaper = MOBILE_TO_PAPER_MAP[row.id.toLowerCase()];
                                             const v = row.values;
                                             
                                             return (
@@ -346,6 +400,7 @@ const MobileReport: React.FC = () => {
                                                     <div className="font-bold text-gray-900">{row.id}</div>
                                                     <div className="text-[10px] text-gray-500 mr-2">{row.name}</div>
                                                     {!isMatched && !isTotalRow && <span className="text-[9px] text-red-500 font-bold px-1 border border-red-200 rounded">No Match</span>}
+                                                    {mappedPaper && <span className="text-[9px] text-blue-500 font-bold px-1 border border-blue-200 rounded ml-1">→ {mappedPaper.toUpperCase()}</span>}
                                                 </td>
                                                 {/* Member */}
                                                 <td className="px-2 py-2 border-r border-gray-100">{v[0]}</td>
