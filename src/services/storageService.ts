@@ -369,9 +369,8 @@ export const getAllDrawRecords = async (): Promise<DrawBalance[]> => {
     return (data || []).map((d: any) => ({ clientId: d.client_id, date: d.date, balance: d.balance }));
 };
 
+// Explicit return type to prevent TS implicit any error
 export const getClientBalancesPriorToDate = async (date: string): Promise<Record<string, number>> => {
-    // This is complex in Supabase. For now, fetch all draw balances and compute locally or rely on most recent.
-    // Simplifying: Fetch all draw records, filter locally for < date, find max date per client.
     const { data } = await supabase.from('draw_balances').select('*').lt('date', date);
     
     const latestBalances: Record<string, { date: string, balance: number }> = {};
@@ -389,11 +388,18 @@ export const getClientBalancesPriorToDate = async (date: string): Promise<Record
 };
 
 export const getTotalDrawReceivables = async () => {
-    // Mock logic: sum of latest draw for all clients
+    // Sum of the latest draw balance for every client
     const { data } = await supabase.from('draw_balances').select('*');
     if(!data) return 0;
-    // ... filtering logic similar to above if needed ...
-    return 0; 
+
+    const latestBalances: Record<string, { date: string, balance: number }> = {};
+    data.forEach((d: any) => {
+        if (!latestBalances[d.client_id] || d.date > latestBalances[d.client_id].date) {
+            latestBalances[d.client_id] = { date: d.date, balance: d.balance };
+        }
+    });
+
+    return Object.values(latestBalances).reduce((acc, curr) => acc + curr.balance, 0);
 };
 
 // --- Mobile Report ---
