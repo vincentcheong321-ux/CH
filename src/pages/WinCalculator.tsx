@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Calculator, Trophy, RotateCcw, Plus, Trash2, Save, User, CheckCircle, Calendar, Hash, Medal, Layers, RefreshCw } from 'lucide-react';
@@ -288,22 +289,43 @@ const WinCalculator: React.FC = () => {
         if (!selectedClientId || entries.length === 0 || !selectedDate) return;
         
         setIsSaving(true);
+
+        // Date Format: DD/MM (22/11)
+        const [yStr, mStr, dStr] = selectedDate.split('-');
+        const dateLabel = `${dStr}/${mStr}`;
+
         const description = entries
             .map(e => {
                 const typeStr = e.playType === 'Box' ? 'iBox' : e.playType === 'Pau' ? '包' : '';
-                return `${e.sides.join('')} ${e.number}-${e.betAmount}-${e.winAmount.toFixed(0)} ${e.positionLabel} ${typeStr}`.trim();
+                // Use Number(val.toFixed(2)) to show decimals if present, but avoid long floating point errors
+                const exactWin = Number(e.winAmount.toFixed(2));
+                return `${e.sides.join('')} ${e.number}-${e.betAmount}-${exactWin} ${e.positionLabel} ${typeStr}`.trim();
             })
             .join('; ');
 
-        // Save Record
+        const finalDescription = `${dateLabel} Winnings: ${description}`;
+
+        // 1. Save to Panel 1 (Detailed)
         await saveLedgerRecord({
             clientId: selectedClientId,
             date: selectedDate,
-            description: `Winnings: ${description}`,
+            description: finalDescription,
             typeLabel: '中',
             amount: totalWinnings,
             operation: 'subtract', 
             column: 'col1',
+            isVisible: true
+        });
+
+        // 2. Save to Main Ledger (Summary)
+        await saveLedgerRecord({
+            clientId: selectedClientId,
+            date: selectedDate,
+            description: `${dateLabel} Winnings Total`,
+            typeLabel: '中',
+            amount: totalWinnings,
+            operation: 'subtract', 
+            column: 'main',
             isVisible: true
         });
 

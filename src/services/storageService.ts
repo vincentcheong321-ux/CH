@@ -569,6 +569,9 @@ export const getWinningsByDate = async (date: string): Promise<Record<string, nu
         data?.forEach((row: any) => {
             // Check if it is a winning record (label '中')
             if (row.data?.typeLabel === '中') {
+                // Prevent double counting if both Col1 and Main records exist
+                if (row.data?.column === 'main') return;
+
                 const current = map[row.client_id] || 0;
                 // Winnings are stored as negative amounts (subtract operation). We display positive magnitude.
                 map[row.client_id] = current + Math.abs(row.amount);
@@ -593,6 +596,9 @@ export const getWinningsByDateRange = async (startDate: string, endDate: string)
         
         data?.forEach((row: any) => {
             if (row.data?.typeLabel === '中') {
+                // Prevent double counting if both Col1 and Main records exist
+                if (row.data?.column === 'main') return;
+
                 const current = map[row.client_id] || 0;
                 map[row.client_id] = current + Math.abs(row.amount);
             }
