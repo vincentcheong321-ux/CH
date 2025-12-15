@@ -99,7 +99,8 @@ const ClientList: React.FC = () => {
   };
 
   // Helper component for bulk view (Duplicated from ClientLedger to ensure visual consistency in print mode)
-  const BulkLedgerSheet = ({ client }: { client: Client }) => {
+  // FIX: Changed component definition to use React.FC to correctly handle React's special 'key' prop.
+  const BulkLedgerSheet: React.FC<{ client: Client }> = ({ client }) => {
       const records = getLedgerRecords(client.id);
 
       const calculateColumn = (columnKey: 'main' | 'col1' | 'col2') => {

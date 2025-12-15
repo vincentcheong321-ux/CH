@@ -146,7 +146,8 @@ const ClientList: React.FC = () => {
   );
 
   // Grid Card Component
-  const ClientCard = ({ client }: { client: Client }) => {
+  // FIX: Changed component definition to use React.FC to correctly handle React's special 'key' prop.
+  const ClientCard: React.FC<{ client: Client }> = ({ client }) => {
     const isSelected = selectedClientIds.has(client.id);
     
     return (
@@ -246,7 +247,8 @@ const ClientList: React.FC = () => {
   // --- Bulk Print Logic ---
   const handlePrint = () => window.print();
   
-  const BulkLedgerSheet = ({ client }: { client: Client }) => {
+  // FIX: Changed component definition to use React.FC to correctly handle React's special 'key' prop.
+  const BulkLedgerSheet: React.FC<{ client: Client }> = ({ client }) => {
       const [allRecords, setAllRecords] = useState<LedgerRecord[]>([]);
       const [isReady, setIsReady] = useState(false);
 

@@ -336,7 +336,7 @@ const ClientLedger: React.FC = () => {
 
   const LedgerColumnView = ({ data, footerLabel = "收" }: { data: ReturnType<typeof calculateColumn>, footerLabel?: string }) => {
       // Empty state handler
-      if (data.processed.length === 0) return <div className="flex-1 min-h-[50px] flex items-center justify-center text-gray-300 text-sm italic">No records</div>;
+      if (data.processed.length === 0) return <div className="flex-1 min-h-[50px]" />;
 
       const isNegative = data.finalBalance < 0;
       let displayLabel = footerLabel;

@@ -120,17 +120,19 @@ const CashAdvanceReport: React.FC = () => {
       setSelectedDate(`${yearStr}-${m}-${d}`);
   };
 
+  // FIX: Added explicit type for 'prev' to prevent 'unknown' type inference issues.
   const handleInputChange = useCallback((clientId: string, val: string) => {
       if (val === '' || /^-?\d*\.?\d*$/.test(val)) {
-        setCashAdvances(prev => ({
+        setCashAdvances((prev: Record<string, string>) => ({
             ...prev,
             [clientId]: val
         }));
       }
   }, []);
 
+  // FIX: Added explicit type for 'current' to prevent 'unknown' type inference issues.
   const handleInputBlur = useCallback(async (clientId: string) => {
-      setCashAdvances(current => {
+      setCashAdvances((current: Record<string, string>) => {
           const val = current[clientId];
           if (val !== '' && !isNaN(Number(val))) {
               saveCashAdvance(selectedDate, clientId, parseFloat(val));
@@ -171,7 +173,8 @@ const CashAdvanceReport: React.FC = () => {
   };
 
   // --- Week Grouping Logic ---
-  const currentMonthWeeks = useMemo(() => {
+  // FIX: Added explicit type for useMemo to ensure correct type inference downstream.
+  const currentMonthWeeks: Record<number, Date[]> = useMemo(() => {
       return getWeeksForMonth(currentYear, currentMonth);
   }, [currentYear, currentMonth]);
 
@@ -179,11 +182,12 @@ const CashAdvanceReport: React.FC = () => {
   
   if (selectedDate) {
       for (const [wNum, days] of Object.entries(currentMonthWeeks)) {
-          const match = days.some(d => {
+          // FIX: Added explicit cast for `days` to ensure `some` method is available.
+          const match = (days as Date[]).some(d => {
               const yearStr = d.getFullYear();
               const m = String(d.getMonth() + 1).padStart(2, '0');
               const dayStr = String(d.getDate()).padStart(2, '0');
-              return `${yearStr}-${m}-${dayStr}` === selectedDate;
+              return `${yearStr}-${m}-${dStr}` === selectedDate;
           });
           if (match) {
               activeWeekNum = wNum;

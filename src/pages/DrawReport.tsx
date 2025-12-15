@@ -125,17 +125,19 @@ const DrawReport: React.FC = () => {
       setSelectedDate(`${yearStr}-${m}-${d}`);
   };
 
+  // FIX: Added explicit type for 'prev' to prevent 'unknown' type inference issues.
   const handleInputChange = useCallback((clientId: string, val: string) => {
       if (val === '' || /^-?\d*\.?\d*$/.test(val)) {
-        setClientBalances(prev => ({
+        setClientBalances((prev: Record<string, string>) => ({
             ...prev,
             [clientId]: val
         }));
       }
   }, []);
 
+  // FIX: Added explicit type for 'currentBalances' to prevent 'unknown' type inference issues.
   const handleInputBlur = useCallback(async (clientId: string) => {
-      setClientBalances(currentBalances => {
+      setClientBalances((currentBalances: Record<string, string>) => {
           const val = currentBalances[clientId];
           if (val !== '' && !isNaN(Number(val))) {
               saveDrawBalance(selectedDate, clientId, parseFloat(val));
@@ -202,7 +204,8 @@ const DrawReport: React.FC = () => {
   };
 
   // --- Week Grouping Logic ---
-  const currentMonthWeeks = useMemo(() => {
+  // FIX: Added explicit type for useMemo to ensure correct type inference downstream.
+  const currentMonthWeeks: Record<number, Date[]> = useMemo(() => {
       return getWeeksForMonth(currentYear, currentMonth);
   }, [currentYear, currentMonth]);
 
@@ -212,7 +215,8 @@ const DrawReport: React.FC = () => {
   if (selectedDate) {
       for (const [wNum, days] of Object.entries(currentMonthWeeks)) {
           // Check if selectedDate matches any day in this week
-          const match = days.some(d => {
+          // FIX: Added explicit cast for `days` to ensure `some` method is available.
+          const match = (days as Date[]).some(d => {
               const yearStr = d.getFullYear();
               const m = String(d.getMonth() + 1).padStart(2, '0');
               const dayStr = String(d.getDate()).padStart(2, '0');
@@ -277,7 +281,7 @@ const DrawReport: React.FC = () => {
   // Create string for display
   const activeWeekDateRange = activeWeekDays.length > 0 
     ? getWeekRangeString(null, null, activeWeekDays)
-    : '';
+    : `Week ${activeWeekIndex + 1}`;
 
   return (
     <div className="flex flex-col lg:flex-row gap-6 min-h-screen pb-20">
