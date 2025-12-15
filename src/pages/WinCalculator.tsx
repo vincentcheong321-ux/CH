@@ -227,15 +227,21 @@ const WinCalculator: React.FC = () => {
         });
 
         // Update local list state optimistically with explicit typing
-        setClientWinnings((prev: Record<string, string>) => {
-            const raw = prev[selectedClientId];
+        setClientWinnings((prev) => {
+            const record = prev as Record<string, string>;
+            const raw = record[selectedClientId];
             const currentVal = parseFloat(raw || '0') || 0;
-            return { ...prev, [selectedClientId]: (currentVal + totalWinnings).toString() };
+            return { ...record, [selectedClientId]: (currentVal + totalWinnings).toString() };
         });
 
         setIsSaving(false);
         setShowSuccess(true);
-        setTimeout(() => setShowSuccess(false), 2000);
+        
+        // Redirect after short delay
+        setTimeout(() => {
+            navigate(`/clients/${selectedClientId}`);
+        }, 800);
+        
         handleClearAll();
     };
 
@@ -250,10 +256,6 @@ const WinCalculator: React.FC = () => {
     const handleListInputBlur = useCallback(async (clientId: string) => {
         setClientWinnings((current: Record<string, string>) => {
             const newVal = parseFloat(current[clientId]) || 0;
-            
-            // We need to compare this new Total with what's actually in DB to find the Delta.
-            // Since we don't have the original loaded value stored separately in this simple implementation,
-            // we will re-fetch the DB value for this client to be safe, then calculate difference.
             
             // Async wrapper
             (async () => {
@@ -461,7 +463,19 @@ const WinCalculator: React.FC = () => {
                             <Medal size={20} className="mr-2 text-red-500" />
                             Daily Winnings Summary
                         </h2>
-                        <p className="text-sm text-gray-500 mt-1">Total winnings ("中") for {selectedDate}. Changes here update the ledger.</p>
+                        <div className="flex items-center mt-2">
+                            <p className="text-sm text-gray-500 mr-4">Total winnings ("中") for:</p>
+                            {/* Date Selector for List */}
+                            <div className="relative">
+                                <Calendar className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                                <input 
+                                    type="date" 
+                                    value={selectedDate} 
+                                    onChange={(e) => setSelectedDate(e.target.value)} 
+                                    className="pl-7 pr-2 py-1 border border-gray-300 rounded text-sm font-bold text-gray-700 focus:outline-none focus:border-blue-500 shadow-sm" 
+                                />
+                            </div>
+                        </div>
                     </div>
                     <div className="text-right">
                         <div className="text-xs text-gray-400 font-bold uppercase tracking-wider">Total Daily Payout</div>
@@ -507,6 +521,7 @@ const WinCalculator: React.FC = () => {
                             <CheckCircle size={28} className="text-green-600" />
                         </div>
                         <h3 className="text-lg font-bold text-gray-800">Saved!</h3>
+                        <p className="text-sm text-gray-500 mt-1">Redirecting to ledger...</p>
                     </div>
                 </div>
             )}

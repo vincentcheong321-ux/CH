@@ -35,14 +35,14 @@ const PositionBadge = ({ label }: { label: string }) => {
     let colorClass = 'bg-gray-100 text-gray-600';
     let text = label;
 
-    if (label.includes('头')) { colorClass = 'bg-yellow-100 text-yellow-700 border border-yellow-300'; text = '头'; }
+    if (label.includes('头')) { colorClass = 'bg-yellow-100 text-yellow-800 border border-yellow-300'; text = '头'; }
     else if (label.includes('二')) { colorClass = 'bg-slate-100 text-slate-700 border border-slate-300'; text = '二'; }
-    else if (label.includes('三')) { colorClass = 'bg-orange-100 text-orange-700 border border-orange-300'; text = '三'; }
-    else if (label.includes('入')) { colorClass = 'bg-blue-100 text-blue-700 border border-blue-300'; text = '入'; }
-    else if (label.includes('安')) { colorClass = 'bg-green-100 text-green-700 border border-green-300'; text = '安'; }
+    else if (label.includes('三')) { colorClass = 'bg-orange-100 text-orange-800 border border-orange-300'; text = '三'; }
+    else if (label.includes('入')) { colorClass = 'bg-blue-100 text-blue-800 border border-blue-300'; text = '入'; }
+    else if (label.includes('安')) { colorClass = 'bg-green-100 text-green-800 border border-green-300'; text = '安'; }
 
     return (
-        <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold ${colorClass} shadow-sm ml-1`}>
+        <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${colorClass} shadow-sm ml-2`}>
             {text}
         </span>
     );
@@ -63,14 +63,14 @@ const WinningBreakdown: React.FC<WinningBreakdownProps> = ({ description, totalA
     const entries = rawContent.split(';').map(s => s.trim()).filter(s => s);
 
     return (
-        <div className="w-full relative group mb-2 border-b-2 border-gray-100 pb-1">
+        <div className="w-full relative group mb-3 border-b-2 border-gray-100 pb-2">
              {/* Edit/Delete Actions (Absolute, visible on hover) - Moved to left to avoid overlap */}
-             <div className="no-print opacity-0 group-hover:opacity-100 transition-opacity flex flex-col space-y-1 absolute -left-7 top-0 z-20">
-                <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-1 text-blue-600 hover:bg-blue-50 bg-white shadow-sm rounded border border-gray-200"><Pencil size={10} /></button>
-                <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1 text-red-600 hover:bg-red-50 bg-white shadow-sm rounded border border-gray-200"><Trash2 size={10} /></button>
+             <div className="no-print opacity-0 group-hover:opacity-100 transition-opacity flex flex-col space-y-1 absolute -left-8 top-0 z-20">
+                <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-1.5 text-blue-600 hover:bg-blue-50 bg-white shadow-md rounded-lg border border-gray-200"><Pencil size={12} /></button>
+                <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1.5 text-red-600 hover:bg-red-50 bg-white shadow-md rounded-lg border border-gray-200"><Trash2 size={12} /></button>
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-2">
                 {entries.map((entry, idx) => {
                     // Expected: "MKT 5990-6-2200 头"
                     const parts = entry.match(/^([A-Z]+)\s+(\d+)-([\d.]+)-([\d.]+)\s+(.+)$/);
@@ -78,26 +78,35 @@ const WinningBreakdown: React.FC<WinningBreakdownProps> = ({ description, totalA
                     if (parts) {
                         const [_, sides, number, bet, win, pos] = parts;
                         return (
-                            <div key={idx} className="flex items-center justify-between text-xs leading-tight">
-                                {/* Left: Sides + Number */}
-                                <div className="flex items-baseline space-x-1">
-                                    <span className="font-bold text-gray-500 font-mono tracking-tighter text-[10px]">{sides}</span>
-                                    <span className="font-bold text-gray-900 font-mono text-sm">{number}</span>
+                            <div key={idx} className="flex items-center justify-between text-sm leading-snug">
+                                {/* Left: Sides */}
+                                <div className="w-8 flex-shrink-0">
+                                    <span className="font-bold text-gray-400 font-mono tracking-tighter text-[10px] uppercase block">{sides}</span>
                                 </div>
-                                {/* Right: Win + Position */}
-                                <div className="flex items-center">
-                                    <span className="font-bold text-gray-800 font-mono mr-1">{Number(win).toLocaleString()}</span>
+                                
+                                {/* Middle: Number - Bet - Win */}
+                                <div className="flex-1 flex items-center justify-end font-mono text-gray-800">
+                                    <span className="font-bold text-gray-900 text-lg mr-2">{number}</span>
+                                    <span className="text-gray-300 mx-1">-</span>
+                                    <span className="text-gray-600 font-bold mx-1">{Number(bet).toLocaleString()}</span>
+                                    <span className="text-gray-300 mx-1">-</span>
+                                    <span className="font-bold text-red-600 text-base ml-1">{Number(win).toLocaleString()}</span>
+                                </div>
+
+                                {/* Right: Position */}
+                                <div className="flex-shrink-0">
                                     <PositionBadge label={pos} />
                                 </div>
                             </div>
                         );
                     }
-                    return <div key={idx} className="text-[10px] text-gray-500">{entry}</div>;
+                    return <div key={idx} className="text-xs text-gray-500">{entry}</div>;
                 })}
             </div>
             {/* Total Footer */}
-            <div className="mt-1 pt-1 border-t border-gray-200 text-right">
-                <span className="text-lg font-mono font-bold text-red-600 leading-none">{totalAmount.toLocaleString()}</span>
+            <div className="mt-2 pt-1 border-t border-gray-200 text-right flex justify-end items-baseline gap-2">
+                <span className="text-xs text-gray-400 uppercase font-bold tracking-wider">Total Win</span>
+                <span className="text-2xl font-mono font-bold text-red-600 leading-none">{totalAmount.toLocaleString()}</span>
             </div>
         </div>
     );
