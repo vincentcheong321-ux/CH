@@ -21,6 +21,15 @@ import { MONTH_NAMES, getWeeksForMonth, getWeekRangeString } from '../utils/repo
 
 type LedgerColumn = 'main' | 'col1' | 'col2';
 
+// Helper for sorting by system-defined order
+const getRecordSortPriority = (record: LedgerRecord): number => {
+    if (record.id.startsWith('sale_')) return 1; // 收
+    if (record.id.startsWith('cred_')) return 2; // 来
+    if (record.id.startsWith('adv_')) return 3;  // 支
+    if (record.id.startsWith('draw_')) return 4;  // 欠
+    return 5; // Manual entries come last
+};
+
 const ClientLedger: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
@@ -116,8 +125,7 @@ const ClientLedger: React.FC = () => {
 
   const loadRecords = async () => {
     if (id) {
-      const recs = await getLedgerRecords(id);
-      recs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      const recs = await getLedgerRecords(id); // This is now pre-sorted from storageService
       setAllRecords(recs);
     }
   };
@@ -168,8 +176,12 @@ const ClientLedger: React.FC = () => {
         finalRecords.push(aggregatedSale);
     }
 
-    // 4. Sort aggregated list chronologically
-    finalRecords.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    // 4. Sort aggregated list chronologically (respecting type priority)
+    finalRecords.sort((a, b) => {
+        if (a.date < b.date) return -1;
+        if (a.date > b.date) return 1;
+        return getRecordSortPriority(a) - getRecordSortPriority(b);
+    });
 
     // 5. Calculate total (should be same as summing all original 'current' records)
     const weekChange = current.reduce((acc, r) => acc + getNetAmount(r), 0);
@@ -262,7 +274,17 @@ const ClientLedger: React.FC = () => {
     };
 
     const saved = await saveLedgerRecord(newRecord);
-    setAllRecords(prev => [...prev, saved].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+    
+    // Optimistically update and re-sort to place new manual entry correctly
+    setAllRecords(prev => {
+        const newArray = [...prev, saved];
+        newArray.sort((a, b) => {
+            if (a.date < b.date) return -1;
+            if (a.date > b.date) return 1;
+            return getRecordSortPriority(a) - getRecordSortPriority(b);
+        });
+        return newArray;
+    });
     
     if (activeCategory.label.trim() === '') {
         setAmount(''); setDescription(''); 

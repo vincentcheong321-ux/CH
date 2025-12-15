@@ -122,6 +122,7 @@ const CashAdvanceReport: React.FC = () => {
 
   const handleInputChange = useCallback((clientId: string, val: string) => {
       if (val === '' || /^-?\d*\.?\d*$/.test(val)) {
+        // FIX: Explicitly typing `prev` prevents it from being inferred as `unknown`.
         setCashAdvances((prev: Record<string, string>) => ({
             ...prev,
             [clientId]: val
@@ -130,6 +131,7 @@ const CashAdvanceReport: React.FC = () => {
   }, []);
 
   const handleInputBlur = useCallback(async (clientId: string) => {
+      // FIX: Explicitly typing `current` prevents it from being inferred as `unknown`.
       setCashAdvances((current: Record<string, string>) => {
           const val = current[clientId];
           if (val !== '' && !isNaN(Number(val))) {
@@ -171,6 +173,8 @@ const CashAdvanceReport: React.FC = () => {
   };
 
   // --- Week Grouping Logic ---
+  // FIX: Explicitly providing a generic type to `useMemo` ensures `currentMonthWeeks` is correctly typed,
+  // which resolves errors when its properties are accessed later (e.g., using `.some`).
   const currentMonthWeeks = useMemo<Record<number, Date[]>>(() => {
       return getWeeksForMonth(currentYear, currentMonth);
   }, [currentYear, currentMonth]);
@@ -179,7 +183,7 @@ const CashAdvanceReport: React.FC = () => {
   
   if (selectedDate) {
       for (const [wNum, days] of Object.entries(currentMonthWeeks)) {
-          const match = days.some(d => {
+          const match = (days as Date[]).some(d => {
               const yearStr = d.getFullYear();
               const m = String(d.getMonth() + 1).padStart(2, '0');
               const dayStr = String(d.getDate()).padStart(2, '0');

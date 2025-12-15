@@ -84,6 +84,16 @@ export const seedData = () => {
 
 // --- 3. Unified Financial Journal Adapters ---
 
+// Helper for sorting by system-defined order
+const getRecordSortPriority = (record: LedgerRecord): number => {
+    // Check prefixed IDs for system records
+    if (record.id.startsWith('sale_')) return 1; // 收
+    if (record.id.startsWith('cred_')) return 2; // 来
+    if (record.id.startsWith('adv_')) return 3;  // 支
+    if (record.id.startsWith('draw_')) return 4;  // 欠
+    return 5; // Manual entries come last
+};
+
 // A. Helper to map DB row to LedgerRecord
 // Updated to handle ALL types and map them to requested labels
 const mapJournalToLedgerRecord = (row: any): LedgerRecord => {
@@ -165,10 +175,21 @@ export const getLedgerRecords = async (clientId: string): Promise<LedgerRecord[]
         const { data } = await supabase
             .from('financial_journal')
             .select('*')
-            .eq('client_id', clientId)
-            .order('entry_date', { ascending: true }); // Ensure sorted order
+            .eq('client_id', clientId);
             
-        if (data) return data.map(mapJournalToLedgerRecord);
+        if (data) {
+            const records = data.map(mapJournalToLedgerRecord);
+
+            // Apply custom multi-level sort
+            records.sort((a, b) => {
+                if (a.date < b.date) return -1;
+                if (a.date > b.date) return 1;
+                // Dates are same, sort by type priority
+                return getRecordSortPriority(a) - getRecordSortPriority(b);
+            });
+
+            return records;
+        }
     }
     return [];
 };
@@ -178,7 +199,19 @@ export const getAllLedgerRecords = async (): Promise<LedgerRecord[]> => {
         const { data } = await supabase
             .from('financial_journal')
             .select('*');
-        if (data) return data.map(mapJournalToLedgerRecord);
+        if (data) {
+            const records = data.map(mapJournalToLedgerRecord);
+
+            // Apply custom multi-level sort
+            records.sort((a, b) => {
+                if (a.date < b.date) return -1;
+                if (a.date > b.date) return 1;
+                // Dates are same, sort by type priority
+                return getRecordSortPriority(a) - getRecordSortPriority(b);
+            });
+
+            return records;
+        }
     }
     return [];
 };
