@@ -227,9 +227,10 @@ const DrawReport: React.FC = () => {
       }
   }
 
-  const activeWeekDays = activeWeekNum ? currentMonthWeeks[parseInt(activeWeekNum)] : [];
   const activeWeekIndex = activeWeekNum ? Object.keys(currentMonthWeeks).map(Number).sort((a,b) => a-b).indexOf(Number(activeWeekNum)) : 0;
   const sortedWeekNums = Object.keys(currentMonthWeeks).map(Number).sort((a,b) => a-b);
+
+  const activeWeekDays = activeWeekNum ? currentMonthWeeks[parseInt(activeWeekNum)] : [];
 
   const renderDateButtons = () => {
       return (
@@ -302,15 +303,40 @@ const DrawReport: React.FC = () => {
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col flex-1 relative">
                     {/* Header */}
                     <div className="bg-gray-50 p-4 border-b border-gray-200 sticky top-0 z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div>
-                            <h2 className="text-xl font-bold text-gray-900 flex items-center">
-                                <Layers size={20} className="mr-2 text-blue-600" />
-                                {activeWeekDateRange}
-                            </h2>
-                            <p className="text-gray-500 font-medium text-sm mt-1">
-                                {MONTH_NAMES[currentMonth]} {currentYear} • Week {activeWeekIndex + 1}
-                            </p>
+                        <div className="flex flex-col">
+                            <div className="flex items-center">
+                                <h2 className="text-xl font-bold text-gray-900 flex items-center mr-3">
+                                    <Layers size={20} className="mr-2 text-blue-600" />
+                                    {activeWeekDateRange}
+                                </h2>
+                                <span className="text-xs font-bold text-gray-500 bg-gray-200 px-2 py-0.5 rounded">
+                                    {MONTH_NAMES[currentMonth]} {currentYear}
+                                </span>
+                            </div>
+                            
+                            {/* Mobile Week Buttons (Inserted) */}
+                            <div className="flex lg:hidden space-x-2 bg-gray-200 p-1 rounded-lg w-fit overflow-x-auto max-w-full mt-3">
+                                {sortedWeekNums.map((weekNum, idx) => {
+                                    const days = currentMonthWeeks[weekNum];
+                                    const isActive = weekNum.toString() === activeWeekNum;
+                                    return (
+                                        <button
+                                            key={weekNum}
+                                            onClick={() => handleDateClick(days[0])}
+                                            className={`
+                                                px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap
+                                                ${isActive 
+                                                    ? 'bg-white text-blue-600 shadow-sm' 
+                                                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}
+                                            `}
+                                        >
+                                            Week {idx + 1}
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </div>
+
                         <div className="flex items-center gap-3">
                             <button 
                                 onClick={handleGenerateBalance}

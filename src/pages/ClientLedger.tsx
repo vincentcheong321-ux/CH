@@ -214,7 +214,8 @@ const ClientLedger: React.FC = () => {
 
   const handleQuickEntry = () => {
       setActiveCategory({ id: 'quick', label: '', operation: 'add', color: 'bg-blue-600 text-white' });
-      setCurrentOperation(activeColumn === 'col1' ? 'none' : 'add');
+      // Default to Add if not explicitly set by user later
+      setCurrentOperation('add');
       setAmount(''); setDescription(''); 
   };
 
@@ -231,7 +232,7 @@ const ClientLedger: React.FC = () => {
     }
 
     let op = activeCategory.label === '' ? currentOperation : activeCategory.operation;
-    if (activeColumn === 'col1' && activeCategory.label === '') op = 'none';
+    // REMOVED: The forced 'none' check for Panel 1 Quick Entry to allow calculation if user desires.
 
     const newRecord: Omit<LedgerRecord, 'id'> = {
       clientId: id,
@@ -337,6 +338,7 @@ const ClientLedger: React.FC = () => {
                     
                     let textColor = 'text-gray-600';
                     if (r.operation === 'add') {
+                        // FORCE RED if net negative, even if op is 'add'
                         textColor = isNetNegative ? 'text-red-700' : 'text-green-700';
                     } else if (r.operation === 'subtract') {
                         textColor = 'text-red-700';
@@ -352,7 +354,8 @@ const ClientLedger: React.FC = () => {
                                 </div>
                             )}
                             <div className={`text-sm md:text-lg font-bold uppercase tracking-wide text-gray-700`}>{r.typeLabel}</div>
-                            {r.description && <div className="text-xs md:text-sm text-gray-500 font-medium mr-1 md:mr-2 max-w-[80px] md:max-w-[120px] truncate">{r.description}</div>}
+                            {/* Note Text Size Increased */}
+                            {r.description && <div className="text-sm md:text-base text-gray-700 font-medium mr-1 md:mr-2 max-w-[100px] md:max-w-[150px] truncate">{r.description}</div>}
                             <div className={`text-base md:text-xl font-mono font-bold w-16 md:w-28 text-right ${textColor}`}>
                                 {displayValue}
                             </div>
@@ -494,17 +497,16 @@ const ClientLedger: React.FC = () => {
                      <form onSubmit={handleSubmit} className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                         {activeCategory.label === '' && (
                             <div className="md:col-span-2">
-                                {activeColumn === 'col1' ? <div className="bg-gray-100 text-gray-600 p-2 rounded-lg text-center font-bold text-sm mb-2 border border-gray-200">(Ø) Note Only Mode</div> : 
                                 <div className="flex space-x-2 mb-2">
                                     <button type="button" onClick={() => setCurrentOperation('add')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${currentOperation === 'add' ? 'bg-green-100 text-green-800 ring-2 ring-green-500' : 'bg-gray-100 text-gray-500'}`}>(+) Add</button>
                                     <button type="button" onClick={() => setCurrentOperation('subtract')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${currentOperation === 'subtract' ? 'bg-red-100 text-red-800 ring-2 ring-red-500' : 'bg-gray-100 text-gray-500'}`}>(-) Deduct</button>
                                     <button type="button" onClick={() => setCurrentOperation('none')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${currentOperation === 'none' ? 'bg-gray-200 text-gray-800 ring-2 ring-gray-500' : 'bg-gray-100 text-gray-500'}`}>(Ø) Note</button>
-                                </div>}
+                                </div>
                             </div>
                         )}
                         <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Amount</label><input ref={amountInputRef} autoFocus type="number" step="0.01" required value={amount} onChange={e => setAmount(e.target.value)} className="w-full mt-1 p-3 text-2xl font-mono border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="0.00"/></div>
                         <div><label className="text-xs font-bold text-gray-500 uppercase">Note</label><input type="text" value={description} onChange={e => setDescription(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"/></div>
-                        <div className="flex items-end"><button type="submit" className={`w-full py-3 rounded-lg text-white font-bold shadow-md active:scale-95 transition-transform ${activeCategory.label === '' ? (activeColumn === 'col1' ? 'bg-gray-600' : currentOperation === 'add' ? 'bg-green-600' : currentOperation === 'subtract' ? 'bg-red-600' : 'bg-gray-600') : (activeCategory.operation === 'add' ? 'bg-green-600' : activeCategory.operation === 'subtract' ? 'bg-red-600' : 'bg-gray-600')}`}>Confirm</button></div>
+                        <div className="flex items-end"><button type="submit" className={`w-full py-3 rounded-lg text-white font-bold shadow-md active:scale-95 transition-transform ${activeCategory.label === '' ? (currentOperation === 'add' ? 'bg-green-600' : currentOperation === 'subtract' ? 'bg-red-600' : 'bg-gray-600') : (activeCategory.operation === 'add' ? 'bg-green-600' : activeCategory.operation === 'subtract' ? 'bg-red-600' : 'bg-gray-600')}`}>Confirm</button></div>
                      </form>
                 </div>
             )}
