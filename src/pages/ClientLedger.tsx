@@ -135,7 +135,7 @@ const ClientLedger: React.FC = () => {
     }
   };
 
-  const weeksData = useMemo(() => getWeeksForMonth(currentYear, currentMonth), [currentYear, currentMonth]);
+  const weeksData = useMemo<Record<number, Date[]>>(() => getWeeksForMonth(currentYear, currentMonth), [currentYear, currentMonth]);
   const activeDays = weeksData[selectedWeekNum] || [];
   
   const activeDateStrings = useMemo(() => 

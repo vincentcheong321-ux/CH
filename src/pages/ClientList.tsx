@@ -29,7 +29,7 @@ const ClientList: React.FC = () => {
   });
 
   // Calculate Week Dates
-  const weeksData = useMemo(() => getWeeksForMonth(currentYear, currentMonth), [currentYear, currentMonth]);
+  const weeksData = useMemo<Record<number, Date[]>>(() => getWeeksForMonth(currentYear, currentMonth), [currentYear, currentMonth]);
   
   const { selectedWeekStartDate, selectedWeekEndDate } = useMemo(() => {
       const days = weeksData[selectedWeekNum];

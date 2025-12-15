@@ -13,6 +13,7 @@ import CashFlow from './pages/CashFlow';
 import SalesIndex from './pages/SalesIndex';
 import ClientSales from './pages/ClientSales';
 import MobileReport from './pages/MobileReport';
+import WinCalculator from './pages/WinCalculator';
 import Login from './pages/Login';
 import { seedData } from './services/storageService';
 
@@ -114,6 +115,14 @@ const App: React.FC = () => {
           isAuthenticated ? (
             <Layout onLogout={handleLogout}>
               <CashCredit />
+            </Layout>
+          ) : <Navigate to="/login" />
+        } />
+
+        <Route path="/calculator" element={
+          isAuthenticated ? (
+            <Layout onLogout={handleLogout}>
+              <WinCalculator />
             </Layout>
           ) : <Navigate to="/login" />
         } />
