@@ -99,7 +99,9 @@ const WinningBreakdown: React.FC<WinningBreakdownProps> = ({ description, totalA
                                     <div className="h-6 w-px bg-red-400 mx-1"></div>
                                     
                                     {/* Win */}
-                                    <div className="font-bold text-red-600 text-lg w-16 text-center">{Number(win).toLocaleString()}</div>
+                                    <div className="font-bold text-red-600 text-lg w-16 text-center">
+                                        {Number(win).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                    </div>
                                 </div>
 
                                 {/* Position Badge */}
@@ -115,7 +117,9 @@ const WinningBreakdown: React.FC<WinningBreakdownProps> = ({ description, totalA
             {/* Total Footer */}
             <div className="mt-3 pt-2 border-t border-gray-300 flex justify-end items-center gap-3">
                 <span className="text-sm text-gray-400 uppercase font-bold tracking-widest font-serif">共中</span>
-                <span className="text-3xl font-mono font-bold text-red-600 leading-none">{totalAmount.toLocaleString()}</span>
+                <span className="text-3xl font-mono font-bold text-red-600 leading-none">
+                    {totalAmount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                </span>
             </div>
         </div>
     );

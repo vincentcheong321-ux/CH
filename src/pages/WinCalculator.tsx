@@ -297,9 +297,9 @@ const WinCalculator: React.FC = () => {
         const description = entries
             .map(e => {
                 const typeStr = e.playType === 'Box' ? 'iBox' : e.playType === 'Pau' ? '包' : '';
-                // Use Number(val.toFixed(2)) to show decimals if present, but avoid long floating point errors
-                const exactWin = Number(e.winAmount.toFixed(2));
-                return `${e.sides.join('')} ${e.number}-${e.betAmount}-${exactWin} ${e.positionLabel} ${typeStr}`.trim();
+                // STRICT FORMATTING: Use toFixed(2) to ensure the string description has 2 decimals.
+                const exactWinStr = e.winAmount.toFixed(2);
+                return `${e.sides.join('')} ${e.number}-${e.betAmount}-${exactWinStr} ${e.positionLabel} ${typeStr}`.trim();
             })
             .join('; ');
 
@@ -318,6 +318,7 @@ const WinCalculator: React.FC = () => {
         });
 
         // 2. Save to Main Ledger (Summary)
+        // Ensure this logic runs to reflect in Main Ledger column
         await saveLedgerRecord({
             clientId: selectedClientId,
             date: selectedDate,
@@ -331,7 +332,6 @@ const WinCalculator: React.FC = () => {
 
         // Update local list state optimistically
         setClientWinnings((prev) => {
-            // Explicitly cast to Record<string, string> to resolve unknown type issues
             const record = prev as Record<string, string>;
             const raw = record[selectedClientId];
             const currentVal = parseFloat(raw || '0') || 0;
@@ -369,16 +369,11 @@ const WinCalculator: React.FC = () => {
     }, []);
 
     const handleListInputBlur = useCallback(async (clientId: string) => {
-        // We use the updater to access the current state securely
         setClientWinnings((current) => {
-            // Explicitly type 'current' to ensure type safety
             const typedCurrent = current as Record<string, string>;
             const newVal = parseFloat(typedCurrent[clientId]) || 0;
             
-            // Side effect: Re-fetch weekly total from DB to compare against current inputs
-            // We do this in an IIFE to not block the synchronous state update
             (async () => {
-                // Determine range again
                 const d = new Date(selectedDate);
                 const weeks = getWeeksForMonth(d.getFullYear(), d.getMonth());
                 const targetStr = selectedDate;
@@ -397,7 +392,6 @@ const WinCalculator: React.FC = () => {
                     
                     if (newVal !== oldVal) {
                         const diff = newVal - oldVal;
-                        // Save diff to selectedDate
                         const op = diff < 0 ? 'add' : 'subtract'; 
                         
                         await saveLedgerRecord({
@@ -430,7 +424,6 @@ const WinCalculator: React.FC = () => {
         return selectedDate;
     }, [selectedDate]);
 
-    // Split clients for 2 columns
     const midPoint = Math.ceil(clients.length / 2);
     const leftClients = clients.slice(0, midPoint);
     const rightClients = clients.slice(midPoint);
