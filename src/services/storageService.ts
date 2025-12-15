@@ -376,8 +376,8 @@ export const getAllDrawRecords = async () => {
     }
     return records;
 }
-export const getClientBalancesPriorToDate = async (date: string) => {
-    return {}; // Mock implementation
+export const getClientBalancesPriorToDate = async (date: string): Promise<Record<string, number>> => {
+    return {}; // Mock implementation, fixed return type
 }
 export const getTotalDrawReceivables = async () => {
     return 0; // Mock for dashboard

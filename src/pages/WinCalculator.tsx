@@ -393,7 +393,12 @@ const WinCalculator: React.FC = () => {
                     
                     if (newVal !== oldVal) {
                         const diff = newVal - oldVal;
-                        const op = diff < 0 ? 'add' : 'subtract'; 
+                        // Manual adjust always reflects new total desired.
+                        // If new value > old value (positive diff), we need to SUBTRACT more (because winning is a subtract op).
+                        // But standard operation logic: 
+                        // To increase a red number, we add another red number ('subtract' op).
+                        // To decrease a red number, we add a green number ('add' op).
+                        const op = diff > 0 ? 'subtract' : 'add'; 
                         
                         await saveLedgerRecord({
                             clientId,
@@ -402,7 +407,7 @@ const WinCalculator: React.FC = () => {
                             typeLabel: '中',
                             amount: Math.abs(diff),
                             operation: op, 
-                            column: 'main', // Save to MAIN ledger
+                            column: 'main', // Save to MAIN ledger as requested
                             isVisible: true
                         });
                     }
