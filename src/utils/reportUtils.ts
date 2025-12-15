@@ -13,7 +13,7 @@ const getDaysInMonth = (year: number, monthIndex: number) => {
 
 /**
  * Generates weeks for a given month/year.
- * It ensures weeks are always full 7-day cycles (Sunday to Saturday).
+ * It ensures weeks are always full 7-day cycles (Monday to Sunday).
  * Week 1 is the week that contains the 1st of the month.
  * 
  * Returns: { 1: [Date, Date...], 2: [Date...] }
@@ -23,22 +23,29 @@ export const getWeeksForMonth = (year: number, monthIndex: number): Record<numbe
     const firstDayOfMonth = new Date(year, monthIndex, 1);
     const lastDayOfMonth = new Date(year, monthIndex + 1, 0);
     
-    // Backtrack to the Sunday of the week containing the 1st
-    // getDay() returns 0 for Sunday, 1 for Monday, etc.
-    const startDayOfWeek = firstDayOfMonth.getDay(); 
+    // Find the Monday of the week containing the 1st
+    // JS getDay(): 0=Sun, 1=Mon, ..., 6=Sat
+    let dayOfWeek = firstDayOfMonth.getDay();
+    
+    // Calculate days to subtract to reach the previous Monday
+    // If Sunday (0), subtract 6 days.
+    // If Monday (1), subtract 0 days.
+    // If Tuesday (2), subtract 1 day, etc.
+    const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    
     const startDate = new Date(firstDayOfMonth);
-    startDate.setDate(firstDayOfMonth.getDate() - startDayOfWeek);
+    startDate.setDate(firstDayOfMonth.getDate() - daysSinceMonday);
 
     let currentWeekNum = 1;
     let currentDate = new Date(startDate);
 
-    // Iterate until the start of the week is beyond the last day of the month
+    // Iterate until the start of the week is beyond the last day of the month.
     // We include any week that starts on or before the last day of the month.
-    // This ensures we cover all days in the current month.
+    // Since we align to Monday, 'currentDate' will always be a Monday.
     while (currentDate <= lastDayOfMonth) {
         const weekDays: Date[] = [];
         
-        // Build a full 7-day week
+        // Build a full 7-day week (Monday to Sunday)
         for (let i = 0; i < 7; i++) {
             weekDays.push(new Date(currentDate));
             currentDate.setDate(currentDate.getDate() + 1);
@@ -46,7 +53,7 @@ export const getWeeksForMonth = (year: number, monthIndex: number): Record<numbe
         
         weeks[currentWeekNum] = weekDays;
         currentWeekNum++;
-        // currentDate is now at the start of the next week
+        // currentDate is now at the start of the next week (next Monday)
     }
     
     return weeks;
