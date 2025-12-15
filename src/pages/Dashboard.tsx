@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { 
   BarChart, 
@@ -11,7 +10,7 @@ import {
   LineChart,
   Line
 } from 'recharts';
-import { getAllLedgerRecords, getAssetRecords, getNetAmount, getClients, getClientBalance, getTotalDrawReceivables, getAllDrawRecords } from '../services/storageService';
+import { getAllLedgerRecords, getAssetRecords, getNetAmount, getClients, getTotalDrawReceivables, getAllDrawRecords } from '../services/storageService';
 import { TrendingUp, TrendingDown, DollarSign, Wallet } from 'lucide-react';
 import { getWeeksForMonth, MONTH_NAMES } from '../utils/reportUtils';
 
@@ -44,6 +43,7 @@ const Dashboard: React.FC = () => {
         const assetsIn = assets.filter(a => a.type === 'IN').reduce((acc, curr) => acc + curr.amount, 0);
         const assetsOut = assets.filter(a => a.type === 'OUT').reduce((acc, curr) => acc + curr.amount, 0);
 
+        // Total Company Balance (Liquidity + Owed Debts)
         const liquidCash = assetsIn - assetsOut;
         const totalBalance = liquidCash + totalReceivables;
 
