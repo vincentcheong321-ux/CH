@@ -36,8 +36,13 @@ const MobileReport: React.FC = () => {
       setSelectedMonth(now.getMonth());
       
       const weeks = getWeeksForMonth(y, now.getMonth());
-      const todayNum = now.getDate();
-      const foundWeek = Object.keys(weeks).find(w => weeks[parseInt(w)].includes(todayNum));
+      const todayStr = `${y}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+      const foundWeek = Object.keys(weeks).find(w => {
+          return weeks[parseInt(w)].some(d => {
+              const dStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+              return dStr === todayStr;
+          });
+      });
       if (foundWeek) setSelectedWeekNum(parseInt(foundWeek));
   }, []);
 
@@ -126,16 +131,17 @@ const MobileReport: React.FC = () => {
       setIsSaving(true);
 
       const weeks = getWeeksForMonth(selectedYear, selectedMonth);
-      const days = weeks[selectedWeekNum];
+      const days = weeks[selectedWeekNum]; // Date[]
       if (!days || days.length === 0) {
           setSaveStatus({ type: 'error', message: 'Invalid week selection.' });
           setIsSaving(false);
           return;
       }
       const lastDay = days[days.length - 1];
-      const mStr = String(selectedMonth + 1).padStart(2, '0');
-      const dStr = String(lastDay).padStart(2, '0');
-      const targetDate = `${selectedYear}-${mStr}-${dStr}`;
+      const mStr = String(lastDay.getMonth() + 1).padStart(2, '0');
+      const dStr = String(lastDay.getDate()).padStart(2, '0');
+      // Year might roll over if week overflows (e.g. Dec to Jan)
+      const targetDate = `${lastDay.getFullYear()}-${mStr}-${dStr}`;
 
       let matchedCount = 0;
       let skippedCount = 0;

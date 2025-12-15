@@ -12,47 +12,80 @@ const getDaysInMonth = (year: number, monthIndex: number) => {
 };
 
 /**
- * Generates weeks for a given month/year based on a simple Monday-Sunday logic.
- * Week 1: 1st of month -> First Sunday
- * Week 2+: Monday -> Sunday
- * Last Week: Monday -> End of Month
+ * Generates weeks for a given month/year.
+ * It starts from the 1st of the month.
+ * It ensures the last week of the month extends to Sunday, even if it crosses into the next month.
  * 
- * Returns: { 1: [1, 2, 3, 4], 2: [5, 6, 7, 8, 9, 10, 11], ... }
+ * Returns: { 1: [Date, Date...], 2: [Date...] }
  */
-export const getWeeksForMonth = (year: number, monthIndex: number) => {
-    const weeks: Record<number, number[]> = {};
-    const totalDays = getDaysInMonth(year, monthIndex);
+export const getWeeksForMonth = (year: number, monthIndex: number): Record<number, Date[]> => {
+    const weeks: Record<number, Date[]> = {};
+    const firstDayOfMonth = new Date(year, monthIndex, 1);
+    const lastDayOfMonth = new Date(year, monthIndex + 1, 0);
     
     let currentWeek = 1;
-    
-    for (let day = 1; day <= totalDays; day++) {
+    // Clone to avoid mutation issues
+    let currentDate = new Date(firstDayOfMonth);
+
+    // 1. Iterate through the current month
+    while (currentDate <= lastDayOfMonth) {
         if (!weeks[currentWeek]) {
             weeks[currentWeek] = [];
         }
         
-        weeks[currentWeek].push(day);
+        weeks[currentWeek].push(new Date(currentDate));
         
-        const date = new Date(year, monthIndex, day);
-        const dayOfWeek = date.getDay(); // 0 is Sunday
+        const dayOfWeek = currentDate.getDay(); // 0 is Sunday
         
-        // If it's Sunday, and it's not the last day of the month, move to next week
-        if (dayOfWeek === 0 && day < totalDays) {
+        // If Sunday, move to next week (unless it's the very last day of iteration, handled by loop)
+        if (dayOfWeek === 0) {
             currentWeek++;
+        }
+        
+        // Advance 1 day
+        currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    // 2. Handle Overflow: If the last populated week didn't end on a Sunday, extend it into next month.
+    const weekKeys = Object.keys(weeks).map(Number).sort((a,b) => a-b);
+    if (weekKeys.length > 0) {
+        const lastWeekKey = weekKeys[weekKeys.length - 1];
+        const lastWeekDays = weeks[lastWeekKey];
+        
+        // Check the last day in the week
+        if (lastWeekDays.length > 0) {
+            const lastDate = lastWeekDays[lastWeekDays.length - 1];
+            
+            if (lastDate.getDay() !== 0) {
+                // It's not Sunday, so keep adding days until we hit Sunday
+                const nextDate = new Date(lastDate);
+                nextDate.setDate(nextDate.getDate() + 1);
+                
+                while (true) {
+                    lastWeekDays.push(new Date(nextDate));
+                    if (nextDate.getDay() === 0) break; // Stop after adding Sunday
+                    nextDate.setDate(nextDate.getDate() + 1);
+                }
+            }
         }
     }
     
     return weeks;
 };
 
-export const getWeekRangeString = (year: number, monthIndex: number, days: number[]) => {
+// Signature updated to accept Date[] directly. 
+// Year/Month params kept for backwards compatibility in call sites if needed, but unused.
+export const getWeekRangeString = (year: number | null, monthIndex: number | null, days: Date[]) => {
     if (!days || days.length === 0) return '';
     
-    const startDay = days[0];
-    const endDay = days[days.length - 1];
-    const mon = MONTH_NAMES[monthIndex].slice(0, 3);
+    const start = days[0];
+    const end = days[days.length - 1];
     
-    const pad = (n: number) => n.toString().padStart(2, '0');
+    const fmt = (d: Date) => {
+        const m = MONTH_NAMES[d.getMonth()].slice(0, 3);
+        const day = d.getDate().toString().padStart(2, '0');
+        return `${day} ${m}`;
+    };
     
-    // Example: 01 DEC - 07 DEC
-    return `${pad(startDay)} ${mon} - ${pad(endDay)} ${mon}`;
+    return `${fmt(start)} - ${fmt(end)}`;
 };

@@ -33,8 +33,6 @@ const Dashboard: React.FC = () => {
         const allDraws = await getAllDrawRecords();
 
         // Calculate Ledger Balance (Old method)
-        // Note: getClientBalance is currently placeholder/sync-local in this refactor step.
-        // Ideally, we sum up from DB. For now, assuming limited functionality or use what works.
         let ledgerBalanceSum = 0;
         // clients.forEach(c => {
         //     ledgerBalanceSum += getClientBalance(c.id);
@@ -68,21 +66,20 @@ const Dashboard: React.FC = () => {
         // --- Weekly Draw Chart Data ---
         const currentYear = new Date().getFullYear();
         const currentMonthIndex = new Date().getMonth();
-        const yearToUse = currentYear;
         
-        const weeks = getWeeksForMonth(yearToUse, currentMonthIndex);
+        const weeks = getWeeksForMonth(currentYear, currentMonthIndex);
         
         const wData = Object.keys(weeks).sort((a,b)=>Number(a)-Number(b)).map((weekNum, index) => {
-            const days = weeks[Number(weekNum)];
+            const days = weeks[Number(weekNum)]; // This is now Date[]
             
             // Sum all draws that match the computed date strings for this week's days
             const weekTotal = allDraws.reduce((acc, r) => {
-                const match = days.some(day => {
-                    const dObj = new Date(yearToUse, currentMonthIndex, day);
-                    const y = dObj.getFullYear();
-                    const m = String(dObj.getMonth() + 1).padStart(2, '0');
-                    const d = String(dObj.getDate()).padStart(2, '0');
-                    const targetDateStr = `${y}-${m}-${d}`;
+                const match = days.some(d => {
+                    // Compare ISO date strings YYYY-MM-DD
+                    const yearStr = d.getFullYear();
+                    const m = String(d.getMonth() + 1).padStart(2, '0');
+                    const dayStr = String(d.getDate()).padStart(2, '0');
+                    const targetDateStr = `${yearStr}-${m}-${dayStr}`;
                     return r.date === targetDateStr;
                 });
 

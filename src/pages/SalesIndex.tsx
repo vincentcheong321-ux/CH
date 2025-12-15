@@ -185,7 +185,6 @@ const ClientWeeklyCard = React.memo(({
     const clientRecords = salesData.filter(r => r.clientId === client.id);
     const rawTotal = clientRecords.reduce((acc, r) => acc + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
     
-    // ADJUSTMENT: REMOVED 14% deduction as requested
     const totalWeek = rawTotal;
 
     const formatMonth = (mIndex: number) => {
@@ -195,8 +194,10 @@ const ClientWeeklyCard = React.memo(({
 
     // Filter to only show relevant Paper Dates (Tue, Wed, Sat, Sun) in the Card
     const paperDisplayDates = dateStrings.filter(dStr => {
-        const d = new Date(dStr);
-        const day = d.getDay();
+        // dStr is YYYY-MM-DD
+        const [y, m, d] = dStr.split('-').map(Number);
+        const dateObj = new Date(y, m-1, d); // Month is 0-indexed in Date
+        const day = dateObj.getDay();
         return [0, 2, 3, 6].includes(day);
     });
 
@@ -293,9 +294,13 @@ const SalesIndex: React.FC = () => {
       setCurrentMonth(m);
 
       const weeks = getWeeksForMonth(y, m);
+      const todayStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      
       const foundWeek = Object.keys(weeks).find(wKey => {
-          const days = weeks[parseInt(wKey)];
-          return days.includes(d);
+          return weeks[parseInt(wKey)].some(dObj => {
+              const dStr = `${dObj.getFullYear()}-${String(dObj.getMonth()+1).padStart(2,'0')}-${String(dObj.getDate()).padStart(2,'0')}`;
+              return dStr === todayStr;
+          });
       });
 
       if (foundWeek) {
@@ -308,16 +313,14 @@ const SalesIndex: React.FC = () => {
   const weeksData = useMemo(() => getWeeksForMonth(currentYear, currentMonth), [currentYear, currentMonth]);
   const activeDays = weeksData[selectedWeekNum] || [];
   
-  // FETCH ALL DAYS for the week to ensure Mobile Reports (which might be Mon/Thu) are found
   const activeDateStrings = useMemo(() => 
       activeDays.map(d => {
-            const dateObj = new Date(currentYear, currentMonth, d);
-            const y = dateObj.getFullYear();
-            const m = String(dateObj.getMonth() + 1).padStart(2, '0');
-            const day = String(dateObj.getDate()).padStart(2, '0');
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
             return `${y}-${m}-${day}`;
         }),
-  [activeDays, currentYear, currentMonth]);
+  [activeDays]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -434,7 +437,6 @@ const SalesIndex: React.FC = () => {
   const totalPaper = [...zClients, ...cClients].reduce((acc, client) => {
       const clientRecs = salesData.filter(r => r.clientId === client.id);
       const rawSum = clientRecs.reduce((sum, r) => sum + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
-      // ADJUSTMENT: REMOVED 14% deduction
       return acc + rawSum;
   }, 0);
 
@@ -464,10 +466,10 @@ const SalesIndex: React.FC = () => {
   }, [sortedWeekKeys, selectedWeekNum]);
 
   const getWeekRangeLabel = (weekNum: number) => {
-      const days = weeksData[weekNum];
+      const days = weeksData[weekNum]; // Date[]
       if (!days || days.length === 0) return '';
-      const firstDay = new Date(currentYear, currentMonth, days[0]);
-      const lastDay = new Date(currentYear, currentMonth, days[days.length - 1]);
+      const firstDay = days[0];
+      const lastDay = days[days.length - 1];
       const formatDate = (d: Date) => `${String(d.getDate()).padStart(2, '0')} ${MONTH_NAMES[d.getMonth()].slice(0,3)}`;
       return `${formatDate(firstDay)} - ${formatDate(lastDay)}`;
   };
@@ -648,7 +650,7 @@ const SalesIndex: React.FC = () => {
                                         <th className="px-2 py-3 text-right text-gray-600">佣金</th>
                                         <th className="px-2 py-3 text-right text-gray-600">赔出</th>
                                         <th className="px-2 py-3 text-right text-gray-600">抽费用</th>
-                                        <th className="px-2 py-3 text-right font-extrabold bg-green-50 text-green-900 border-l border-green-100">总额</th>
+                                        <th className="px-2 py-3 text-right font-extrabold bg-green-100 text-green-900 border-l border-green-100">总额</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">

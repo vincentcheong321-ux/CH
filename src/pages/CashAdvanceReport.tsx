@@ -65,18 +65,24 @@ const CashAdvanceReport: React.FC = () => {
 
     // Find week that contains today
     const weeks = getWeeksForMonth(y, m);
-    const todayNum = now.getDate();
-    const weekNum = Object.keys(weeks).find(w => weeks[parseInt(w)].includes(todayNum));
+    
+    const todayStr = `${y}-${String(m+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const weekNum = Object.keys(weeks).find(w => {
+        return weeks[parseInt(w)].some(d => {
+            const dStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+            return dStr === todayStr;
+        });
+    });
     
     if (weekNum) {
         // Select start day of this week
         const startDay = weeks[parseInt(weekNum)][0];
-        handleDateClick(startDay, m, y);
+        handleDateClick(startDay);
     } else {
         // Fallback to first week
         const firstWeekNum = Object.keys(weeks)[0];
         if (firstWeekNum) {
-            handleDateClick(weeks[parseInt(firstWeekNum)][0], m, y);
+            handleDateClick(weeks[parseInt(firstWeekNum)][0]);
         }
     }
   }, []);
@@ -107,11 +113,10 @@ const CashAdvanceReport: React.FC = () => {
       setLoading(false);
   };
 
-  const handleDateClick = (day: number, mIndex: number = currentMonth, y: number = currentYear) => {
-      const dObj = new Date(y, mIndex, day);
-      const yearStr = dObj.getFullYear();
-      const m = String(dObj.getMonth() + 1).padStart(2, '0');
-      const d = String(dObj.getDate()).padStart(2, '0');
+  const handleDateClick = (dateObj: Date) => {
+      const yearStr = dateObj.getFullYear();
+      const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const d = String(dateObj.getDate()).padStart(2, '0');
       setSelectedDate(`${yearStr}-${m}-${d}`);
   };
 
@@ -175,11 +180,10 @@ const CashAdvanceReport: React.FC = () => {
   if (selectedDate) {
       for (const [wNum, days] of Object.entries(currentMonthWeeks)) {
           const match = days.some(d => {
-              const dObj = new Date(currentYear, currentMonth, d);
-              const y = dObj.getFullYear();
-              const m = String(dObj.getMonth() + 1).padStart(2, '0');
-              const dayStr = String(dObj.getDate()).padStart(2, '0');
-              return `${y}-${m}-${dayStr}` === selectedDate;
+              const yearStr = d.getFullYear();
+              const m = String(d.getMonth() + 1).padStart(2, '0');
+              const dayStr = String(d.getDate()).padStart(2, '0');
+              return `${yearStr}-${m}-${dayStr}` === selectedDate;
           });
           if (match) {
               activeWeekNum = wNum;
@@ -193,7 +197,7 @@ const CashAdvanceReport: React.FC = () => {
 
   const activeDays = activeWeekNum ? currentMonthWeeks[parseInt(activeWeekNum)] : [];
   const rangeTitle = activeDays.length > 0 
-    ? getWeekRangeString(currentYear, currentMonth, activeDays) 
+    ? getWeekRangeString(null, null, activeDays) 
     : `Week ${activeWeekIndex + 1}`;
 
   const renderDateButtons = () => {
@@ -209,7 +213,7 @@ const CashAdvanceReport: React.FC = () => {
                   {sortedWeekNums.map((weekNum, idx) => {
                       const days = currentMonthWeeks[weekNum];
                       const isActiveWeek = weekNum.toString() === activeWeekNum;
-                      const rangeStr = getWeekRangeString(currentYear, currentMonth, days);
+                      const rangeStr = getWeekRangeString(null, null, days);
 
                       return (
                         <button

@@ -17,7 +17,7 @@ const ClientList: React.FC = () => {
   const [selectedClientIds, setSelectedClientIds] = useState<Set<string>>(new Set());
   const [isBulkPrintMode, setIsBulkPrintMode] = useState(false);
   
-  // Date/Week State (Kept for Bulk Print context and navigation state)
+  // Date/Week State
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [selectedWeekNum, setSelectedWeekNum] = useState<number>(1);
@@ -36,22 +36,16 @@ const ClientList: React.FC = () => {
       if (!days || days.length === 0) return { selectedWeekStartDate: undefined, selectedWeekEndDate: undefined };
       
       const lastDay = days[days.length - 1];
-      const endDateObj = new Date(currentYear, currentMonth, lastDay);
-      const eY = endDateObj.getFullYear();
-      const eM = String(endDateObj.getMonth() + 1).padStart(2, '0');
-      const eD = String(endDateObj.getDate()).padStart(2, '0');
+      const endDateStr = `${lastDay.getFullYear()}-${String(lastDay.getMonth()+1).padStart(2,'0')}-${String(lastDay.getDate()).padStart(2,'0')}`;
 
       const firstDay = days[0];
-      const startDateObj = new Date(currentYear, currentMonth, firstDay);
-      const sY = startDateObj.getFullYear();
-      const sM = String(startDateObj.getMonth() + 1).padStart(2, '0');
-      const sD = String(startDateObj.getDate()).padStart(2, '0');
+      const startDateStr = `${firstDay.getFullYear()}-${String(firstDay.getMonth()+1).padStart(2,'0')}-${String(firstDay.getDate()).padStart(2,'0')}`;
 
       return {
-          selectedWeekStartDate: `${sY}-${sM}-${sD}`,
-          selectedWeekEndDate: `${eY}-${eM}-${eD}`
+          selectedWeekStartDate: startDateStr,
+          selectedWeekEndDate: endDateStr
       };
-  }, [weeksData, selectedWeekNum, currentYear, currentMonth]);
+  }, [weeksData, selectedWeekNum]);
 
   useEffect(() => {
     // Initialize date defaults
@@ -64,8 +58,16 @@ const ClientList: React.FC = () => {
     setCurrentMonth(m);
     
     const weeks = getWeeksForMonth(y, m);
-    const todayNum = now.getDate();
-    const foundWeek = Object.keys(weeks).find(w => weeks[parseInt(w)].includes(todayNum));
+    
+    // Check if today matches any week
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const foundWeek = Object.keys(weeks).find(w => {
+        return weeks[parseInt(w)].some(d => {
+            const dStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+            return dStr === todayStr;
+        });
+    });
+
     if(foundWeek) setSelectedWeekNum(parseInt(foundWeek));
   }, []);
 
@@ -415,7 +417,7 @@ const ClientList: React.FC = () => {
                 <div className="flex space-x-1 overflow-x-auto max-w-full pb-1 md:pb-0 scrollbar-hide">
                     {sortedWeekKeys.map(wk => {
                         const days = weeksData[wk];
-                        const label = getWeekRangeString(currentYear, currentMonth, days);
+                        const label = getWeekRangeString(null, null, days);
                         return (
                             <button
                                 key={wk}

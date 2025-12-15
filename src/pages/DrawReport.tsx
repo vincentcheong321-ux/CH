@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getClients, getDrawBalances, saveDrawBalance, getClientBalancesPriorToDate } from '../services/storageService';
 import { Client } from '../types';
-import { Calendar, ChevronLeft, ChevronRight, Filter, Save, Layers, RefreshCw, Loader2, CheckCircle2 } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Filter, Save, Layers, RefreshCw, Loader2 } from 'lucide-react';
 import { MONTH_NAMES, getWeeksForMonth, getWeekRangeString } from '../utils/reportUtils';
 
 // Extracted Component to prevent re-mounting on every render
@@ -59,7 +59,6 @@ const DrawReport: React.FC = () => {
     
     // Auto-select nearest date to "Today"
     const now = new Date();
-    // Logic to set year safely within config bounds
     let y = now.getFullYear();
     if(y < 2025) y = 2025;
     if(y > 2026) y = 2026;
@@ -70,18 +69,25 @@ const DrawReport: React.FC = () => {
 
     // Find week that contains today
     const weeks = getWeeksForMonth(y, m);
-    const todayNum = now.getDate();
-    const weekNum = Object.keys(weeks).find(w => weeks[parseInt(w)].includes(todayNum));
+    // Find week where any day matches today
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    
+    const weekNum = Object.keys(weeks).find(w => {
+        return weeks[parseInt(w)].some(d => {
+            const dStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+            return dStr === todayStr;
+        });
+    });
     
     if (weekNum) {
         // Select start day of this week
         const startDay = weeks[parseInt(weekNum)][0];
-        handleDateClick(startDay, m, y);
+        handleDateClick(startDay);
     } else {
         // Fallback to first week of current month
         const firstWeekNum = Object.keys(weeks)[0];
         if (firstWeekNum) {
-            handleDateClick(weeks[parseInt(firstWeekNum)][0], m, y);
+            handleDateClick(weeks[parseInt(firstWeekNum)][0]);
         }
     }
   }, []);
@@ -112,11 +118,10 @@ const DrawReport: React.FC = () => {
       setLoading(false);
   };
 
-  const handleDateClick = (day: number, mIndex: number = currentMonth, y: number = currentYear) => {
-      const dObj = new Date(y, mIndex, day);
-      const yearStr = dObj.getFullYear();
-      const m = String(dObj.getMonth() + 1).padStart(2, '0');
-      const d = String(dObj.getDate()).padStart(2, '0');
+  const handleDateClick = (dateObj: Date) => {
+      const yearStr = dateObj.getFullYear();
+      const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const d = String(dateObj.getDate()).padStart(2, '0');
       setSelectedDate(`${yearStr}-${m}-${d}`);
   };
 
@@ -147,7 +152,6 @@ const DrawReport: React.FC = () => {
 
       setGenerating(true);
       try {
-          // Fetch balances prior to the currently selected date
           const prevBalances = await getClientBalancesPriorToDate(selectedDate);
           
           const newBalances: Record<string, string> = {};
@@ -155,16 +159,11 @@ const DrawReport: React.FC = () => {
           for (const client of clients) {
               const bal = prevBalances[client.id] || 0;
               newBalances[client.id] = bal.toString();
-              // Save each to DB as current draw
               await saveDrawBalance(selectedDate, client.id, bal);
           }
           
           setClientBalances(newBalances);
-          
-          // Allow spinner to show for at least 800ms so user sees it
           await new Promise(r => setTimeout(r, 800));
-          
-          // No Alert - Success
       } catch (e) {
           console.error("Failed to generate balances", e);
           alert("Error generating balances. Please try again.");
@@ -214,11 +213,10 @@ const DrawReport: React.FC = () => {
       for (const [wNum, days] of Object.entries(currentMonthWeeks)) {
           // Check if selectedDate matches any day in this week
           const match = days.some(d => {
-              const dObj = new Date(currentYear, currentMonth, d);
-              const y = dObj.getFullYear();
-              const m = String(dObj.getMonth() + 1).padStart(2, '0');
-              const dayStr = String(dObj.getDate()).padStart(2, '0');
-              return `${y}-${m}-${dayStr}` === selectedDate;
+              const yearStr = d.getFullYear();
+              const m = String(d.getMonth() + 1).padStart(2, '0');
+              const dayStr = String(d.getDate()).padStart(2, '0');
+              return `${yearStr}-${m}-${dayStr}` === selectedDate;
           });
           if (match) {
               activeWeekNum = wNum;
@@ -245,7 +243,7 @@ const DrawReport: React.FC = () => {
                   {sortedWeekNums.map((weekNum, idx) => {
                       const days = currentMonthWeeks[weekNum];
                       const isActiveWeek = weekNum.toString() === activeWeekNum;
-                      const rangeStr = getWeekRangeString(currentYear, currentMonth, days);
+                      const rangeStr = getWeekRangeString(null, null, days);
 
                       return (
                         <button
@@ -278,7 +276,7 @@ const DrawReport: React.FC = () => {
 
   // Create string for display
   const activeWeekDateRange = activeWeekDays.length > 0 
-    ? getWeekRangeString(currentYear, currentMonth, activeWeekDays)
+    ? getWeekRangeString(null, null, activeWeekDays)
     : '';
 
   return (
@@ -314,7 +312,7 @@ const DrawReport: React.FC = () => {
                                 </span>
                             </div>
                             
-                            {/* Mobile Week Buttons (Inserted) */}
+                            {/* Mobile Week Buttons */}
                             <div className="flex lg:hidden space-x-2 bg-gray-200 p-1 rounded-lg w-fit overflow-x-auto max-w-full mt-3">
                                 {sortedWeekNums.map((weekNum, idx) => {
                                     const days = currentMonthWeeks[weekNum];
@@ -358,7 +356,6 @@ const DrawReport: React.FC = () => {
                         <div className="flex-1 overflow-auto">
                             <div className="p-4 md:p-6 pb-24">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-0">
-                                    {/* Column 1 */}
                                     <div className="flex flex-col">
                                         {leftClients.map(c => (
                                             <ClientInputRow 
@@ -370,8 +367,6 @@ const DrawReport: React.FC = () => {
                                             />
                                         ))}
                                     </div>
-                                    
-                                    {/* Column 2 */}
                                     <div className="flex flex-col border-t md:border-t-0 border-gray-100 pt-4 md:pt-0">
                                         {rightClients.map(c => (
                                             <ClientInputRow 
@@ -389,7 +384,6 @@ const DrawReport: React.FC = () => {
                         </div>
                     )}
                     
-                    {/* Sticky Footer Total */}
                     <div className="sticky bottom-0 bg-gray-900 text-white p-4 shadow-lg flex justify-between items-center z-20">
                          <div className="text-sm font-medium uppercase tracking-wider text-gray-400">Total Company Balance</div>
                          <div className={`text-2xl font-mono font-bold ${total >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -400,7 +394,6 @@ const DrawReport: React.FC = () => {
             )}
        </div>
 
-       {/* Full Screen Loading Overlay for Generation */}
        {generating && (
            <div className="fixed inset-0 bg-black/60 z-[9999] flex flex-col items-center justify-center backdrop-blur-sm animate-in fade-in duration-200">
                <div className="bg-white p-8 rounded-2xl shadow-2xl flex flex-col items-center max-w-sm w-full mx-4">

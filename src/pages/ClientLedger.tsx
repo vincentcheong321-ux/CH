@@ -98,8 +98,16 @@ const ClientLedger: React.FC = () => {
         setCurrentMonth(m);
         
         const weeks = getWeeksForMonth(y, m);
-        const todayNum = now.getDate();
-        const foundWeek = Object.keys(weeks).find(w => weeks[parseInt(w)].includes(todayNum));
+        
+        // Find week key that contains today's date string
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+        const foundWeek = Object.keys(weeks).find(w => {
+            return weeks[parseInt(w)].some(d => {
+                const dStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                return dStr === todayStr;
+            });
+        });
+
         if(foundWeek) setSelectedWeekNum(parseInt(foundWeek));
     }
 
@@ -119,18 +127,17 @@ const ClientLedger: React.FC = () => {
   
   const activeDateStrings = useMemo(() => 
       activeDays.map(d => {
-        const dateObj = new Date(currentYear, currentMonth, d);
-        const y = dateObj.getFullYear();
-        const m = String(dateObj.getMonth() + 1).padStart(2, '0');
-        const day = String(dateObj.getDate()).padStart(2, '0');
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
         return `${y}-${m}-${day}`;
       }),
-  [activeDays, currentYear, currentMonth]);
+  [activeDays]);
 
   const { weekRecords, weekTotal } = useMemo(() => {
     if (activeDateStrings.length === 0) return { weekRecords: [], weekTotal: 0 };
     
-    // 1. Get all records for current week
+    // 1. Get all records for current week range
     const current = allRecords.filter(r => activeDateStrings.includes(r.date));
     
     // 2. Separate 'Sales Opening' records (id starts with 'sale_') from others
@@ -461,7 +468,7 @@ const ClientLedger: React.FC = () => {
         <div className="bg-gray-50 border-b border-gray-200 px-4 py-2 flex justify-center space-x-2 overflow-x-auto">
              {sortedWeekKeys.map(wk => {
                 const days = weeksData[Number(wk)];
-                const rangeStr = getWeekRangeString(currentYear, currentMonth, days);
+                const rangeStr = getWeekRangeString(null, null, days);
                 return (
                     <button 
                         key={wk} 
