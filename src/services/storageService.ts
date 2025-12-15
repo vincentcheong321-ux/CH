@@ -579,6 +579,29 @@ export const getWinningsByDate = async (date: string): Promise<Record<string, nu
     return {};
 };
 
+// Fetch winnings across a date range (for weekly summary)
+export const getWinningsByDateRange = async (startDate: string, endDate: string): Promise<Record<string, number>> => {
+    if (supabase) {
+        const { data } = await supabase
+            .from('financial_journal')
+            .select('client_id, amount, data')
+            .gte('entry_date', startDate)
+            .lte('entry_date', endDate)
+            .eq('entry_type', 'MANUAL');
+
+        const map: Record<string, number> = {};
+        
+        data?.forEach((row: any) => {
+            if (row.data?.typeLabel === '中') {
+                const current = map[row.client_id] || 0;
+                map[row.client_id] = current + Math.abs(row.amount);
+            }
+        });
+        return map;
+    }
+    return {};
+};
+
 // --- 4. Global Balance & Utils ---
 
 export const getClientBalance = (clientId: string): number => {

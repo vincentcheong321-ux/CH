@@ -1,13 +1,13 @@
-
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calculator, Trophy, RotateCcw, Plus, Trash2, Save, User, CheckCircle, Calendar, Hash, Medal } from 'lucide-react';
-import { getClients, saveLedgerRecord, getWinningsByDate } from '../services/storageService';
+import { Calculator, Trophy, RotateCcw, Plus, Trash2, Save, User, CheckCircle, Calendar, Hash, Medal, Layers, RefreshCw } from 'lucide-react';
+import { getClients, saveLedgerRecord, getWinningsByDateRange } from '../services/storageService';
 import { Client } from '../types';
-import { getWeeksForMonth } from '../utils/reportUtils';
+import { getWeeksForMonth, MONTH_NAMES, getWeekRangeString } from '../utils/reportUtils';
 
 type GameMode = '4D' | '3D';
 type PrizePosition = '1' | '2' | '3' | 'S' | 'C';
+type BetType = 'Straight' | 'Box' | 'Pau';
 
 interface WinningEntry {
   id: string;
@@ -19,6 +19,7 @@ interface WinningEntry {
   betType: 'Big' | 'Small' | '3A' | '3ABC';
   betAmount: number;
   winAmount: number;
+  playType: BetType;
 }
 
 const PAYOUTS_4D = {
@@ -30,6 +31,36 @@ const PAYOUTS_3D = { '3A': 720, '3ABC': 240 };
 
 const PRIZE_LABELS_CHINESE: Record<PrizePosition, string> = {
     '1': '头', '2': '二', '3': '三', 'S': '入', 'C': '安'
+};
+
+// --- Helper to calculate unique permutations count ---
+const getPermutationCount = (str: string, mode: GameMode): number => {
+    const chars = str.split('');
+    const len = mode === '4D' ? 4 : 3;
+    if (chars.length !== len) return 1; // Fallback
+
+    const counts: Record<string, number> = {};
+    chars.forEach(c => counts[c] = (counts[c] || 0) + 1);
+    
+    // 4D logic
+    if (mode === '4D') {
+        const unique = Object.keys(counts).length;
+        if (unique === 4) return 24; // ABCD
+        if (unique === 3) return 12; // AABC
+        if (unique === 2) {
+            // AABB or AAAB
+            return Object.values(counts).includes(3) ? 4 : 6;
+        }
+        if (unique === 1) return 1; // AAAA
+    } 
+    // 3D logic
+    else {
+        const unique = Object.keys(counts).length;
+        if (unique === 3) return 6; // ABC
+        if (unique === 2) return 3; // AAB
+        if (unique === 1) return 1; // AAA
+    }
+    return 1;
 };
 
 // Component for Client Win Input Row
@@ -88,6 +119,9 @@ const WinCalculator: React.FC = () => {
     const [betSmall, setBetSmall] = useState('');
     const [betA, setBetA] = useState('');
     const [betABC, setBetABC] = useState('');
+    
+    // New Play Type State
+    const [playType, setPlayType] = useState<BetType>('Straight');
 
     const [entries, setEntries] = useState<WinningEntry[]>([]);
     
@@ -98,7 +132,7 @@ const WinCalculator: React.FC = () => {
     const [isSaving, setIsSaving] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
 
-    // Manual List State
+    // Summary State (Weekly)
     const [clientWinnings, setClientWinnings] = useState<Record<string, string>>({});
     const [loadingList, setLoadingList] = useState(false);
 
@@ -111,20 +145,46 @@ const WinCalculator: React.FC = () => {
         fetchClients();
     }, []);
 
+    // Fetch Weekly Winnings on Date Change
     useEffect(() => {
         if (selectedDate && clients.length > 0) {
-            fetchDailyWinnings();
+            fetchWeeklyWinnings();
         }
     }, [selectedDate, clients]);
 
-    const fetchDailyWinnings = async () => {
+    const fetchWeeklyWinnings = async () => {
         setLoadingList(true);
-        const data = await getWinningsByDate(selectedDate);
-        const mapped: Record<string, string> = {};
-        clients.forEach(c => {
-            mapped[c.id] = data[c.id] ? data[c.id].toString() : '';
-        });
-        setClientWinnings(mapped);
+        
+        // Calculate Week Range
+        const d = new Date(selectedDate);
+        const y = d.getFullYear();
+        const m = d.getMonth();
+        const weeks = getWeeksForMonth(y, m);
+        const targetStr = selectedDate;
+        
+        // Find current week array
+        const weekDays = Object.values(weeks).find(days => 
+            days.some(day => {
+                const ds = `${day.getFullYear()}-${String(day.getMonth()+1).padStart(2,'0')}-${String(day.getDate()).padStart(2,'0')}`;
+                return ds === targetStr;
+            })
+        );
+
+        if (weekDays && weekDays.length > 0) {
+            const start = weekDays[0];
+            const end = weekDays[weekDays.length - 1];
+            const sStr = `${start.getFullYear()}-${String(start.getMonth()+1).padStart(2,'0')}-${String(start.getDate()).padStart(2,'0')}`;
+            const eStr = `${end.getFullYear()}-${String(end.getMonth()+1).padStart(2,'0')}-${String(end.getDate()).padStart(2,'0')}`;
+            
+            const data = await getWinningsByDateRange(sStr, eStr);
+            const mapped: Record<string, string> = {};
+            clients.forEach(c => {
+                mapped[c.id] = data[c.id] ? data[c.id].toString() : '';
+            });
+            setClientWinnings(mapped);
+        } else {
+            setClientWinnings({});
+        }
         setLoadingList(false);
     };
 
@@ -142,50 +202,67 @@ const WinCalculator: React.FC = () => {
 
         const newEntries: WinningEntry[] = [];
         const sideCount = sides.length;
+        const permutationCount = getPermutationCount(winningNumber, mode);
         
         if (mode === '4D') {
             const bigAmt = parseFloat(betBig) || 0;
             const smallAmt = parseFloat(betSmall) || 0;
 
             if (bigAmt > 0) {
-                const effectiveBet = bigAmt / sideCount;
-                const winAmount = effectiveBet * PAYOUTS_4D.BIG[position];
+                // Calculate Effective Bet per Permutation
+                let effectiveBet = bigAmt;
+                if (playType === 'Box') { // iBox: Total Bet covers all permutations
+                    effectiveBet = bigAmt / permutationCount;
+                }
+                // If Pau or Straight, Effective Bet is the input amount (per unit)
+                
+                const winAmount = (effectiveBet / sideCount) * PAYOUTS_4D.BIG[position];
+                
                 if (winAmount > 0) {
                     newEntries.push({
-                        id: Date.now() + 'b', number: winningNumber, mode, position, sides,
-                        positionLabel: PRIZE_LABELS_CHINESE[position], betType: 'Big', betAmount: bigAmt, winAmount
+                        id: Date.now() + 'b', number: winningNumber, mode, position, sides: sides.sort(), // Ensure KMT order
+                        positionLabel: PRIZE_LABELS_CHINESE[position], betType: 'Big', betAmount: bigAmt, winAmount, playType
                     });
                 }
             }
             if (smallAmt > 0) {
-                const effectiveBet = smallAmt / sideCount;
-                const winAmount = effectiveBet * PAYOUTS_4D.SMALL[position];
+                let effectiveBet = smallAmt;
+                if (playType === 'Box') effectiveBet = smallAmt / permutationCount;
+
+                const winAmount = (effectiveBet / sideCount) * PAYOUTS_4D.SMALL[position];
                 if (winAmount > 0) {
                     newEntries.push({
-                        id: Date.now() + 's', number: winningNumber, mode, position, sides,
-                        positionLabel: PRIZE_LABELS_CHINESE[position], betType: 'Small', betAmount: smallAmt, winAmount
+                        id: Date.now() + 's', number: winningNumber, mode, position, sides: sides.sort(),
+                        positionLabel: PRIZE_LABELS_CHINESE[position], betType: 'Small', betAmount: smallAmt, winAmount, playType
                     });
                 }
             }
-        } else { // 3D mode
+        } else { 
+            // 3D Logic (Simple, usually straight only but Box logic added for consistency if 3D iBox exists)
             const aAmt = parseFloat(betA) || 0;
             const abcAmt = parseFloat(betABC) || 0;
 
             if (aAmt > 0 && position === '1') {
-                const effectiveBet = aAmt / sideCount;
-                const winAmount = effectiveBet * PAYOUTS_3D['3A'];
-                if(winAmount > 0) newEntries.push({ id: Date.now() + 'a', number: winningNumber, mode, position, sides, positionLabel: PRIZE_LABELS_CHINESE[position], betType: '3A', betAmount: aAmt, winAmount });
+                let effectiveBet = aAmt;
+                if (playType === 'Box') effectiveBet = aAmt / permutationCount;
+                
+                const winAmount = (effectiveBet / sideCount) * PAYOUTS_3D['3A'];
+                if(winAmount > 0) newEntries.push({ id: Date.now() + 'a', number: winningNumber, mode, position, sides: sides.sort(), positionLabel: PRIZE_LABELS_CHINESE[position], betType: '3A', betAmount: aAmt, winAmount, playType });
             }
             if (abcAmt > 0 && ['1', '2', '3'].includes(position)) {
-                const effectiveBet = abcAmt / sideCount;
-                const winAmount = effectiveBet * PAYOUTS_3D['3ABC'];
-                if(winAmount > 0) newEntries.push({ id: Date.now() + 'abc', number: winningNumber, mode, position, sides, positionLabel: PRIZE_LABELS_CHINESE[position], betType: '3ABC', betAmount: abcAmt, winAmount });
+                let effectiveBet = abcAmt;
+                if (playType === 'Box') effectiveBet = abcAmt / permutationCount;
+
+                const winAmount = (effectiveBet / sideCount) * PAYOUTS_3D['3ABC'];
+                if(winAmount > 0) newEntries.push({ id: Date.now() + 'abc', number: winningNumber, mode, position, sides: sides.sort(), positionLabel: PRIZE_LABELS_CHINESE[position], betType: '3ABC', betAmount: abcAmt, winAmount, playType });
             }
         }
 
         if (newEntries.length > 0) {
             setEntries(prev => [...newEntries, ...prev]);
-            handleResetForm();
+            // Do not reset sides to keep workflow fast
+            setWinningNumber('');
+            setBetBig(''); setBetSmall(''); setBetA(''); setBetABC('');
         }
     };
 
@@ -197,6 +274,7 @@ const WinCalculator: React.FC = () => {
         setWinningNumber('');
         setBetBig(''); setBetSmall(''); setBetA(''); setBetABC('');
         setSides([]);
+        setPlayType('Straight');
     };
     
     const handleClearAll = () => {
@@ -211,7 +289,10 @@ const WinCalculator: React.FC = () => {
         
         setIsSaving(true);
         const description = entries
-            .map(e => `${e.sides.join('')} ${e.number}-${e.betAmount}-${e.winAmount.toFixed(0)} ${e.positionLabel}`)
+            .map(e => {
+                const typeStr = e.playType === 'Box' ? 'iBox' : e.playType === 'Pau' ? '包' : '';
+                return `${e.sides.join('')} ${e.number}-${e.betAmount}-${e.winAmount.toFixed(0)} ${e.positionLabel} ${typeStr}`.trim();
+            })
             .join('; ');
 
         // Save Record
@@ -226,8 +307,9 @@ const WinCalculator: React.FC = () => {
             isVisible: true
         });
 
-        // Update local list state optimistically with explicit typing
+        // Update local list state optimistically
         setClientWinnings((prev) => {
+            // Explicitly cast to Record<string, string> to resolve unknown type issues
             const record = prev as Record<string, string>;
             const raw = record[selectedClientId];
             const currentVal = parseFloat(raw || '0') || 0;
@@ -237,55 +319,72 @@ const WinCalculator: React.FC = () => {
         setIsSaving(false);
         setShowSuccess(true);
         
-        // Redirect after short delay
+        // Prepare Context for Redirect
+        const d = new Date(selectedDate);
+        const y = d.getFullYear();
+        const m = d.getMonth();
+        const weeks = getWeeksForMonth(y, m);
+        const dateStr = selectedDate;
+        let weekNum = 1;
+        const foundWeek = Object.keys(weeks).find(w => weeks[parseInt(w)].some(day => 
+            `${day.getFullYear()}-${String(day.getMonth()+1).padStart(2,'0')}-${String(day.getDate()).padStart(2,'0')}` === dateStr
+        ));
+        if (foundWeek) weekNum = parseInt(foundWeek);
+
+        // Redirect after short delay with Context
         setTimeout(() => {
-            navigate(`/clients/${selectedClientId}`);
+            navigate(`/clients/${selectedClientId}`, { state: { year: y, month: m, week: weekNum } });
         }, 800);
         
         handleClearAll();
     };
 
     // --- Manual List Logic ---
-
     const handleListInputChange = useCallback((clientId: string, val: string) => {
         if (val === '' || /^-?\d*\.?\d*$/.test(val)) {
-            setClientWinnings(prev => ({ ...prev, [clientId]: val }));
+            setClientWinnings((prev) => ({ ...prev, [clientId]: val }));
         }
     }, []);
 
     const handleListInputBlur = useCallback(async (clientId: string) => {
-        setClientWinnings((current: Record<string, string>) => {
-            const newVal = parseFloat(current[clientId]) || 0;
+        // We use the updater to access the current state securely
+        setClientWinnings((current) => {
+            // Explicitly type 'current' to ensure type safety
+            const typedCurrent = current as Record<string, string>;
+            const newVal = parseFloat(typedCurrent[clientId]) || 0;
             
-            // Async wrapper
+            // Side effect: Re-fetch weekly total from DB to compare against current inputs
+            // We do this in an IIFE to not block the synchronous state update
             (async () => {
-                const dbData = await getWinningsByDate(selectedDate);
-                const oldVal = dbData[clientId] || 0;
+                // Determine range again
+                const d = new Date(selectedDate);
+                const weeks = getWeeksForMonth(d.getFullYear(), d.getMonth());
+                const targetStr = selectedDate;
+                const weekDays = Object.values(weeks).find(days => 
+                    days.some(day => `${day.getFullYear()}-${String(day.getMonth()+1).padStart(2,'0')}-${String(day.getDate()).padStart(2,'0')}` === targetStr)
+                );
                 
-                if (newVal !== oldVal) {
-                    const diff = newVal - oldVal;
+                if (weekDays) {
+                    const start = weekDays[0];
+                    const end = weekDays[weekDays.length - 1];
+                    const sStr = `${start.getFullYear()}-${String(start.getMonth()+1).padStart(2,'0')}-${String(start.getDate()).padStart(2,'0')}`;
+                    const eStr = `${end.getFullYear()}-${String(end.getMonth()+1).padStart(2,'0')}-${String(end.getDate()).padStart(2,'0')}`;
                     
-                    if (diff < 0) {
-                        // Reducing winnings -> Increasing Debt -> 'add' operation
-                         await saveLedgerRecord({
+                    const dbData = await getWinningsByDateRange(sStr, eStr);
+                    const oldVal = dbData[clientId] || 0;
+                    
+                    if (newVal !== oldVal) {
+                        const diff = newVal - oldVal;
+                        // Save diff to selectedDate
+                        const op = diff < 0 ? 'add' : 'subtract'; 
+                        
+                        await saveLedgerRecord({
                             clientId,
                             date: selectedDate,
-                            description: 'Win Correction',
+                            description: 'Weekly Win Adjustment',
                             typeLabel: '中',
                             amount: Math.abs(diff),
-                            operation: 'add', // Correction adds back to debt
-                            column: 'col1',
-                            isVisible: true
-                        });
-                    } else {
-                        // Increasing winnings -> Reducing Debt -> 'subtract' operation
-                         await saveLedgerRecord({
-                            clientId,
-                            date: selectedDate,
-                            description: 'Manual Win Adjustment',
-                            typeLabel: '中',
-                            amount: Math.abs(diff),
-                            operation: 'subtract', 
+                            operation: op, 
                             column: 'col1',
                             isVisible: true
                         });
@@ -293,20 +392,20 @@ const WinCalculator: React.FC = () => {
                 }
             })();
 
-            return current;
+            return typedCurrent;
         });
     }, [selectedDate]);
 
-    const weekInfo = useMemo(() => {
-        if (!selectedDate) return '';
+    // Format week label
+    const weekLabel = useMemo(() => {
         const d = new Date(selectedDate);
         const weeks = getWeeksForMonth(d.getFullYear(), d.getMonth());
         const dateStr = selectedDate;
-        const foundWeek = Object.keys(weeks).find(w => weeks[parseInt(w)].some(day => 
-            `${day.getFullYear()}-${String(day.getMonth()+1).padStart(2,'0')}-${String(day.getDate()).padStart(2,'0')}` === dateStr
-        ));
-        if (foundWeek) return `Week ${Object.keys(weeks).indexOf(foundWeek) + 1}`;
-        return '';
+        const foundDays = Object.values(weeks).find(days => 
+            days.some(day => `${day.getFullYear()}-${String(day.getMonth()+1).padStart(2,'0')}-${String(day.getDate()).padStart(2,'0')}` === dateStr)
+        );
+        if (foundDays) return getWeekRangeString(null, null, foundDays);
+        return selectedDate;
     }, [selectedDate]);
 
     // Split clients for 2 columns
@@ -314,11 +413,30 @@ const WinCalculator: React.FC = () => {
     const leftClients = clients.slice(0, midPoint);
     const rightClients = clients.slice(midPoint);
 
-    const totalDailyWinnings = Object.values(clientWinnings).reduce((acc, val) => acc + (parseFloat(val) || 0), 0);
+    const totalDailyWinnings: number = (Object.values(clientWinnings) as string[]).reduce((acc: number, val: string) => acc + (parseFloat(val) || 0), 0);
 
     return (
         <div className="max-w-[1600px] mx-auto p-4 md:p-8 space-y-8">
             
+            {/* Top Bar: Date Selector */}
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                    <div className="bg-red-100 p-2 rounded-lg text-red-600">
+                        <Calendar size={24} />
+                    </div>
+                    <div>
+                        <h2 className="font-bold text-gray-800">Calculation Date</h2>
+                        <p className="text-xs text-gray-500">Determines ledger entry date & summary week.</p>
+                    </div>
+                </div>
+                <input 
+                    type="date" 
+                    value={selectedDate} 
+                    onChange={(e) => setSelectedDate(e.target.value)} 
+                    className="border-2 border-gray-300 rounded-lg px-4 py-2 font-bold text-gray-700 focus:border-blue-500 outline-none"
+                />
+            </div>
+
             {/* Top Section: Calculator */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 {/* Calculator Form */}
@@ -340,11 +458,25 @@ const WinCalculator: React.FC = () => {
                         </div>
 
                         <div className="p-5 space-y-5">
-                            {/* Sides */}
+                            {/* Permutation Type Selector */}
+                            <div className="flex bg-gray-100 p-1 rounded-lg">
+                                {['Straight', 'Box', 'Pau'].map((type) => (
+                                    <button 
+                                        key={type}
+                                        type="button" 
+                                        onClick={() => setPlayType(type as BetType)}
+                                        className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${playType === type ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}
+                                    >
+                                        {type === 'Box' ? 'iBox' : type === 'Pau' ? '包 (Pau)' : 'Straight'}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Sides - Visual Order K, M, T if all present, but data uses logic */}
                             <div>
                                 <label className="block text-[10px] font-bold text-gray-400 uppercase mb-2">Sides</label>
                                 <div className="grid grid-cols-3 gap-2">
-                                    {['M', 'K', 'T'].map(side => (
+                                    {['K', 'M', 'T'].map(side => (
                                         <button type="button" key={side} onClick={() => handleSideToggle(side)} className={`py-2 rounded-lg border-2 font-bold transition-all text-sm ${sides.includes(side) ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white'}`}>{side}</button>
                                     ))}
                                 </div>
@@ -412,10 +544,12 @@ const WinCalculator: React.FC = () => {
                                                 <div className="bg-yellow-100 text-yellow-800 font-bold px-2 py-1 rounded text-xs">{entry.positionLabel}</div>
                                                 <div className="font-mono text-lg font-bold text-gray-800">{entry.number}</div>
                                                 <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">{entry.sides.join('')}</div>
-                                                <div className="text-xs text-gray-400">Bet: ${entry.betAmount} ({entry.betType})</div>
+                                                <div className="text-xs text-gray-400">
+                                                    Bet: ${entry.betAmount} {entry.playType !== 'Straight' ? `(${entry.playType === 'Box' ? 'iBox' : 'Pau'})` : ''}
+                                                </div>
                                             </div>
                                             <div className="flex items-center space-x-4">
-                                                <span className="font-mono font-bold text-red-600">+ ${entry.winAmount.toLocaleString()}</span>
+                                                <span className="font-mono font-bold text-red-600">+ ${entry.winAmount.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                                                 <button onClick={() => handleDeleteEntry(entry.id)} className="text-gray-300 hover:text-red-500"><Trash2 size={16} /></button>
                                             </div>
                                         </div>
@@ -427,14 +561,6 @@ const WinCalculator: React.FC = () => {
                         {entries.length > 0 && (
                             <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 animate-in slide-in-from-bottom-2">
                                 <div className="flex flex-col md:flex-row gap-4 items-end">
-                                    <div className="w-full md:w-48">
-                                        <label className="block text-xs font-bold text-gray-500 mb-1">Date</label>
-                                        <div className="relative">
-                                            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                                            <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="w-full pl-9 pr-3 py-2 border rounded-lg text-sm font-medium" />
-                                        </div>
-                                        {weekInfo && <div className="text-[10px] text-blue-600 font-bold mt-1 text-right">{weekInfo}</div>}
-                                    </div>
                                     <div className="flex-1 w-full">
                                         <label className="block text-xs font-bold text-gray-500 mb-1">Client Account</label>
                                         <div className="relative">
@@ -446,7 +572,7 @@ const WinCalculator: React.FC = () => {
                                         </div>
                                     </div>
                                     <button onClick={handleSaveToLedger} disabled={!selectedClientId || isSaving} className="w-full md:w-auto px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold shadow-md flex items-center justify-center disabled:opacity-50">
-                                        {isSaving ? 'Saving...' : <><Save size={18} className="mr-2" /> Save & Update List</>}
+                                        {isSaving ? 'Saving...' : <><Save size={18} className="mr-2" /> Save & Redirect</>}
                                     </button>
                                 </div>
                             </div>
@@ -455,36 +581,26 @@ const WinCalculator: React.FC = () => {
                 </div>
             </div>
 
-            {/* Bottom Section: Daily Summary List */}
+            {/* Bottom Section: Weekly Summary List */}
             <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
                 <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4 bg-gray-50">
                     <div>
                         <h2 className="text-xl font-bold text-gray-800 flex items-center">
-                            <Medal size={20} className="mr-2 text-red-500" />
-                            Daily Winnings Summary
+                            <Layers size={20} className="mr-2 text-blue-500" />
+                            Weekly Winnings Summary
                         </h2>
                         <div className="flex items-center mt-2">
-                            <p className="text-sm text-gray-500 mr-4">Total winnings ("中") for:</p>
-                            {/* Date Selector for List */}
-                            <div className="relative">
-                                <Calendar className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
-                                <input 
-                                    type="date" 
-                                    value={selectedDate} 
-                                    onChange={(e) => setSelectedDate(e.target.value)} 
-                                    className="pl-7 pr-2 py-1 border border-gray-300 rounded text-sm font-bold text-gray-700 focus:outline-none focus:border-blue-500 shadow-sm" 
-                                />
-                            </div>
+                            <p className="text-sm text-gray-500">Showing total winnings for week: <strong>{weekLabel}</strong></p>
                         </div>
                     </div>
                     <div className="text-right">
-                        <div className="text-xs text-gray-400 font-bold uppercase tracking-wider">Total Daily Payout</div>
-                        <div className="text-2xl font-mono font-bold text-red-600">${totalDailyWinnings.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+                        <div className="text-xs text-gray-400 font-bold uppercase tracking-wider">Weekly Total Payout</div>
+                        <div className="text-2xl font-mono font-bold text-red-600">${totalDailyWinnings.toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
                     </div>
                 </div>
 
                 {loadingList ? (
-                    <div className="p-12 text-center text-gray-400">Loading daily data...</div>
+                    <div className="p-12 text-center text-gray-400">Loading weekly data...</div>
                 ) : (
                     <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-0">
                         <div className="flex flex-col">

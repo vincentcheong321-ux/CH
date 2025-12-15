@@ -63,14 +63,14 @@ const WinningBreakdown: React.FC<WinningBreakdownProps> = ({ description, totalA
     const entries = rawContent.split(';').map(s => s.trim()).filter(s => s);
 
     return (
-        <div className="w-full relative group mb-3 border-b-2 border-gray-100 pb-2">
-             {/* Edit/Delete Actions (Absolute, visible on hover) - Moved to left to avoid overlap */}
+        <div className="w-full relative group mb-3 border-b-2 border-gray-200 pb-2">
+             {/* Edit/Delete Actions */}
              <div className="no-print opacity-0 group-hover:opacity-100 transition-opacity flex flex-col space-y-1 absolute -left-8 top-0 z-20">
                 <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-1.5 text-blue-600 hover:bg-blue-50 bg-white shadow-md rounded-lg border border-gray-200"><Pencil size={12} /></button>
                 <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1.5 text-red-600 hover:bg-red-50 bg-white shadow-md rounded-lg border border-gray-200"><Trash2 size={12} /></button>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-3">
                 {entries.map((entry, idx) => {
                     // Expected: "MKT 5990-6-2200 头"
                     const parts = entry.match(/^([A-Z]+)\s+(\d+)-([\d.]+)-([\d.]+)\s+(.+)$/);
@@ -78,23 +78,32 @@ const WinningBreakdown: React.FC<WinningBreakdownProps> = ({ description, totalA
                     if (parts) {
                         const [_, sides, number, bet, win, pos] = parts;
                         return (
-                            <div key={idx} className="flex items-center justify-between text-sm leading-snug">
-                                {/* Left: Sides */}
-                                <div className="w-8 flex-shrink-0">
-                                    <span className="font-bold text-gray-400 font-mono tracking-tighter text-[10px] uppercase block">{sides}</span>
+                            <div key={idx} className="flex items-center text-sm leading-snug">
+                                {/* Left: Sides (Fixed Width) */}
+                                <div className="w-10 flex-shrink-0 text-left">
+                                    <span className="font-bold text-gray-400 font-mono text-[11px] uppercase block">{sides}</span>
                                 </div>
                                 
-                                {/* Middle: Number - Bet - Win */}
-                                <div className="flex-1 flex items-center justify-end font-mono text-gray-800">
-                                    <span className="font-bold text-gray-900 text-lg mr-2">{number}</span>
-                                    <span className="text-gray-300 mx-1">-</span>
-                                    <span className="text-gray-600 font-bold mx-1">{Number(bet).toLocaleString()}</span>
-                                    <span className="text-gray-300 mx-1">-</span>
-                                    <span className="font-bold text-red-600 text-base ml-1">{Number(win).toLocaleString()}</span>
+                                {/* Right: Grid for Number | Bet | Win */}
+                                <div className="flex-1 flex items-center justify-between font-mono">
+                                    {/* Number */}
+                                    <div className="text-xl font-bold text-gray-900 w-16 text-center">{number}</div>
+                                    
+                                    {/* Separator */}
+                                    <div className="h-6 w-px bg-gray-300 mx-1"></div>
+                                    
+                                    {/* Bet */}
+                                    <div className="text-gray-600 font-bold w-10 text-center">{Number(bet).toLocaleString()}</div>
+                                    
+                                    {/* Separator */}
+                                    <div className="h-6 w-px bg-red-400 mx-1"></div>
+                                    
+                                    {/* Win */}
+                                    <div className="font-bold text-red-600 text-lg w-16 text-center">{Number(win).toLocaleString()}</div>
                                 </div>
 
-                                {/* Right: Position */}
-                                <div className="flex-shrink-0">
+                                {/* Position Badge */}
+                                <div className="flex-shrink-0 w-8 flex justify-end">
                                     <PositionBadge label={pos} />
                                 </div>
                             </div>
@@ -104,9 +113,9 @@ const WinningBreakdown: React.FC<WinningBreakdownProps> = ({ description, totalA
                 })}
             </div>
             {/* Total Footer */}
-            <div className="mt-2 pt-1 border-t border-gray-200 text-right flex justify-end items-baseline gap-2">
-                <span className="text-xs text-gray-400 uppercase font-bold tracking-wider">Total Win</span>
-                <span className="text-2xl font-mono font-bold text-red-600 leading-none">{totalAmount.toLocaleString()}</span>
+            <div className="mt-3 pt-2 border-t border-gray-300 flex justify-end items-center gap-3">
+                <span className="text-sm text-gray-400 uppercase font-bold tracking-widest font-serif">共中</span>
+                <span className="text-3xl font-mono font-bold text-red-600 leading-none">{totalAmount.toLocaleString()}</span>
             </div>
         </div>
     );
@@ -621,7 +630,7 @@ const ClientLedger: React.FC = () => {
                     <div className="bg-gray-100 rounded-lg p-1 flex w-full">
                         <button onClick={() => setActiveColumn('col1')} className={`flex-1 px-3 py-2 text-xs font-bold rounded-md transition-all ${activeColumn === 'col1' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:bg-gray-200/50'}`}>Panel 1</button>
                         <button onClick={() => setActiveColumn('col2')} className={`flex-1 px-3 py-2 text-xs font-bold rounded-md transition-all ${activeColumn === 'col2' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:bg-gray-200/50'}`}>Panel 2</button>
-                        <button onClick={() => setActiveColumn('main')} className={`flex-1 px-3 py-2 text-xs font-bold rounded-md transition-all ${activeColumn === 'main' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-200/50'}`}>Main Ledger</button>
+                        <button onClick={() => setActiveColumn('main')} className={`flex-1 px-3 py-2 text-xs font-bold rounded-md transition-all ${activeColumn === 'main' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>Main Ledger</button>
                     </div>
                 </div>
 
