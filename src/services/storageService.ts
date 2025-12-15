@@ -131,7 +131,7 @@ const mapJournalToLedgerRecord = (row: any): LedgerRecord => {
             baseRecord.typeLabel = '支';
             baseRecord.id = `adv_${row.id}`;
             baseRecord.operation = 'add';
-            baseRecord.column = 'col1'; // Advances often in Panel 1
+            baseRecord.column = 'main'; // Advances in Main Ledger
             break;
 
         case 'CREDIT':
@@ -139,7 +139,7 @@ const mapJournalToLedgerRecord = (row: any): LedgerRecord => {
             baseRecord.typeLabel = '来';
             baseRecord.id = `cred_${row.id}`;
             baseRecord.operation = 'subtract';
-            baseRecord.column = 'col1'; // Credits often in Panel 1
+            baseRecord.column = 'main'; // Credits in Main Ledger
             break;
 
         case 'DRAW':

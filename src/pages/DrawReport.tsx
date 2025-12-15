@@ -174,9 +174,8 @@ const DrawReport: React.FC = () => {
       }
   };
 
-  // FIX: Added explicit return type to ensure `total` is a number.
   const calculateTotal = (): number => {
-      return Object.values(clientBalances).reduce((acc, val) => {
+      return Object.values(clientBalances).reduce((acc: number, val: string) => {
           const num = parseFloat(val);
           return acc + (isNaN(num) ? 0 : num);
       }, 0);
@@ -216,7 +215,6 @@ const DrawReport: React.FC = () => {
   if (selectedDate) {
       for (const [wNum, days] of Object.entries(currentMonthWeeks)) {
           // Check if selectedDate matches any day in this week
-          // FIX: Removed unnecessary cast as `days` is now correctly typed as Date[].
           const match = days.some(d => {
               const yearStr = d.getFullYear();
               const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -230,8 +228,8 @@ const DrawReport: React.FC = () => {
       }
   }
 
-  const activeWeekIndex = activeWeekNum ? Object.keys(currentMonthWeeks).map(Number).sort((a,b) => a-b).indexOf(Number(activeWeekNum)) : 0;
-  const sortedWeekNums = Object.keys(currentMonthWeeks).map(Number).sort((a,b) => a-b);
+  const activeWeekIndex = activeWeekNum ? Object.keys(currentMonthWeeks).map(Number).sort((a: number,b: number) => a-b).indexOf(Number(activeWeekNum)) : 0;
+  const sortedWeekNums = Object.keys(currentMonthWeeks).map(Number).sort((a: number,b: number) => a-b);
 
   const activeWeekDays = activeWeekNum ? currentMonthWeeks[parseInt(activeWeekNum)] : [];
 

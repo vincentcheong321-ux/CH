@@ -141,9 +141,8 @@ const CashAdvanceReport: React.FC = () => {
       });
   }, [selectedDate]);
 
-  // FIX: Added explicit return type to ensure `total` is a number.
   const calculateTotal = (): number => {
-      return Object.values(cashAdvances).reduce((acc, val) => {
+      return Object.values(cashAdvances).reduce((acc: number, val: string) => {
           const num = parseFloat(val);
           return acc + (isNaN(num) ? 0 : num);
       }, 0);
@@ -171,7 +170,7 @@ const CashAdvanceReport: React.FC = () => {
       }
   };
 
-  // FIX: Switched to explicitly providing a generic type for useMemo to ensure correct type inference downstream.
+  // --- Week Grouping Logic ---
   const currentMonthWeeks = useMemo<Record<number, Date[]>>(() => {
       return getWeeksForMonth(currentYear, currentMonth);
   }, [currentYear, currentMonth]);
@@ -180,7 +179,6 @@ const CashAdvanceReport: React.FC = () => {
   
   if (selectedDate) {
       for (const [wNum, days] of Object.entries(currentMonthWeeks)) {
-          // FIX: Removed unnecessary cast as `days` is now correctly typed as Date[].
           const match = days.some(d => {
               const yearStr = d.getFullYear();
               const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -194,8 +192,8 @@ const CashAdvanceReport: React.FC = () => {
       }
   }
 
-  const activeWeekIndex = activeWeekNum ? Object.keys(currentMonthWeeks).map(Number).sort((a,b) => a-b).indexOf(Number(activeWeekNum)) : 0;
-  const sortedWeekNums = Object.keys(currentMonthWeeks).map(Number).sort((a,b) => a-b);
+  const activeWeekIndex = activeWeekNum ? Object.keys(currentMonthWeeks).map(Number).sort((a: number,b: number) => a-b).indexOf(Number(activeWeekNum)) : 0;
+  const sortedWeekNums = Object.keys(currentMonthWeeks).map(Number).sort((a: number,b: number) => a-b);
 
   const activeDays = activeWeekNum ? currentMonthWeeks[parseInt(activeWeekNum)] : [];
   const rangeTitle = activeDays.length > 0 
