@@ -373,7 +373,7 @@ const ClientLedger: React.FC = () => {
       <div className="flex flex-col items-center w-full">
           <div className="flex flex-col w-full md:w-fit items-end">
                 {data.processed.map((r) => {
-                    const isReflected = r.id.startsWith('sale_') || r.id.startsWith('adv_') || r.id.startsWith('draw_') || r.id === 'agg_sale_week';
+                    const isReflected = r.id.startsWith('sale_') || r.id.startsWith('adv_') || r.id.startsWith('draw_') || r.id === 'agg_sale_week' || r.id.startsWith('cred_');
                     
                     const isNetNegative = r.operation !== 'none' && r.netChange < 0;
                     const absValue = Math.abs(r.operation === 'none' ? r.amount : r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2});
@@ -459,7 +459,7 @@ const ClientLedger: React.FC = () => {
   return (
     <div className="bg-gray-100 min-h-screen pb-20">
       <div className="no-print bg-white sticky top-0 z-20 shadow-md">
-        <div className="flex items-center justify-between p-3 md:p-4 max-w-5xl mx-auto">
+        <div className="flex items-center justify-between p-3 md:p-4 max-w-7xl mx-auto">
           <div className="flex items-center space-x-2 md:space-x-3">
             <Link to="/clients" className="p-2 hover:bg-gray-100 rounded-full text-gray-600 transition-colors">
               <ArrowLeft size={20} />
@@ -511,88 +511,91 @@ const ClientLedger: React.FC = () => {
         </div>
       </div>
       
-      <div className="max-w-5xl mx-auto px-2 md:px-8 py-4 md:py-6">
-        
-        <div className="no-print mb-6 md:mb-8 space-y-4">
-            <div className="flex justify-center">
-                <div className="bg-white rounded-lg p-1 shadow-sm border border-gray-200 flex w-full md:w-auto overflow-x-auto">
-                    <button onClick={() => setActiveColumn('col1')} className={`flex-1 md:flex-none px-3 py-2 text-xs md:text-sm font-bold rounded-md transition-all ${activeColumn === 'col1' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-50'}`}>Panel 1</button>
-                    <button onClick={() => setActiveColumn('col2')} className={`flex-1 md:flex-none px-3 py-2 text-xs md:text-sm font-bold rounded-md transition-all ${activeColumn === 'col2' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-50'}`}>Panel 2</button>
-                    <button onClick={() => setActiveColumn('main')} className={`flex-1 md:flex-none px-3 py-2 text-xs md:text-sm font-bold rounded-md transition-all ${activeColumn === 'main' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>Main Ledger</button>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="flex flex-col lg:flex-row gap-8">
+            {/* --- LEFT COLUMN: CONTROLS --- */}
+            <div className="lg:w-80 xl:w-96 flex-shrink-0 space-y-6 no-print">
+                <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                    <h3 className="font-bold text-gray-500 text-xs uppercase tracking-wider mb-2">Panel Selector</h3>
+                    <div className="bg-gray-100 rounded-lg p-1 flex w-full">
+                        <button onClick={() => setActiveColumn('col1')} className={`flex-1 px-3 py-2 text-xs font-bold rounded-md transition-all ${activeColumn === 'col1' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:bg-gray-200/50'}`}>Panel 1</button>
+                        <button onClick={() => setActiveColumn('col2')} className={`flex-1 px-3 py-2 text-xs font-bold rounded-md transition-all ${activeColumn === 'col2' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:bg-gray-200/50'}`}>Panel 2</button>
+                        <button onClick={() => setActiveColumn('main')} className={`flex-1 px-3 py-2 text-xs font-bold rounded-md transition-all ${activeColumn === 'main' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-200/50'}`}>Main Ledger</button>
+                    </div>
                 </div>
-            </div>
-            {!activeCategory ? (
-                <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 md:gap-3">
-                    {categories.filter(c => c.label !== '').map((cat, idx) => (
-                         <div key={cat.id} className="relative group">
-                            <button onClick={() => handleCategorySelect(cat)} className={`w-full h-full flex flex-col items-center justify-center p-3 md:p-4 border-2 rounded-xl transition-all shadow-sm active:scale-95 ${cat.color} ${cat.operation === 'add' ? 'border-green-100 hover:border-green-300' : cat.operation === 'subtract' ? 'border-red-100 hover:border-red-300' : 'border-gray-100 hover:border-gray-300'}`}>
-                                <div className={`p-1.5 md:p-2 rounded-full mb-1 md:mb-2 bg-black bg-opacity-5`}>{cat.operation === 'add' ? <Plus size={16}/> : cat.operation === 'subtract' ? <Minus size={16}/> : <Hash size={16}/>}</div>
-                                <span className="text-sm md:text-base font-bold text-center truncate w-full">{cat.label}</span>
-                            </button>
-                            <button onClick={(e) => { e.stopPropagation(); setConfirmModal({isOpen:true, type:'DELETE_CATEGORY', targetId:cat.id, title:'Delete Button', message:'Remove this button?'}); }} className="absolute -top-2 -right-2 text-gray-400 hover:text-red-600 bg-white rounded-full p-1 shadow-md opacity-0 group-hover:opacity-100 transition-opacity"><X size={14}/></button>
-                         </div>
-                    ))}
-                    <button onClick={handleQuickEntry} className="flex flex-col items-center justify-center p-3 md:p-4 bg-indigo-50 border-2 border-indigo-200 rounded-xl hover:bg-indigo-100 transition-all text-indigo-700 active:scale-95">
-                        <div className="p-1.5 md:p-2 rounded-full mb-1 md:mb-2 bg-indigo-200"><Zap size={16} /></div><span className="text-sm md:text-base font-bold text-center">Quick Entry</span>
-                    </button>
-                    <button onClick={() => setIsAddCatModalOpen(true)} className="flex flex-col items-center justify-center p-3 md:p-4 bg-white border-2 border-dashed border-gray-300 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all text-gray-500"><Plus size={20} className="mb-1"/><span className="text-[10px] md:text-xs font-bold uppercase">New</span></button>
-                </div>
-            ) : (
-                <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden animate-fade-in ring-4 ring-blue-50/50">
-                     <div className={`p-3 flex items-center justify-between ${activeCategory.label === '' ? 'bg-indigo-50 border-b border-indigo-100' : activeCategory.color}`}>
-                        <div className="flex items-center space-x-2">
-                             <h3 className="font-bold flex items-center text-sm md:text-base text-gray-900">{activeCategory.label || "Quick Entry"}</h3>
-                             <span className="text-[10px] md:text-xs opacity-50 px-2 py-0.5 bg-black/5 rounded-full">{activeColumn === 'main' ? 'Main' : activeColumn === 'col1' ? 'P1' : 'P2'}</span>
-                        </div>
-                        <button onClick={() => setActiveCategory(null)} className="p-1 hover:bg-black/10 rounded"><X size={20}/></button>
-                     </div>
-                     <form onSubmit={handleSubmit} className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {activeCategory.label === '' && (
-                            <div className="md:col-span-2">
-                                <div className="flex space-x-2 mb-2">
-                                    <button type="button" onClick={() => setCurrentOperation('add')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${currentOperation === 'add' ? 'bg-green-100 text-green-800 ring-2 ring-green-500' : 'bg-gray-100 text-gray-500'}`}>(+) Add</button>
-                                    <button type="button" onClick={() => setCurrentOperation('subtract')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${currentOperation === 'subtract' ? 'bg-red-100 text-red-800 ring-2 ring-red-500' : 'bg-gray-100 text-gray-500'}`}>(-) Deduct</button>
-                                    <button type="button" onClick={() => setCurrentOperation('none')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${currentOperation === 'none' ? 'bg-gray-200 text-gray-800 ring-2 ring-gray-500' : 'bg-gray-100 text-gray-500'}`}>(Ø) Note</button>
-                                </div>
+
+                {!activeCategory ? (
+                    <div className="grid grid-cols-3 gap-2">
+                        {categories.filter(c => c.label !== '').map((cat, idx) => (
+                            <div key={cat.id} className="relative group">
+                                <button onClick={() => handleCategorySelect(cat)} className={`w-full flex flex-col items-center justify-center p-3 border rounded-lg transition-all shadow-sm active:scale-95 ${cat.color} ${cat.operation === 'add' ? 'border-green-100 hover:border-green-300' : cat.operation === 'subtract' ? 'border-red-100 hover:border-red-300' : 'border-gray-100 hover:border-gray-300'}`}>
+                                    <div className="p-1.5 rounded-full mb-1 bg-black bg-opacity-5">{cat.operation === 'add' ? <Plus size={14}/> : cat.operation === 'subtract' ? <Minus size={14}/> : <Hash size={14}/>}</div>
+                                    <span className="text-xs font-bold text-center truncate w-full">{cat.label}</span>
+                                </button>
+                                <button onClick={(e) => { e.stopPropagation(); setConfirmModal({isOpen:true, type:'DELETE_CATEGORY', targetId:cat.id, title:'Delete Button', message:'Remove this button?'}); }} className="absolute -top-1.5 -right-1.5 text-gray-400 hover:text-red-600 bg-white rounded-full p-0.5 shadow-md opacity-0 group-hover:opacity-100 transition-opacity"><X size={12}/></button>
                             </div>
-                        )}
-                        <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Amount</label><input ref={amountInputRef} autoFocus type="number" step="0.01" required value={amount} onChange={e => setAmount(e.target.value)} className="w-full mt-1 p-3 text-2xl font-mono border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="0.00"/></div>
-                        <div><label className="text-xs font-bold text-gray-500 uppercase">Note</label><input type="text" value={description} onChange={e => setDescription(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"/></div>
-                        <div className="flex items-end"><button type="submit" className={`w-full py-3 rounded-lg text-white font-bold shadow-md active:scale-95 transition-transform ${activeCategory.label === '' ? (currentOperation === 'add' ? 'bg-green-600' : currentOperation === 'subtract' ? 'bg-red-600' : 'bg-gray-600') : (activeCategory.operation === 'add' ? 'bg-green-600' : activeCategory.operation === 'subtract' ? 'bg-red-600' : 'bg-gray-600')}`}>Confirm</button></div>
-                     </form>
-                </div>
-            )}
-        </div>
-
-        <div className="pb-4">
-            <div id="printable-area" className="relative max-w-5xl mx-auto md:min-w-0">
-                <div className="bg-white border border-gray-200 shadow-sm min-h-[400px] relative text-lg font-serif">
-                    <div style={{ height: `${verticalPadding.top}px` }} className="relative group w-full no-print-bg"><div className="absolute bottom-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResize('top', undefined, e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div></div>
-
-                    <div className="px-4 md:px-8 pb-2 md:pb-4 flex justify-between items-end mb-2 md:mb-4">
-                        <div>
-                            <h2 className="text-2xl md:text-4xl font-bold text-gray-900 uppercase tracking-widest">{client.name}</h2>
-                            {client.code && <p className="text-gray-600 mt-1 font-mono text-sm md:text-xl">{client.code}</p>}
-                        </div>
+                        ))}
+                        <button onClick={handleQuickEntry} className="flex flex-col items-center justify-center p-3 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-all text-indigo-700 active:scale-95">
+                            <div className="p-1.5 rounded-full mb-1 bg-indigo-200"><Zap size={14} /></div><span className="text-xs font-bold text-center">Quick Entry</span>
+                        </button>
+                        <button onClick={() => setIsAddCatModalOpen(true)} className="flex flex-col items-center justify-center p-3 bg-white border border-dashed border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all text-gray-500"><Plus size={16} className="mb-1"/><span className="text-[10px] font-bold uppercase">New</span></button>
                     </div>
-
-                    <div className="flex flex-col md:flex-row w-full min-h-[400px] relative" ref={containerRef}>
-                        {/* On Mobile, show only if activeColumn matches. On Desktop, show always */}
-                        <div style={{ width: isMobile ? '100%' : `${colWidths[0]}%` }} className={`relative flex-col p-1 border-r border-transparent group overflow-hidden ${isMobile && activeColumn !== 'col1' ? 'hidden' : 'flex'}`}>
-                            <LedgerColumnView data={col1Ledger} footerLabel="收"/>
-                            <div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print" onMouseDown={(e) => startResize('col', 0, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div>
+                ) : (
+                    <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden animate-fade-in ring-2 ring-blue-100">
+                        <div className={`p-3 flex items-center justify-between ${activeCategory.label === '' ? 'bg-indigo-50 border-b border-indigo-100' : activeCategory.color}`}>
+                            <div className="flex items-center space-x-2">
+                                <h3 className="font-bold flex items-center text-sm text-gray-900">{activeCategory.label || "Quick Entry"}</h3>
+                                <span className="text-[10px] opacity-50 px-2 py-0.5 bg-black/5 rounded-full">{activeColumn === 'main' ? 'Main' : activeColumn === 'col1' ? 'P1' : 'P2'}</span>
+                            </div>
+                            <button onClick={() => setActiveCategory(null)} className="p-1 hover:bg-black/10 rounded"><X size={20}/></button>
                         </div>
-                        <div style={{ width: isMobile ? '100%' : `${colWidths[1]}%` }} className={`relative flex-col p-1 border-r border-transparent group overflow-hidden ${isMobile && activeColumn !== 'col2' ? 'hidden' : 'flex'}`}>
-                            <LedgerColumnView data={col2Ledger} footerLabel="收"/>
-                            <div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print" onMouseDown={(e) => startResize('col', 1, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div>
-                        </div>
-                        <div style={{ width: isMobile ? '100%' : `${colWidths[2]}%` }} className={`relative flex-col p-1 bg-gray-50/30 overflow-hidden ${isMobile && activeColumn !== 'main' ? 'hidden' : 'flex'}`}>
-                            <LedgerColumnView data={mainLedger} footerLabel="欠"/>
-                        </div>
+                        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+                            {activeCategory.label === '' && (
+                                <div>
+                                    <div className="flex space-x-2">
+                                        <button type="button" onClick={() => setCurrentOperation('add')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${currentOperation === 'add' ? 'bg-green-100 text-green-800 ring-2 ring-green-500' : 'bg-gray-100 text-gray-500'}`}>(+) Add</button>
+                                        <button type="button" onClick={() => setCurrentOperation('subtract')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${currentOperation === 'subtract' ? 'bg-red-100 text-red-800 ring-2 ring-red-500' : 'bg-gray-100 text-gray-500'}`}>(-) Deduct</button>
+                                        <button type="button" onClick={() => setCurrentOperation('none')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${currentOperation === 'none' ? 'bg-gray-200 text-gray-800 ring-2 ring-gray-500' : 'bg-gray-100 text-gray-500'}`}>(Ø) Note</button>
+                                    </div>
+                                </div>
+                            )}
+                            <div><label className="text-xs font-bold text-gray-500 uppercase">Amount</label><input ref={amountInputRef} autoFocus type="number" step="0.01" required value={amount} onChange={e => setAmount(e.target.value)} className="w-full mt-1 p-3 text-2xl font-mono border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="0.00"/></div>
+                            <div><label className="text-xs font-bold text-gray-500 uppercase">Note</label><input type="text" value={description} onChange={e => setDescription(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"/></div>
+                            <div><button type="submit" className={`w-full py-3 rounded-lg text-white font-bold shadow-md active:scale-95 transition-transform ${activeCategory.label === '' ? (currentOperation === 'add' ? 'bg-green-600' : currentOperation === 'subtract' ? 'bg-red-600' : 'bg-gray-600') : (activeCategory.operation === 'add' ? 'bg-green-600' : activeCategory.operation === 'subtract' ? 'bg-red-600' : 'bg-gray-600')}`}>Confirm</button></div>
+                        </form>
                     </div>
-                    
-                    <div style={{ height: `${verticalPadding.bottom}px` }} className="relative group w-full mt-auto no-print-bg"><div className="absolute top-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResize('bottom', undefined, e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div></div>
+                )}
+            </div>
 
+            {/* --- RIGHT COLUMN: LEDGER --- */}
+            <div className="flex-1 min-w-0">
+                <div id="printable-area" className="relative">
+                    <div className="bg-white border border-gray-200 shadow-sm min-h-[600px] relative text-lg font-serif">
+                        <div style={{ height: `${verticalPadding.top}px` }} className="relative group w-full no-print-bg"><div className="absolute bottom-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResize('top', undefined, e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div></div>
+
+                        <div className="px-4 md:px-8 pb-2 md:pb-4 flex justify-between items-end mb-2 md:mb-4">
+                            <div>
+                                <h2 className="text-2xl md:text-4xl font-bold text-gray-900 uppercase tracking-widest">{client.name}</h2>
+                                {client.code && <p className="text-gray-600 mt-1 font-mono text-sm md:text-xl">{client.code}</p>}
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col md:flex-row w-full min-h-[400px] relative" ref={containerRef}>
+                            <div style={{ width: isMobile ? '100%' : `${colWidths[0]}%` }} className={`relative flex-col p-1 border-r border-transparent group overflow-hidden ${isMobile && activeColumn !== 'col1' ? 'hidden' : 'flex'}`}>
+                                <LedgerColumnView data={col1Ledger} footerLabel="收"/>
+                                <div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print" onMouseDown={(e) => startResize('col', 0, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div>
+                            </div>
+                            <div style={{ width: isMobile ? '100%' : `${colWidths[1]}%` }} className={`relative flex-col p-1 border-r border-transparent group overflow-hidden ${isMobile && activeColumn !== 'col2' ? 'hidden' : 'flex'}`}>
+                                <LedgerColumnView data={col2Ledger} footerLabel="收"/>
+                                <div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print" onMouseDown={(e) => startResize('col', 1, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div>
+                            </div>
+                            <div style={{ width: isMobile ? '100%' : `${colWidths[2]}%` }} className={`relative flex-col p-1 bg-gray-50/30 overflow-hidden ${isMobile && activeColumn !== 'main' ? 'hidden' : 'flex'}`}>
+                                <LedgerColumnView data={mainLedger} footerLabel="欠"/>
+                            </div>
+                        </div>
+                        
+                        <div style={{ height: `${verticalPadding.bottom}px` }} className="relative group w-full mt-auto no-print-bg"><div className="absolute top-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResize('bottom', undefined, e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div></div>
+                    </div>
                 </div>
             </div>
         </div>
