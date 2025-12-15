@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { ArrowLeft, RefreshCw, Save, CheckCircle, AlertCircle, History, FileText, Loader2, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Save, CheckCircle, AlertCircle, History, FileText, Loader2, Image as ImageIcon, Zap } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { getClients, saveSaleRecord, saveMobileReportHistory, getMobileReportHistory, saveLedgerRecord } from '../services/storageService';
+import { getClients, saveSaleRecord, saveMobileReportHistory, getMobileReportHistory, saveLedgerRecord, getLedgerRecords, updateLedgerRecord } from '../services/storageService';
 import { Client } from '../types';
 import { getWeeksForMonth, MONTH_NAMES } from '../utils/reportUtils';
 
@@ -194,41 +194,29 @@ const MobileReport: React.FC = () => {
           }
 
           // 2. Special Paper Client "Dian" (电) Cross-Posting
-          // Check if this mobile row ID maps to a known Paper Client
           const mappedPaperCode = MOBILE_TO_PAPER_MAP[row.id.toLowerCase()];
           
           if (mappedPaperCode) {
-              // Find the corresponding Paper Client
               const paperClient = clients.find(c => c.code.toLowerCase() === mappedPaperCode.toLowerCase());
               
               if (paperClient) {
-                  // "record down 公司 总额 of the member" (Company Total is at Index 5)
                   const companyTotalRaw = values[5]; 
                   const companyAmount = parseFloat(String(companyTotalRaw).replace(/,/g, ''));
 
                   if (!isNaN(companyAmount) && companyAmount !== 0) {
                       // Logic: 
-                      // If Company Total > 0 (Company Won), user usually owes.
-                      // If Company Total < 0 (Company Lost), user is credited.
-                      // Label: "电"
-                      // Operation: "deduction" context in prompt usually implies Subtract visually or logically?
-                      // We will store it such that:
-                      // If Amount > 0 -> Add (Increases Balance)
-                      // If Amount < 0 -> Subtract (Decreases Balance)
-                      // But the prompt says "shows '电' deduction". 
-                      // In storageService, '电' is set to `subtract` operation by default (Red).
-                      // However, we want the math to be correct.
-                      // If Company Won (+), Client Balance Increases.
-                      // If Company Lost (-), Client Balance Decreases.
+                      // If Company Total > 0 (Company Won), user owes (Add to Debt).
+                      // If Company Total < 0 (Company Lost), user is credited (Subtract from Debt).
+                      // Operation logic: 'add' means increase balance (positive debt), 'subtract' means decrease.
+                      const operation = companyAmount >= 0 ? 'add' : 'subtract';
                       
                       await saveLedgerRecord({
                           clientId: paperClient.id,
                           date: targetDate,
-                          description: '', // Empty description
+                          description: '', 
                           typeLabel: '电',
                           amount: Math.abs(companyAmount),
-                          // If positive, it adds to debt. If negative, it reduces debt.
-                          operation: companyAmount >= 0 ? 'add' : 'subtract',
+                          operation: operation,
                           column: 'main',
                           isVisible: true
                       });
@@ -250,6 +238,74 @@ const MobileReport: React.FC = () => {
       } else {
           setSaveStatus({ type: 'error', message: `No matching clients found. Ensure Client Codes match.` });
       }
+  };
+
+  const handleRegenerateDian = async () => {
+        if (parsedData.length === 0) return;
+        setIsSaving(true);
+
+        const weeks = getWeeksForMonth(selectedYear, selectedMonth);
+        const days = weeks[selectedWeekNum]; 
+        if (!days || days.length === 0) {
+            setSaveStatus({ type: 'error', message: 'Invalid week selection.' });
+            setIsSaving(false);
+            return;
+        }
+        const lastDay = days[days.length - 1];
+        const mStr = String(lastDay.getMonth() + 1).padStart(2, '0');
+        const dStr = String(lastDay.getDate()).padStart(2, '0');
+        const targetDate = `${lastDay.getFullYear()}-${mStr}-${dStr}`;
+
+        let updateCount = 0;
+
+        for (const row of parsedData) {
+            if (row.id === '总额') continue;
+            
+            const mappedPaperCode = MOBILE_TO_PAPER_MAP[row.id.toLowerCase()];
+            if (mappedPaperCode) {
+                const paperClient = clients.find(c => c.code.toLowerCase() === mappedPaperCode.toLowerCase());
+                if (paperClient) {
+                    const companyTotalRaw = row.values[5];
+                    const companyAmount = parseFloat(String(companyTotalRaw).replace(/,/g, ''));
+                    
+                    if (!isNaN(companyAmount) && companyAmount !== 0) {
+                        // Fetch existing records to dedupe/update
+                        const existingRecords = await getLedgerRecords(paperClient.id);
+                        // Find '电' record for this date
+                        const existingDian = existingRecords.find(r => 
+                            r.date === targetDate && 
+                            r.typeLabel === '电' &&
+                            r.column === 'main'
+                        );
+
+                        // Force Addition logic: Positive Company Total -> Add Debt
+                        const operation = companyAmount >= 0 ? 'add' : 'subtract';
+                        const amount = Math.abs(companyAmount);
+
+                        if (existingDian) {
+                            await updateLedgerRecord(existingDian.id, {
+                                amount: amount,
+                                operation: operation
+                            });
+                        } else {
+                            await saveLedgerRecord({
+                                clientId: paperClient.id,
+                                date: targetDate,
+                                description: '',
+                                typeLabel: '电',
+                                amount: amount,
+                                operation: operation,
+                                column: 'main',
+                                isVisible: true
+                            });
+                        }
+                        updateCount++;
+                    }
+                }
+            }
+        }
+        setIsSaving(false);
+        setSaveStatus({ type: 'success', message: `Regenerated ${updateCount} '电' records with updated logic.` });
   };
 
   const weeksForMonth = useMemo(() => getWeeksForMonth(selectedYear, selectedMonth), [selectedYear, selectedMonth]);
@@ -322,14 +378,25 @@ const MobileReport: React.FC = () => {
                         </button>
 
                         {parsedData.length > 0 && (
-                            <button 
-                                onClick={handleSaveToSystem} 
-                                disabled={isSaving}
-                                className="px-4 py-2 text-sm font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded-lg flex items-center shadow-md animate-in fade-in ml-auto"
-                            >
-                                {isSaving ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Save size={16} className="mr-2" />}
-                                {isSaving ? 'Saving...' : 'Save to System'}
-                            </button>
+                            <div className="flex space-x-2 ml-auto">
+                                <button 
+                                    onClick={handleRegenerateDian}
+                                    disabled={isSaving}
+                                    className="px-4 py-2 text-sm font-bold text-blue-700 bg-blue-100 hover:bg-blue-200 disabled:opacity-50 rounded-lg flex items-center shadow-sm"
+                                    title="Update existing '电' records with new logic"
+                                >
+                                    <Zap size={16} className="mr-2" />
+                                    Regenerate 电
+                                </button>
+                                <button 
+                                    onClick={handleSaveToSystem} 
+                                    disabled={isSaving}
+                                    className="px-4 py-2 text-sm font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded-lg flex items-center shadow-md animate-in fade-in"
+                                >
+                                    {isSaving ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Save size={16} className="mr-2" />}
+                                    {isSaving ? 'Saving...' : 'Save to System'}
+                                </button>
+                            </div>
                         )}
                     </div>
 
