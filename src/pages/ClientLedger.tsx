@@ -21,16 +21,6 @@ import { MONTH_NAMES, getWeeksForMonth, getWeekRangeString } from '../utils/repo
 
 type LedgerColumn = 'main' | 'col1' | 'col2';
 
-// Helper for sorting by system-defined order
-const getRecordSortPriority = (record: LedgerRecord): number => {
-    if (record.id.startsWith('draw_') || record.typeLabel === '上欠') return 1;
-    if (record.id.startsWith('sale_') || record.id === 'agg_sale_week') return 2;
-    if (record.id.startsWith('cred_')) return 3;
-    if (record.id.startsWith('adv_')) return 4;
-    return 5;
-};
-
-// --- Position Badge Component ---
 const PositionBadge = ({ label }: { label: string }) => {
     let colorClass = 'bg-gray-100 text-gray-600';
     let text = label;
@@ -58,12 +48,12 @@ interface WinningBreakdownProps {
 }
 
 const WinningBreakdown: React.FC<WinningBreakdownProps> = ({ description, totalAmount, recordId, onDelete, onEdit }) => {
-    // Parse format: "Winnings: KMT 1234-10-2500 头; ..."
-    const rawContent = description.replace(/^Winnings:\s*/i, '');
+    // Robustly remove prefix like "22/11 Winnings: " or just "Winnings: "
+    const rawContent = description.replace(/^.*?Winnings:\s*/i, '');
     const entries = rawContent.split(';').map(s => s.trim()).filter(s => s);
 
     return (
-        <div className="w-full relative group mb-3 border-b-2 border-gray-200 pb-2">
+        <div className="w-full relative group mb-3 border-b-2 border-gray-200 pb-2 bg-white">
              {/* Edit/Delete Actions */}
              <div className="no-print opacity-0 group-hover:opacity-100 transition-opacity flex flex-col space-y-1 absolute -left-8 top-0 z-20">
                 <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-1.5 text-blue-600 hover:bg-blue-50 bg-white shadow-md rounded-lg border border-gray-200"><Pencil size={12} /></button>
@@ -78,7 +68,7 @@ const WinningBreakdown: React.FC<WinningBreakdownProps> = ({ description, totalA
                     if (parts) {
                         const [_, sides, number, bet, win, pos] = parts;
                         return (
-                            <div key={idx} className="flex items-center text-sm leading-snug">
+                            <div key={idx} className="flex items-center text-sm leading-snug w-full">
                                 {/* Left: Sides (Fixed Width) */}
                                 <div className="w-10 flex-shrink-0 text-left">
                                     <span className="font-bold text-gray-400 font-mono text-[11px] uppercase block">{sides}</span>
@@ -132,12 +122,10 @@ const ClientLedger: React.FC = () => {
   const [allRecords, setAllRecords] = useState<LedgerRecord[]>([]);
   const [categories, setCategories] = useState<TransactionCategory[]>([]);
   
-  // Date/Week State
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [selectedWeekNum, setSelectedWeekNum] = useState<number>(1);
 
-  // Input State
   const [activeCategory, setActiveCategory] = useState<TransactionCategory | null>(null);
   const [activeColumn, setActiveColumn] = useState<LedgerColumn>('main');
   const [amount, setAmount] = useState('');
@@ -147,24 +135,18 @@ const ClientLedger: React.FC = () => {
   const [currentOperation, setCurrentOperation] = useState<'add'|'subtract'|'none'>('add');
   const amountInputRef = useRef<HTMLInputElement>(null);
 
-  // Modal & Edit State
   const [isAddCatModalOpen, setIsAddCatModalOpen] = useState(false);
   const [newCatLabel, setNewCatLabel] = useState('');
   const [newCatOp, setNewCatOp] = useState<'add'|'subtract'|'none'>('subtract');
   const [editingRecord, setEditingRecord] = useState<LedgerRecord | null>(null);
-  
-  // Advanced Winnings Edit State
   const [winningsEntries, setWinningsEntries] = useState<any[]>([]);
 
-  // Layout State
   const [colWidths, setColWidths] = useState<number[]>([33.33, 33.33, 33.34]);
   const [verticalPadding, setVerticalPadding] = useState<{top: number, bottom: number}>({ top: 40, bottom: 40 });
   const containerRef = useRef<HTMLDivElement>(null);
   const dragInfo = useRef<{ type: 'col'|'top'|'bottom', index?: number, startX?: number, startY?: number, startWidths?: number[], startHeight?: number, containerWidth?: number } | null>(null);
   
-  // Responsive State
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-
   const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; type: string; targetId?: string; title: string; message: string; } | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
 
@@ -209,7 +191,6 @@ const ClientLedger: React.FC = () => {
         });
         if(foundWeek) setSelectedWeekNum(parseInt(foundWeek));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, location.state]);
 
   const loadRecords = async () => {
@@ -255,10 +236,20 @@ const ClientLedger: React.FC = () => {
         finalRecords.push(aggregatedSale);
     }
 
+    // Sort by custom priority
+    const getPriority = (record: LedgerRecord): number => {
+        if (record.id.startsWith('draw_') || record.typeLabel === '上欠') return 1;
+        if (record.id.startsWith('sale_') || record.id === 'agg_sale_week') return 2;
+        if (record.id.startsWith('cred_')) return 3;
+        if (record.id.startsWith('adv_')) return 4;
+        if (record.typeLabel === '中') return 6; // Winnings at the bottom
+        return 5;
+    };
+
     finalRecords.sort((a, b) => {
         if (a.date < b.date) return -1;
         if (a.date > b.date) return 1;
-        return getRecordSortPriority(a) - getRecordSortPriority(b);
+        return getPriority(a) - getPriority(b);
     });
 
     const weekChange = current.reduce((acc, r) => acc + getNetAmount(r), 0);
@@ -350,13 +341,9 @@ const ClientLedger: React.FC = () => {
     const saved = await saveLedgerRecord(newRecord);
     setAllRecords(prev => {
         const newArray = [...prev, saved];
-        newArray.sort((a, b) => {
-            if (a.date < b.date) return -1;
-            if (a.date > b.date) return 1;
-            return getRecordSortPriority(a) - getRecordSortPriority(b);
-        });
         return newArray;
     });
+    loadRecords();
     
     if (activeCategory.label.trim() === '') {
         setAmount(''); setDescription(''); 
@@ -388,13 +375,11 @@ const ClientLedger: React.FC = () => {
       setConfirmModal(null);
   };
 
-  // Prepare Record for Editing
   const openEditModal = (record: LedgerRecord) => {
       setEditingRecord(record);
-      
-      // Parse Winnings for Advanced Editor
-      if (record.description.startsWith('Winnings:')) {
-          const rawContent = record.description.replace(/^Winnings:\s*/i, '');
+      // Robust regex check for Winnings prefix
+      if (record.description.includes('Winnings:')) {
+          const rawContent = record.description.replace(/^.*?Winnings:\s*/i, '');
           const entries = rawContent.split(';').map(s => s.trim()).filter(s => s);
           const parsed = entries.map((entry, idx) => {
               const parts = entry.match(/^([A-Z]+)\s+(\d+)-([\d.]+)-([\d.]+)\s+(.+)$/);
@@ -415,15 +400,16 @@ const ClientLedger: React.FC = () => {
       let finalDescription = editingRecord.description;
       let finalAmount = editingRecord.amount;
 
-      // Reconstruct Winnings String if in Advanced Mode
-      if (editingRecord.description.startsWith('Winnings:') && winningsEntries.length > 0) {
+      if (editingRecord.description.includes('Winnings:') && winningsEntries.length > 0) {
           const newDescParts = winningsEntries.map(entry => {
               if (entry.raw) return entry.raw;
               return `${entry.sides} ${entry.number}-${entry.bet}-${entry.win} ${entry.pos}`;
           });
-          finalDescription = `Winnings: ${newDescParts.join('; ')}`;
+          // Preserve prefix if it exists (e.g. date label)
+          const prefixMatch = editingRecord.description.match(/^(.*?Winnings:\s*)/i);
+          const prefix = prefixMatch ? prefixMatch[1] : 'Winnings: ';
+          finalDescription = `${prefix}${newDescParts.join('; ')}`;
           
-          // Recalculate Total
           finalAmount = winningsEntries.reduce((acc, curr) => {
               return acc + (parseFloat(curr.win) || 0);
           }, 0);
@@ -482,7 +468,8 @@ const ClientLedger: React.FC = () => {
           <div className="flex flex-col w-full md:w-fit items-end">
                 {data.processed.map((r) => {
                     // Check for Winnings Record (Panel 1 Special Display)
-                    if (isPanel1 && r.description && r.description.startsWith('Winnings:')) {
+                    // Robust check: contains "Winnings:"
+                    if (isPanel1 && r.description && r.description.includes('Winnings:')) {
                         return (
                             <WinningBreakdown 
                                 key={r.id} 

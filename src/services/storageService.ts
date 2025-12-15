@@ -88,9 +88,10 @@ export const seedData = () => {
 const getRecordSortPriority = (record: LedgerRecord): number => {
     // Handle manual '上欠' with high priority as well
     if (record.id.startsWith('draw_') || record.typeLabel === '上欠') return 1;
-    if (record.id.startsWith('sale_')) return 2; // 收
+    if (record.id.startsWith('sale_') || record.id === 'agg_sale_week') return 2; // 收
     if (record.id.startsWith('cred_')) return 3; // 来
     if (record.id.startsWith('adv_')) return 4;  // 支
+    if (record.typeLabel === '中') return 6;     // Winnings (User Request: "below of all order")
     return 5; // Manual entries come last
 };
 
