@@ -1,48 +1,15 @@
 
 import { Client, LedgerRecord, AssetRecord, TransactionCategory, SaleRecord, DrawBalance, CashAdvanceRecord } from '../types';
-import { supabase } from '../supabaseClient';
 
+const CLIENTS_KEY = 'ledger_clients';
 const CATEGORIES_KEY = 'ledger_categories';
+const RECORDS_KEY = 'ledger_records';
+const ASSETS_KEY = 'ledger_assets';
 
-// --- Mappers (DB snake_case <-> App camelCase) ---
+// Helper to generate local IDs
+const generateId = () => Math.random().toString(36).substr(2, 9);
 
-const mapClientFromDB = (db: any): Client => ({
-    id: db.id,
-    code: db.code,
-    name: db.name,
-    phone: db.phone,
-    note: db.note,
-    createdAt: db.created_at,
-    category: db.category || 'paper',
-    column1Notes: db.column1_notes,
-    column2Notes: db.column2_notes
-});
-
-const mapLedgerFromDB = (db: any): LedgerRecord => ({
-    id: db.id,
-    clientId: db.client_id,
-    date: db.date,
-    description: db.description || '',
-    typeLabel: db.type_label || '',
-    amount: db.amount,
-    operation: db.operation,
-    column: db.column_name || 'main',
-    isVisible: db.is_visible
-});
-
-const mapSaleFromDB = (db: any): SaleRecord => ({
-    id: db.id,
-    clientId: db.client_id,
-    date: db.date,
-    b: db.b || 0,
-    s: db.s || 0,
-    a: db.a || 0,
-    c: db.c || 0,
-    mobileRaw: db.mobile_raw,
-    mobileRawData: db.mobile_raw_data
-});
-
-// --- Categories (Local Storage - Config) ---
+// --- 1. Categories (Synchronous - used directly in UI render) ---
 export const getCategories = (): TransactionCategory[] => {
   const data = localStorage.getItem(CATEGORIES_KEY);
   let categories: TransactionCategory[] = data ? JSON.parse(data) : [];
@@ -62,25 +29,52 @@ export const getCategories = (): TransactionCategory[] => {
     categories = defaults;
     localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories));
   } else {
-    // Migration Logic
+    // Migration Logic: Ensure specific categories exist and have correct colors
     let updated = false;
-    if (!categories.find(c => c.label === '上欠')) { categories.push({ id: Math.random().toString(36).substr(2,9), label: '上欠', operation: 'add', color: 'bg-green-100 text-green-800' }); updated = true; }
-    if (!categories.find(c => c.label === '电')) { categories.push({ id: Math.random().toString(36).substr(2,9), label: '电', operation: 'add', color: 'bg-green-100 text-green-800' }); updated = true; }
     
+    if (!categories.find(c => c.label === '上欠')) {
+        categories.push({ id: generateId(), label: '上欠', operation: 'add', color: 'bg-green-100 text-green-800' });
+        updated = true;
+    }
+    if (!categories.find(c => c.label === '%')) {
+        categories.push({ id: generateId(), label: '%', operation: 'subtract', color: 'bg-red-100 text-red-800' });
+        updated = true;
+    }
+    if (!categories.find(c => c.label === '来')) {
+        categories.push({ id: generateId(), label: '来', operation: 'subtract', color: 'bg-red-100 text-red-800' });
+        updated = true;
+    }
+    const dianIndex = categories.findIndex(c => c.label === '电');
+    if (dianIndex === -1) {
+        categories.push({ id: generateId(), label: '电', operation: 'add', color: 'bg-green-100 text-green-800' });
+        updated = true;
+    } else if (categories[dianIndex].operation !== 'add') {
+        categories[dianIndex] = { ...categories[dianIndex], operation: 'add', color: 'bg-green-100 text-green-800' };
+        updated = true;
+    }
+
     categories = categories.map(c => {
-        if (c.operation === 'add' && c.color.includes('bg-blue-100')) { updated = true; return { ...c, color: 'bg-green-100 text-green-800' }; }
-        if (c.label === '出' && c.color.includes('bg-orange-100')) { updated = true; return { ...c, color: 'bg-red-100 text-red-800' }; }
+        if (c.operation === 'add' && c.color.includes('bg-blue-100')) {
+            updated = true;
+            return { ...c, color: 'bg-green-100 text-green-800' };
+        }
+        if (c.label === '出' && c.color.includes('bg-orange-100')) {
+            updated = true;
+            return { ...c, color: 'bg-red-100 text-red-800' };
+        }
         return c;
     });
 
-    if (updated) localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories));
+    if (updated) {
+        localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories));
+    }
   }
   return categories;
 };
 
-export const saveCategory = (category: Omit<TransactionCategory, 'id'>) => {
+export const saveCategory = (category: Omit<TransactionCategory, 'id'>): TransactionCategory => {
   const categories = getCategories();
-  const newCat = { ...category, id: Math.random().toString(36).substr(2, 9) };
+  const newCat = { ...category, id: generateId() };
   localStorage.setItem(CATEGORIES_KEY, JSON.stringify([...categories, newCat]));
   return newCat;
 };
@@ -91,34 +85,35 @@ export const saveCategoriesOrder = (categories: TransactionCategory[]) => {
 
 export const deleteCategory = (id: string) => {
   const categories = getCategories();
-  localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories.filter(c => c.id !== id)));
+  const filtered = categories.filter(c => c.id !== id);
+  localStorage.setItem(CATEGORIES_KEY, JSON.stringify(filtered));
 };
 
-// --- Clients (Supabase) ---
+// --- 2. Clients (LocalStorage) ---
 
 export const getClients = async (): Promise<Client[]> => {
-  const { data, error } = await supabase.from('clients').select('*').order('created_at', { ascending: true });
-  if (error) { console.error('Error fetching clients:', error); return []; }
-  return data.map(mapClientFromDB);
+  return JSON.parse(localStorage.getItem(CLIENTS_KEY) || '[]');
 };
 
 export const saveClient = async (client: Omit<Client, 'id' | 'createdAt'>): Promise<Client> => {
-  const { data, error } = await supabase.from('clients').insert([{
-      name: client.name,
-      code: client.code,
-      phone: client.phone,
-      category: client.category || 'paper'
-  }]).select();
-  
-  if (error || !data) { console.error('Error saving client:', error); throw error; }
-  return mapClientFromDB(data[0]);
+  const clients = JSON.parse(localStorage.getItem(CLIENTS_KEY) || '[]');
+  const newClient = { ...client, id: generateId(), createdAt: new Date().toISOString() };
+  localStorage.setItem(CLIENTS_KEY, JSON.stringify([...clients, newClient]));
+  return newClient as Client;
 };
 
 export const deleteClient = async (id: string) => {
-  await supabase.from('clients').delete().eq('id', id);
+  const clients = JSON.parse(localStorage.getItem(CLIENTS_KEY) || '[]');
+  localStorage.setItem(CLIENTS_KEY, JSON.stringify(clients.filter((c:Client) => c.id !== id)));
 };
 
-// --- Ledger Records (Supabase) ---
+export const seedInitialClients = async () => {};
+
+export const seedData = () => {
+    getCategories();
+};
+
+// --- 3. Unified Financial Journal Adapters ---
 
 const getRecordSortPriority = (record: LedgerRecord): number => {
     if (record.id.startsWith('draw_') || record.typeLabel === '上欠') return 1;
@@ -130,332 +125,328 @@ const getRecordSortPriority = (record: LedgerRecord): number => {
     return 7;
 };
 
-export const getNetAmount = (r: LedgerRecord): number => {
-  if (r.operation === 'none') return 0;
-  return r.operation === 'add' ? r.amount : -r.amount;
+const normalizeRecord = (r: any): LedgerRecord => {
+  const record = { ...r, column: r.column || 'main' };
+  if (record.operation && typeof record.typeLabel === 'string') {
+      return record as LedgerRecord;
+  }
+  // Migration fallback
+  if ((r.shou || 0) > 0) return { ...record, typeLabel: '收', amount: r.shou, operation: 'add' };
+  if ((r.zhiqian || 0) > 0) return { ...record, typeLabel: '支钱', amount: r.zhiqian, operation: 'add' };
+  if ((r.zhong || 0) > 0) return { ...record, typeLabel: '中', amount: r.zhong, operation: 'subtract' };
+  if ((r.dianhua || 0) > 0) return { ...record, typeLabel: '出', amount: r.dianhua, operation: 'subtract' }; 
+  return { ...record, typeLabel: 'Entry', amount: 0, operation: 'add' };
 };
 
-// Helper: Fetch external data (Sales, Cash, etc) and convert to Virtual Ledger Records
-const fetchVirtualRecords = async (clientId: string): Promise<LedgerRecord[]> => {
-    const virtualRecords: LedgerRecord[] = [];
+export const getNetAmount = (r: LedgerRecord): number => {
+  const normalized = normalizeRecord(r);
+  if (normalized.operation === 'none') return 0;
+  return normalized.operation === 'add' ? normalized.amount : -normalized.amount;
+};
 
-    // 1. Sales
-    const { data: sales } = await supabase.from('sales_records').select('*').eq('client_id', clientId);
-    if (sales) {
-        sales.forEach(s => {
-            const r = mapSaleFromDB(s);
-            const total = (r.b || 0) + (r.s || 0) + (r.a || 0) + (r.c || 0);
-            if (total !== 0) {
-                virtualRecords.push({
-                    id: `sale_${r.date}_${r.id}`,
-                    clientId: r.clientId,
-                    date: r.date,
-                    description: 'Sales Opening',
-                    typeLabel: '收',
-                    amount: total,
-                    operation: 'add',
-                    column: 'main',
-                    isVisible: true
-                });
-            }
+export const getAllLedgerRecords = async (): Promise<LedgerRecord[]> => {
+    // 1. Get Manual Records
+    const manualData = localStorage.getItem(RECORDS_KEY);
+    const manualRecords: LedgerRecord[] = manualData ? JSON.parse(manualData).map(normalizeRecord) : [];
+
+    // 2. Get Sales Records (Converted)
+    const allClients = await getClients();
+    let salesRecords: LedgerRecord[] = [];
+    
+    for (const client of allClients) {
+        const sales = await getSaleRecords(client.id);
+        const clientSales = sales.map(s => {
+            const total = (s.b || 0) + (s.s || 0) + (s.a || 0) + (s.c || 0);
+            return {
+                id: `sale_${s.date}_${client.id}`,
+                clientId: client.id,
+                date: s.date,
+                description: 'Sales Opening',
+                typeLabel: '收',
+                amount: total,
+                operation: 'add' as const,
+                column: 'main' as const,
+                isVisible: true
+            };
         });
+        salesRecords = [...salesRecords, ...clientSales];
     }
 
-    // 2. Cash Advances
-    const { data: advances } = await supabase.from('cash_advances').select('*').eq('client_id', clientId);
-    if (advances) {
-        advances.forEach(a => {
-            if (a.amount !== 0) {
-                virtualRecords.push({
-                    id: `adv_${a.date}_${a.id}`,
-                    clientId: a.client_id,
-                    date: a.date,
+    // 3. Get Cash Advance (Converted)
+    const advData = JSON.parse(localStorage.getItem('ledger_cash_advance') || '{}');
+    const advRecords: LedgerRecord[] = [];
+    for (const date in advData) {
+        for (const clientId in advData[date]) {
+            const amount = advData[date][clientId];
+            if (amount !== 0) {
+                advRecords.push({
+                    id: `adv_${date}_${clientId}`,
+                    clientId,
+                    date,
                     description: 'Cash Advance',
                     typeLabel: '支',
-                    amount: a.amount,
+                    amount,
                     operation: 'add',
                     column: 'main',
                     isVisible: true
                 });
             }
-        });
+        }
     }
 
-    // 3. Cash Credits
-    const { data: credits } = await supabase.from('cash_credits').select('*').eq('client_id', clientId);
-    if (credits) {
-        credits.forEach(c => {
-            if (c.amount !== 0) {
-                virtualRecords.push({
-                    id: `cred_${c.date}_${c.id}`,
-                    clientId: c.client_id,
-                    date: c.date,
+    // 4. Get Cash Credit (Converted)
+    const credData = JSON.parse(localStorage.getItem('ledger_cash_credit') || '{}');
+    const credRecords: LedgerRecord[] = [];
+    for (const date in credData) {
+        for (const clientId in credData[date]) {
+            const amount = credData[date][clientId];
+            if (amount !== 0) {
+                credRecords.push({
+                    id: `cred_${date}_${clientId}`,
+                    clientId,
+                    date,
                     description: 'Cash Credit',
                     typeLabel: '来',
-                    amount: c.amount,
-                    operation: 'subtract',
+                    amount,
+                    operation: 'subtract', // Credit reduces balance
                     column: 'main',
                     isVisible: true
                 });
             }
-        });
+        }
     }
 
-    // 4. Draw Balances (Mapped to '上欠')
-    const { data: draws } = await supabase.from('draw_balances').select('*').eq('client_id', clientId);
-    if (draws) {
-        draws.forEach(d => {
-            if (d.balance !== 0) {
-                virtualRecords.push({
-                    id: `draw_${d.date}_${d.id}`,
-                    clientId: d.client_id,
-                    date: d.date,
+    // 5. Get Draw Reports (Converted - Special Case "上欠")
+    const drawData = JSON.parse(localStorage.getItem('ledger_draw_balances') || '{}');
+    const drawRecords: LedgerRecord[] = [];
+    for (const date in drawData) {
+        for (const clientId in drawData[date]) {
+            const amount = drawData[date][clientId];
+            if (amount !== 0) {
+                drawRecords.push({
+                    id: `draw_${date}_${clientId}`,
+                    clientId,
+                    date,
                     description: 'Previous Balance',
                     typeLabel: '上欠',
-                    amount: Math.abs(d.balance),
-                    operation: d.balance >= 0 ? 'add' : 'subtract',
+                    amount: Math.abs(amount), 
+                    operation: amount >= 0 ? 'add' : 'subtract', 
                     column: 'main',
                     isVisible: true
                 });
             }
-        });
+        }
     }
 
-    return virtualRecords;
+    return [...manualRecords, ...salesRecords, ...advRecords, ...credRecords, ...drawRecords];
 };
 
 export const getLedgerRecords = async (clientId: string): Promise<LedgerRecord[]> => {
-    // 1. Fetch Manual Records
-    const { data: manualData } = await supabase.from('ledger_records').select('*').eq('client_id', clientId);
-    const manualRecords = (manualData || []).map(mapLedgerFromDB);
-
-    // 2. Fetch Virtual Records
-    const virtualRecords = await fetchVirtualRecords(clientId);
-
-    const all = [...manualRecords, ...virtualRecords];
-    
-    // Sort
-    return all.sort((a, b) => {
+    const all = await getAllLedgerRecords();
+    return all.filter(r => r.clientId === clientId).sort((a, b) => {
         if (a.date < b.date) return -1;
         if (a.date > b.date) return 1;
         return getRecordSortPriority(a) - getRecordSortPriority(b);
     });
 };
 
-export const getAllLedgerRecords = async (): Promise<LedgerRecord[]> => {
-    const { data } = await supabase.from('ledger_records').select('*');
-    return (data || []).map(mapLedgerFromDB);
-}
-
-export const saveLedgerRecord = async (record: Omit<LedgerRecord, 'id'>): Promise<LedgerRecord> => {
-  const { data, error } = await supabase.from('ledger_records').insert([{
-      client_id: record.clientId,
-      date: record.date,
-      description: record.description,
-      type_label: record.typeLabel,
-      amount: record.amount,
-      operation: record.operation,
-      column_name: record.column,
-      is_visible: record.isVisible
-  }]).select();
-
-  if (error || !data) { console.error("Save Ledger Error", error); throw error; }
-  return mapLedgerFromDB(data[0]);
+export const getClientBalance = async (clientId: string): Promise<number> => {
+    const records = await getLedgerRecords(clientId);
+    
+    // Priority Rule: If Panel 1 (col1) has visible records, return its balance.
+    const col1Records = records.filter(r => r.column === 'col1' && r.isVisible);
+    if (col1Records.length > 0) {
+        return col1Records.reduce((acc, r) => acc + getNetAmount(r), 0);
+    }
+    
+    // Fallback: Main Ledger
+    const mainRecords = records.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
+    return mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
 };
 
-export const updateLedgerRecord = async (id: string, updates: Partial<LedgerRecord>) => {
-  const payload: any = {};
-  if (updates.amount !== undefined) payload.amount = updates.amount;
-  if (updates.description !== undefined) payload.description = updates.description;
-  if (updates.column !== undefined) payload.column_name = updates.column;
-  if (updates.isVisible !== undefined) payload.is_visible = updates.isVisible;
-  if (updates.operation !== undefined) payload.operation = updates.operation;
-  
-  await supabase.from('ledger_records').update(payload).eq('id', id);
+export const saveLedgerRecord = async (record: Omit<LedgerRecord, 'id'>): Promise<LedgerRecord> => {
+  const data = localStorage.getItem(RECORDS_KEY);
+  const allRecords: LedgerRecord[] = data ? JSON.parse(data) : [];
+  const newRecord: LedgerRecord = { ...record, id: generateId() };
+  localStorage.setItem(RECORDS_KEY, JSON.stringify([...allRecords, newRecord]));
+  return newRecord;
 };
 
 export const deleteLedgerRecord = async (id: string) => {
-  await supabase.from('ledger_records').delete().eq('id', id);
+  const data = localStorage.getItem(RECORDS_KEY);
+  const allRecords: LedgerRecord[] = data ? JSON.parse(data) : [];
+  const filtered = allRecords.filter(r => r.id !== id);
+  localStorage.setItem(RECORDS_KEY, JSON.stringify(filtered));
 };
 
-// --- Sales (Supabase) ---
+export const updateLedgerRecord = async (id: string, updates: Partial<LedgerRecord>) => {
+  const data = localStorage.getItem(RECORDS_KEY);
+  const allRecords: LedgerRecord[] = data ? JSON.parse(data) : [];
+  const updated = allRecords.map(r => r.id === id ? { ...r, ...updates } : r);
+  localStorage.setItem(RECORDS_KEY, JSON.stringify(updated));
+}
+
+// --- SALES (LocalStorage) ---
 export const getSaleRecords = async (clientId: string): Promise<SaleRecord[]> => {
-    const { data } = await supabase.from('sales_records').select('*').eq('client_id', clientId);
-    return (data || []).map(mapSaleFromDB);
-};
-
+    const data = localStorage.getItem('ledger_sales_' + clientId);
+    return data ? JSON.parse(data) : [];
+}
 export const getSalesForDates = async (dates: string[]): Promise<SaleRecord[]> => {
-    // Supabase 'in' filter
-    const { data } = await supabase.from('sales_records').select('*').in('date', dates);
-    return (data || []).map(mapSaleFromDB);
-};
-
+    const clients = await getClients();
+    let allSales: SaleRecord[] = [];
+    for(const c of clients) {
+        const sales = JSON.parse(localStorage.getItem('ledger_sales_' + c.id) || '[]');
+        allSales = [...allSales, ...sales];
+    }
+    return allSales.filter(s => dates.includes(s.date));
+}
 export const saveSaleRecord = async (record: any) => {
-    // Check if exists
-    const { data: existing } = await supabase.from('sales_records')
-        .select('id')
-        .eq('client_id', record.clientId)
-        .eq('date', record.date)
-        .single();
+    const key = 'ledger_sales_' + record.clientId;
+    const existing = JSON.parse(localStorage.getItem(key) || '[]');
+    const idx = existing.findIndex((r: any) => r.date === record.date);
+    if(idx >= 0) existing[idx] = { ...existing[idx], ...record };
+    else existing.push({ ...record, id: generateId() });
+    localStorage.setItem(key, JSON.stringify(existing));
+}
 
-    const payload = {
-        client_id: record.clientId,
-        date: record.date,
-        b: record.b, s: record.s, a: record.a, c: record.c,
-        mobile_raw: record.mobileRaw,
-        mobile_raw_data: record.mobileRawData
-    };
-
-    if (existing) {
-        await supabase.from('sales_records').update(payload).eq('id', existing.id);
-    } else {
-        await supabase.from('sales_records').insert([payload]);
-    }
-};
-
-// --- Cash Advance ---
+// --- CASH ADVANCE ---
 export const getCashAdvances = async (date: string) => {
-    const { data } = await supabase.from('cash_advances').select('*').eq('date', date);
-    const result: Record<string, number> = {};
-    data?.forEach((d: any) => { result[d.client_id] = d.amount; });
-    return result;
-};
-
+    const data = JSON.parse(localStorage.getItem('ledger_cash_advance') || '{}');
+    return data[date] || {};
+}
 export const saveCashAdvance = async (date: string, clientId: string, amount: number) => {
-    const { data: existing } = await supabase.from('cash_advances').select('id').eq('client_id', clientId).eq('date', date).single();
-    if (existing) {
-        await supabase.from('cash_advances').update({ amount }).eq('id', existing.id);
-    } else {
-        await supabase.from('cash_advances').insert([{ client_id: clientId, date, amount }]);
-    }
-};
+    const data = JSON.parse(localStorage.getItem('ledger_cash_advance') || '{}');
+    if(!data[date]) data[date] = {};
+    data[date][clientId] = amount;
+    localStorage.setItem('ledger_cash_advance', JSON.stringify(data));
+}
 
-// --- Cash Credit ---
+// --- CASH CREDIT ---
 export const getCashCredits = async (date: string) => {
-    const { data } = await supabase.from('cash_credits').select('*').eq('date', date);
-    const result: Record<string, number> = {};
-    data?.forEach((d: any) => { result[d.client_id] = d.amount; });
-    return result;
-};
-
+    const data = JSON.parse(localStorage.getItem('ledger_cash_credit') || '{}');
+    return data[date] || {};
+}
 export const saveCashCredit = async (date: string, clientId: string, amount: number) => {
-    const { data: existing } = await supabase.from('cash_credits').select('id').eq('client_id', clientId).eq('date', date).single();
-    if (existing) {
-        await supabase.from('cash_credits').update({ amount }).eq('id', existing.id);
-    } else {
-        await supabase.from('cash_credits').insert([{ client_id: clientId, date, amount }]);
-    }
-};
+    const data = JSON.parse(localStorage.getItem('ledger_cash_credit') || '{}');
+    if(!data[date]) data[date] = {};
+    data[date][clientId] = amount;
+    localStorage.setItem('ledger_cash_credit', JSON.stringify(data));
+}
 
-// --- Draw Report ---
+// --- DRAW REPORT ---
 export const getDrawBalances = async (date: string) => {
-    const { data } = await supabase.from('draw_balances').select('*').eq('date', date);
-    const result: Record<string, number> = {};
-    data?.forEach((d: any) => { result[d.client_id] = d.balance; });
-    return result;
-};
-
-export const saveDrawBalance = async (date: string, clientId: string, balance: number) => {
-    const { data: existing } = await supabase.from('draw_balances').select('id').eq('client_id', clientId).eq('date', date).single();
-    if (existing) {
-        await supabase.from('draw_balances').update({ balance }).eq('id', existing.id);
-    } else {
-        await supabase.from('draw_balances').insert([{ client_id: clientId, date, balance }]);
-    }
-};
-
+    const data = JSON.parse(localStorage.getItem('ledger_draw_balances') || '{}');
+    return data[date] || {};
+}
+export const saveDrawBalance = async (date: string, clientId: string, amount: number) => {
+    const data = JSON.parse(localStorage.getItem('ledger_draw_balances') || '{}');
+    if(!data[date]) data[date] = {};
+    data[date][clientId] = amount;
+    localStorage.setItem('ledger_draw_balances', JSON.stringify(data));
+}
 export const getAllDrawRecords = async (): Promise<DrawBalance[]> => {
-    const { data } = await supabase.from('draw_balances').select('*');
-    return (data || []).map((d: any) => ({ clientId: d.client_id, date: d.date, balance: d.balance }));
-};
-
-// Explicit return type to prevent TS implicit any error
-export const getClientBalancesPriorToDate = async (date: string): Promise<Record<string, number>> => {
-    const { data } = await supabase.from('draw_balances').select('*').lt('date', date);
-    
-    const latestBalances: Record<string, { date: string, balance: number }> = {};
-    data?.forEach((d: any) => {
-        if (!latestBalances[d.client_id] || d.date > latestBalances[d.client_id].date) {
-            latestBalances[d.client_id] = { date: d.date, balance: d.balance };
+    const data = JSON.parse(localStorage.getItem('ledger_draw_balances') || '{}');
+    const records: DrawBalance[] = [];
+    for(const date in data) {
+        for(const clientId in data[date]) {
+            records.push({ date, clientId, balance: data[date][clientId] });
         }
-    });
-
-    const result: Record<string, number> = {};
-    for (const cid in latestBalances) {
-        result[cid] = latestBalances[cid].balance;
     }
-    return result;
-};
-
-export const getTotalDrawReceivables = async () => {
-    // Sum of the latest draw balance for every client
-    const { data } = await supabase.from('draw_balances').select('*');
-    if(!data) return 0;
-
-    const latestBalances: Record<string, { date: string, balance: number }> = {};
-    data.forEach((d: any) => {
-        if (!latestBalances[d.client_id] || d.date > latestBalances[d.client_id].date) {
-            latestBalances[d.client_id] = { date: d.date, balance: d.balance };
+    return records;
+}
+export const getClientBalancesPriorToDate = async (date: string): Promise<Record<string, number>> => {
+    const allDraws = await getAllDrawRecords();
+    const result: Record<string, number> = {};
+    const clients = await getClients();
+    
+    clients.forEach(c => {
+        // Find latest draw before this date
+        const clientDraws = allDraws.filter(d => d.clientId === c.id && d.date < date);
+        if (clientDraws.length > 0) {
+            // Sort desc date
+            clientDraws.sort((a,b) => b.date.localeCompare(a.date));
+            result[c.id] = clientDraws[0].balance;
+        } else {
+            result[c.id] = 0;
         }
     });
-
-    return Object.values(latestBalances).reduce((acc, curr) => acc + curr.balance, 0);
-};
-
-// --- Mobile Report ---
-export const saveMobileReportHistory = async (date: string, json: any) => {
-    await supabase.from('mobile_report_history').insert([{ report_date: date, json_data: json }]);
-};
-
-export const getMobileReportHistory = async () => {
-    const { data } = await supabase.from('mobile_report_history').select('*').order('created_at', { ascending: false });
-    return data || [];
-};
-
-// --- Winnings ---
-export const getWinningsByDateRange = async (startDate: string, endDate: string): Promise<Record<string, number>> => {
-    // Query Supabase for Winnings
-    const { data } = await supabase
-        .from('ledger_records')
-        .select('*')
-        .gte('date', startDate)
-        .lte('date', endDate)
-        .eq('type_label', '中')
-        .eq('column_name', 'main'); // Filter by Main Ledger column
-
-    const winnings: Record<string, number> = {};
-    data?.forEach((d: any) => {
-        const current = winnings[d.client_id] || 0;
-        winnings[d.client_id] = current + d.amount;
+    return result;
+}
+export const getTotalDrawReceivables = async () => {
+    // Sum of latest draw for each client
+    const allDraws = await getAllDrawRecords();
+    const latestMap: Record<string, number> = {};
+    allDraws.forEach(d => {
+        // Simple overwrite: if we process chronologically or sort, we get latest.
+        // Or check date.
+        // Let's assume we want the ABSOLUTE latest regardless of date for "Current" snapshot
+        if (!latestMap[d.clientId]) {
+             latestMap[d.clientId] = d.balance;
+        } else {
+             // We need to compare dates to be sure, but loop order isn't guaranteed.
+             // Better to group by client and find max date.
+        }
     });
+    
+    // Better impl:
+    const clients = await getClients();
+    let total = 0;
+    for(const c of clients) {
+        const cDraws = allDraws.filter(d => d.clientId === c.id);
+        if(cDraws.length > 0) {
+            cDraws.sort((a,b) => b.date.localeCompare(a.date));
+            total += cDraws[0].balance;
+        }
+    }
+    return total;
+}
+
+// --- MOBILE REPORT ---
+export const saveMobileReportHistory = async (date: string, json: any) => {
+    const hist = JSON.parse(localStorage.getItem('mobile_report_history') || '[]');
+    hist.unshift({ id: generateId(), report_date: date, created_at: new Date().toISOString(), json_data: json });
+    localStorage.setItem('mobile_report_history', JSON.stringify(hist));
+}
+export const getMobileReportHistory = async () => {
+    return JSON.parse(localStorage.getItem('mobile_report_history') || '[]');
+}
+
+// --- WINNINGS (Calculated from Main Ledger) ---
+export const getWinningsByDateRange = async (startDate: string, endDate: string): Promise<Record<string, number>> => {
+    // 1. Fetch ALL records (from LocalStorage via getAllLedgerRecords)
+    const allRecords = await getAllLedgerRecords(); 
+    
+    const winnings: Record<string, number> = {};
+    
+    allRecords.forEach(r => {
+        // Filter criteria:
+        // - Within Date Range
+        // - Type is '中' (Winning)
+        // - Column is 'main' (User requirement: reflect in main ledger)
+        if (r.date >= startDate && r.date <= endDate && r.typeLabel === '中' && r.column === 'main') {
+            const current = winnings[r.clientId] || 0;
+            // Winnings are stored as 'subtract' operation (red), but we want the positive magnitude sum for the report list
+            winnings[r.clientId] = current + r.amount;
+        }
+    });
+    
     return winnings;
 };
 
-// --- Assets ---
+// --- ASSETS ---
 export const getAssetRecords = (): AssetRecord[] => {
-    // LocalStorage for now as assets table wasn't explicitly requested/migrated in context
-    const data = localStorage.getItem('ledger_assets');
-    return data ? JSON.parse(data) : [];
+  const data = localStorage.getItem(ASSETS_KEY);
+  return data ? JSON.parse(data) : [];
 };
 
-export const saveAssetRecord = (record: Omit<AssetRecord, 'id'>) => {
-    const data = getAssetRecords();
-    const newRec = { ...record, id: Math.random().toString(36).substr(2,9) };
-    localStorage.setItem('ledger_assets', JSON.stringify([newRec, ...data]));
-};
-
-export const getClientBalance = async (clientId: string): Promise<number> => {
-    const records = await getLedgerRecords(clientId);
-    // Priority: Panel 1
-    const col1 = records.filter(r => r.column === 'col1' && r.isVisible);
-    if (col1.length > 0) return col1.reduce((acc, r) => acc + getNetAmount(r), 0);
-    
-    const main = records.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
-    return main.reduce((acc, r) => acc + getNetAmount(r), 0);
+export const saveAssetRecord = (record: Omit<AssetRecord, 'id'>): AssetRecord => {
+  const data = localStorage.getItem(ASSETS_KEY);
+  const allRecords: AssetRecord[] = data ? JSON.parse(data) : [];
+  const newRecord: AssetRecord = { ...record, id: generateId() };
+  localStorage.setItem(ASSETS_KEY, JSON.stringify([...allRecords, newRecord]));
+  return newRecord;
 };
 
 export const fetchClientTotalBalance = async (clientId: string) => {
     return getClientBalance(clientId);
-};
-
-export const seedData = () => { getCategories(); };
+}
