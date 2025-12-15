@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Calculator, Trophy, RotateCcw, Plus, Trash2, Save, User, CheckCircle, Calendar } from 'lucide-react';
 import { getClients, saveLedgerRecord } from '../services/storageService';
 import { Client } from '../types';
+import { getWeeksForMonth } from '../utils/reportUtils';
 
 type GameMode = '4D' | '3D';
 type PrizePosition = '1' | '2' | '3' | 'S' | 'C';
@@ -186,6 +187,29 @@ const WinCalculator: React.FC = () => {
         }, 1500);
     };
 
+    const weekInfo = useMemo(() => {
+        if (!selectedDate) return '';
+        const d = new Date(selectedDate);
+        const weeks = getWeeksForMonth(d.getFullYear(), d.getMonth());
+        
+        const selectedDateStr = selectedDate; // YYYY-MM-DD
+        
+        const foundWeek = Object.keys(weeks).find(w => {
+            return weeks[parseInt(w)].some(day => {
+                const yearStr = day.getFullYear();
+                const m = String(day.getMonth() + 1).padStart(2, '0');
+                const dayStr = String(day.getDate()).padStart(2, '0');
+                return `${yearStr}-${m}-${dayStr}` === selectedDateStr;
+            });
+        });
+        
+        if (foundWeek) {
+            const index = Object.keys(weeks).map(Number).sort((a,b)=>a-b).indexOf(Number(foundWeek));
+            return `Week ${index + 1}`;
+        }
+        return '';
+    }, [selectedDate]);
+
     return (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Left Column: Calculator Form */}
@@ -318,6 +342,11 @@ const WinCalculator: React.FC = () => {
                                     onChange={(e) => setSelectedDate(e.target.value)}
                                     className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-gray-700"
                                 />
+                                {weekInfo && (
+                                    <div className="absolute -top-3 left-2 bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded">
+                                        {weekInfo}
+                                    </div>
+                                )}
                             </div>
                             <div className="relative flex-1">
                                 <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18}/>

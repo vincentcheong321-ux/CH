@@ -42,7 +42,7 @@ const PositionBadge = ({ label }: { label: string }) => {
     else if (label.includes('安')) { colorClass = 'bg-green-100 text-green-700 border border-green-300'; text = '安'; }
 
     return (
-        <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${colorClass} shadow-sm ml-2`}>
+        <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${colorClass} shadow-sm ml-1`}>
             {text}
         </span>
     );
@@ -73,23 +73,24 @@ const WinningBreakdown: React.FC<WinningBreakdownProps> = ({ description, totalA
             <div className="space-y-1">
                 {entries.map((entry, idx) => {
                     // Expected: "MKT 5990-6-2200 头"
-                    // Regex to split strictly
-                    // Parts: [Sides] [Number]-[Bet]-[Win] [Position]
+                    // Parsing Parts: [Sides] [Number]-[Bet]-[Win] [Position]
                     const parts = entry.match(/^([A-Z]+)\s+(\d+)-([\d.]+)-([\d.]+)\s+(.+)$/);
                     
                     if (parts) {
                         const [_, sides, number, bet, win, pos] = parts;
                         return (
-                            <div key={idx} className="flex items-center justify-between text-sm leading-tight border-b border-gray-50 last:border-0 pb-1 last:pb-0">
-                                <div className="flex items-center space-x-2">
-                                    <span className="font-bold text-gray-700 font-mono tracking-tighter text-xs">{sides}</span>
-                                    <span className="font-bold text-gray-900 font-mono text-base">{number}</span>
-                                </div>
-                                <div className="flex items-center">
-                                    <span className="text-gray-400 text-xs mr-1">{bet}-</span>
-                                    <span className="font-bold text-gray-800 font-mono">{Number(win).toLocaleString()}</span>
-                                    <PositionBadge label={pos} />
-                                </div>
+                            <div key={idx} className="grid grid-cols-[2.5rem_3.5rem_1fr_2.5rem_3.5rem_1.5rem] items-center gap-1 text-sm border-b border-gray-50 last:border-0 pb-1 last:pb-0">
+                                {/* Left Side */}
+                                <div className="font-bold text-gray-700 font-mono tracking-tighter text-xs">{sides}</div>
+                                <div className="font-bold text-gray-900 font-mono text-base">{number}</div>
+                                
+                                {/* Spacer */}
+                                <div></div>
+
+                                {/* Right Side - Aligned */}
+                                <div className="text-right text-gray-400 text-xs font-mono">{bet} -</div>
+                                <div className="text-right font-bold text-gray-800 font-mono">{Number(win).toLocaleString()}</div>
+                                <div className="flex justify-end"><PositionBadge label={pos} /></div>
                             </div>
                         );
                     }
@@ -131,6 +132,9 @@ const ClientLedger: React.FC = () => {
   const [newCatLabel, setNewCatLabel] = useState('');
   const [newCatOp, setNewCatOp] = useState<'add'|'subtract'|'none'>('subtract');
   const [editingRecord, setEditingRecord] = useState<LedgerRecord | null>(null);
+  
+  // Advanced Winnings Edit State
+  const [winningsEntries, setWinningsEntries] = useState<any[]>([]);
 
   // Layout State
   const [draggedCatIndex, setDraggedCatIndex] = useState<number | null>(null);
@@ -365,13 +369,57 @@ const ClientLedger: React.FC = () => {
       setConfirmModal(null);
   };
 
+  // Prepare Record for Editing
+  const openEditModal = (record: LedgerRecord) => {
+      setEditingRecord(record);
+      
+      // Parse Winnings for Advanced Editor
+      if (record.description.startsWith('Winnings:')) {
+          const rawContent = record.description.replace(/^Winnings:\s*/i, '');
+          const entries = rawContent.split(';').map(s => s.trim()).filter(s => s);
+          const parsed = entries.map((entry, idx) => {
+              const parts = entry.match(/^([A-Z]+)\s+(\d+)-([\d.]+)-([\d.]+)\s+(.+)$/);
+              if (parts) {
+                  return { id: idx, sides: parts[1], number: parts[2], bet: parts[3], win: parts[4], pos: parts[5] };
+              }
+              return { id: idx, raw: entry };
+          });
+          setWinningsEntries(parsed);
+      } else {
+          setWinningsEntries([]);
+      }
+  };
+
   const handleUpdateRecord = (e: React.FormEvent) => {
     e.preventDefault();
     if (editingRecord) {
-      updateLedgerRecord(editingRecord.id, editingRecord);
-      setAllRecords(prev => prev.map(r => r.id === editingRecord.id ? editingRecord : r));
+      let finalDescription = editingRecord.description;
+      let finalAmount = editingRecord.amount;
+
+      // Reconstruct Winnings String if in Advanced Mode
+      if (editingRecord.description.startsWith('Winnings:') && winningsEntries.length > 0) {
+          const newDescParts = winningsEntries.map(entry => {
+              if (entry.raw) return entry.raw;
+              return `${entry.sides} ${entry.number}-${entry.bet}-${entry.win} ${entry.pos}`;
+          });
+          finalDescription = `Winnings: ${newDescParts.join('; ')}`;
+          
+          // Recalculate Total
+          finalAmount = winningsEntries.reduce((acc, curr) => {
+              return acc + (parseFloat(curr.win) || 0);
+          }, 0);
+      }
+
+      const updated = { ...editingRecord, description: finalDescription, amount: finalAmount };
+      updateLedgerRecord(editingRecord.id, updated);
+      setAllRecords(prev => prev.map(r => r.id === editingRecord.id ? updated : r));
       setEditingRecord(null);
+      setWinningsEntries([]);
     }
+  };
+  
+  const updateWinningEntry = (idx: number, field: string, val: string) => {
+      setWinningsEntries(prev => prev.map((item, i) => i === idx ? { ...item, [field]: val } : item));
   };
 
   const requestDeleteRecord = (id: string) => setConfirmModal({isOpen:true, type:'DELETE_RECORD', targetId:id, title:'Delete', message:'Delete this record?'});
@@ -423,7 +471,7 @@ const ClientLedger: React.FC = () => {
                                 totalAmount={r.amount}
                                 recordId={r.id}
                                 onDelete={() => requestDeleteRecord(r.id)}
-                                onEdit={() => setEditingRecord(r)}
+                                onEdit={() => openEditModal(r)}
                             />
                         );
                     }
@@ -442,7 +490,7 @@ const ClientLedger: React.FC = () => {
                         <div key={r.id} className={`group flex justify-between md:justify-end items-center leading-none relative gap-1 md:gap-1.5 w-full md:w-auto py-1 ${!r.isVisible ? 'opacity-30 grayscale no-print' : ''}`}>
                             {!isReflected && (
                                 <div className="no-print opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1 absolute -left-16 z-10 bg-white shadow-sm rounded border border-gray-100 p-1">
-                                    <button onClick={() => setEditingRecord(r)} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Pencil size={12} /></button>
+                                    <button onClick={() => openEditModal(r)} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Pencil size={12} /></button>
                                     <button onClick={() => requestDeleteRecord(r.id)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 size={12} /></button>
                                 </div>
                             )}
@@ -677,11 +725,32 @@ const ClientLedger: React.FC = () => {
 
       {editingRecord && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 no-print font-sans">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
                 <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold">Edit Transaction</h2><button onClick={() => setEditingRecord(null)}><X size={24} /></button></div>
                 <form onSubmit={handleUpdateRecord} className="space-y-4">
-                    <div><label className="block text-sm font-bold text-gray-500 uppercase">Amount</label><input type="number" step="0.01" value={editingRecord.amount} onChange={e => setEditingRecord({...editingRecord, amount: parseFloat(e.target.value)})} className="w-full p-2 border rounded"/></div>
-                    <div><label className="block text-sm font-bold text-gray-500 uppercase">Description</label><input type="text" value={editingRecord.description} onChange={e => setEditingRecord({...editingRecord, description: e.target.value})} className="w-full p-2 border rounded"/></div>
+                    {/* Advanced Winnings Editor */}
+                    {winningsEntries.length > 0 ? (
+                        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-3">
+                            <h3 className="text-sm font-bold text-gray-600 uppercase">Winning Entries Breakdown</h3>
+                            {winningsEntries.map((entry, idx) => (
+                                <div key={idx} className="grid grid-cols-[2rem_3rem_3rem_3rem_2rem] gap-2 items-center text-xs">
+                                    <input type="text" className="border p-1 rounded font-bold uppercase" value={entry.sides || ''} onChange={e => updateWinningEntry(idx, 'sides', e.target.value)} />
+                                    <input type="text" className="border p-1 rounded font-mono" value={entry.number || ''} onChange={e => updateWinningEntry(idx, 'number', e.target.value)} />
+                                    <input type="text" className="border p-1 rounded text-right" value={entry.bet || ''} onChange={e => updateWinningEntry(idx, 'bet', e.target.value)} />
+                                    <input type="text" className="border p-1 rounded text-right font-bold" value={entry.win || ''} onChange={e => updateWinningEntry(idx, 'win', e.target.value)} />
+                                    <input type="text" className="border p-1 rounded text-center" value={entry.pos || ''} onChange={e => updateWinningEntry(idx, 'pos', e.target.value)} />
+                                </div>
+                            ))}
+                            <div className="text-xs text-center text-gray-400 mt-2">Modify values directly. Total amount will recalculate on save.</div>
+                        </div>
+                    ) : (
+                        // Standard Editor Fields
+                        <>
+                            <div><label className="block text-sm font-bold text-gray-500 uppercase">Amount</label><input type="number" step="0.01" value={editingRecord.amount} onChange={e => setEditingRecord({...editingRecord, amount: parseFloat(e.target.value)})} className="w-full p-2 border rounded"/></div>
+                            <div><label className="block text-sm font-bold text-gray-500 uppercase">Description</label><input type="text" value={editingRecord.description} onChange={e => setEditingRecord({...editingRecord, description: e.target.value})} className="w-full p-2 border rounded"/></div>
+                        </>
+                    )}
+                    
                     <div><label className="block text-sm font-bold text-gray-500 uppercase">Column</label><select value={editingRecord.column} onChange={e => setEditingRecord({...editingRecord, column: e.target.value as any})} className="w-full p-2 border rounded"><option value="main">Main</option><option value="col1">Panel 1</option><option value="col2">Panel 2</option></select></div>
                     <div className="flex justify-end pt-4"><button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Update</button></div>
                 </form>
