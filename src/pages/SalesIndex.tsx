@@ -86,41 +86,38 @@ const DetailedMobileTableRow = React.memo(({
     record?: SaleRecord
 }) => {
     // Prefer the full raw data array if available
-    const raw = record?.mobileRawData;
-    
-    // Legacy fallback
+    let raw = record?.mobileRawData || [];
     const legacy = record?.mobileRaw;
 
-    // Helper to get value safely. 
-    const getVal = (idx: number): string | number => {
-        if (raw && raw.length > idx) return raw[idx];
-        if (legacy) {
-            if (idx === 0) return legacy.memberBet;
-            if (idx === 7) return legacy.companyTotal;
-            if (idx === 11) return legacy.shareholderTotal;
-            if (idx === 16) return legacy.agentTotal;
-        }
-        return '';
-    };
+    // Normalization for Legacy Data (17 cols) to 19 cols
+    if (raw.length === 17) {
+        // Legacy: [0-7 Comp, 8-11 Sh, 12-16 Agent]
+        // Target: [0-7 Comp, 8-13 Sh (insert 2), 14-18 Agent]
+        raw = [
+            ...raw.slice(0, 11),
+            '-', '-', // Missing Win/Fee
+            raw[11],  // Sh Total
+            ...raw.slice(12)
+        ];
+    } else if (raw.length === 0 && legacy) {
+        // Fallback if no array but legacy obj exists (Unlikely but safe)
+        raw = new Array(19).fill('-');
+        raw[0] = legacy.memberBet;
+        raw[7] = legacy.companyTotal;
+        raw[13] = legacy.shareholderTotal;
+        raw[18] = legacy.agentTotal;
+    }
 
-    // Special Helper for Agent Total (Index 16)
-    // Grab the very last element of the raw array
-    const getAgentTotal = (): string | number => {
-        if (raw && raw.length > 0) {
-            return raw[raw.length - 1];
-        }
-        if (legacy) return legacy.agentTotal || '';
-        return '';
-    };
+    const getVal = (idx: number) => raw[idx] || '';
 
-    // Helper to format currency/number
+    // Agent Total is always last
+    const getAgentTotal = () => raw[raw.length - 1] || '';
+
     const fmt = (val: string | number) => {
-        if (!val) return '';
-        const s = String(val);
-        return s;
+        if (!val || val === '-') return '-';
+        return String(val);
     };
 
-    // Calculate Colors for Totals
     const getColorClass = (val: string | number) => {
         const num = parseFloat(String(val).replace(/,/g,''));
         if (isNaN(num)) return 'text-gray-900';
@@ -148,19 +145,21 @@ const DetailedMobileTableRow = React.memo(({
                 {fmt(getVal(7))}
             </td>
             
-            {/* 4. Shareholder (4 cols) */}
+            {/* 4. Shareholder (6 cols) */}
             <td className="px-2 py-3 text-right">{fmt(getVal(8))}</td>
             <td className="px-2 py-3 text-right">{fmt(getVal(9))}</td>
             <td className="px-2 py-3 text-right">{fmt(getVal(10))}</td>
-            <td className={`px-2 py-3 text-right font-extrabold bg-indigo-50/50 border-x border-indigo-100 ${getColorClass(getVal(11))}`}>
-                {fmt(getVal(11))}
+            <td className="px-2 py-3 text-right text-orange-600 bg-orange-50/30">{fmt(getVal(11))}</td> {/* Win */}
+            <td className="px-2 py-3 text-right">{fmt(getVal(12))}</td> {/* Fee */}
+            <td className={`px-2 py-3 text-right font-extrabold bg-indigo-50/50 border-x border-indigo-100 ${getColorClass(getVal(13))}`}>
+                {fmt(getVal(13))}
             </td>
             
             {/* 5. Agent (5 cols) */}
-            <td className="px-2 py-3 text-right">{fmt(getVal(12))}</td>
-            <td className="px-2 py-3 text-right">{fmt(getVal(13))}</td>
             <td className="px-2 py-3 text-right">{fmt(getVal(14))}</td>
             <td className="px-2 py-3 text-right">{fmt(getVal(15))}</td>
+            <td className="px-2 py-3 text-right">{fmt(getVal(16))}</td>
+            <td className="px-2 py-3 text-right">{fmt(getVal(17))}</td>
             <td className={`px-2 py-3 text-right font-extrabold bg-green-50/50 border-l border-green-100 ${getColorClass(getAgentTotal())}`}>
                 {fmt(getAgentTotal())}
             </td>
@@ -447,8 +446,10 @@ const SalesIndex: React.FC = () => {
       return acc + clientRecs.reduce((sum, r) => {
           // Check Raw Data Array first (Index 11 is Shareholder Total)
           let valStr = '';
-          if (r.mobileRawData && r.mobileRawData.length > 11) {
-              valStr = r.mobileRawData[11];
+          if (r.mobileRawData && r.mobileRawData.length >= 19) {
+              valStr = r.mobileRawData[13]; // 19-col index for Shareholder Total
+          } else if (r.mobileRawData && r.mobileRawData.length >= 17) {
+              valStr = r.mobileRawData[11]; // 17-col index for Shareholder Total
           } else if (r.mobileRaw) {
               valStr = r.mobileRaw.shareholderTotal;
           }
@@ -622,7 +623,7 @@ const SalesIndex: React.FC = () => {
                                         <th className="px-2 py-1 sticky left-0 bg-gray-200 z-10 border-r border-gray-300"></th>
                                         <th colSpan={3} className="px-2 py-1 text-center border-r border-gray-300 bg-gray-200/50">Member / 会员</th>
                                         <th colSpan={5} className="px-2 py-1 text-center border-r border-gray-300 bg-blue-50 text-blue-800">Company / 公司</th>
-                                        <th colSpan={4} className="px-2 py-1 text-center border-r border-gray-300 bg-indigo-50 text-indigo-800">Shareholder / 股东</th>
+                                        <th colSpan={6} className="px-2 py-1 text-center border-r border-gray-300 bg-indigo-50 text-indigo-800">Shareholder / 股东</th>
                                         <th colSpan={5} className="px-2 py-1 text-center bg-green-50 text-green-800">Agent / 总代理</th>
                                     </tr>
                                     {/* Header Row 2: Columns */}
@@ -644,6 +645,8 @@ const SalesIndex: React.FC = () => {
                                         <th className="px-2 py-3 text-right text-gray-600">营业额</th>
                                         <th className="px-2 py-3 text-right text-gray-600">佣金</th>
                                         <th className="px-2 py-3 text-right text-gray-600">赔出</th>
+                                        <th className="px-2 py-3 text-right text-orange-600 bg-orange-50/20">赢彩</th>
+                                        <th className="px-2 py-3 text-right text-gray-600">补费用</th>
                                         <th className="px-2 py-3 text-right font-extrabold bg-indigo-50 text-indigo-800 border-x border-indigo-100">总额</th>
                                         
                                         {/* Agent */}
@@ -669,7 +672,7 @@ const SalesIndex: React.FC = () => {
                                     })}
                                     {filteredMobileClients.length === 0 && (
                                         <tr>
-                                            <td colSpan={20} className="text-center py-8 text-gray-400">No mobile clients found.</td>
+                                            <td colSpan={22} className="text-center py-8 text-gray-400">No mobile clients found.</td>
                                         </tr>
                                     )}
                                 </tbody>

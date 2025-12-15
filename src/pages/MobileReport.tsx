@@ -27,7 +27,6 @@ const MobileReport: React.FC = () => {
       loadClients();
       loadHistory();
       
-      // Initialize week to current week
       const now = new Date();
       let y = now.getFullYear();
       if(y < 2025) y = 2025;
@@ -62,55 +61,50 @@ const MobileReport: React.FC = () => {
     const rows = inputText.trim().split('\n');
     const data: any[] = [];
 
-    // Heuristic: Skip header rows if they don't look like data
-    // We look for a row that starts with alphanumeric ID and has multiple numbers
-    
     for (let i = 0; i < rows.length; i++) {
-        const line = rows[i].trim();
-        if (!line) continue;
+        const line = rows[i].replace(/\r/g, ''); // Remove CR
+        if (!line.trim()) continue;
 
-        // Try splitting by Tab first (Preferred for Excel/Table copy)
-        let parts = line.split('\t');
+        let parts: string[];
         
-        // If no tabs, fallback to loose whitespace split (riskier for names with spaces)
-        if (parts.length < 2) {
-            parts = line.split(/[\t\s]+/);
+        // Detect Separator
+        if (line.includes('\t')) {
+            // STRICT TAB MODE: Preserve empty strings to maintain column alignment
+            parts = line.split('\t').map(p => p.trim());
+        } else {
+            // Fallback for space separated (less reliable for empty cols)
+            parts = line.split(/[\s]+/).map(p => p.trim()).filter(p => p !== '');
         }
 
-        // Filter out empty parts
-        parts = parts.map(p => p.trim()).filter(p => p !== '');
+        // Basic validation: Must have at least ID, Name and some data
+        if (parts.length < 5) continue;
 
-        if (parts.length < 5) continue; // Skip lines that are too short to be data
-
-        // Identify if this is a data row:
-        // 1. First column looks like an ID (alphanumeric)
-        // 2. We can find a sequence of numbers further down
+        // Find the start of numeric data
+        const isNumberLike = (s: string) => /^-?[\d,]+\.?\d*$/.test(s) && s !== '';
         
-        const isNumberLike = (s: string) => /^-?[\d,]+\.?\d*$/.test(s);
-        
-        // Find the index where the numeric data starts
-        // Usually index 2 (after ID and Name)
         let firstStatIndex = -1;
-        
-        // Scan for the first recognizable number that is followed by another number
+        // Scan for pattern: Num, Num
         for (let j = 1; j < parts.length; j++) {
-            if (isNumberLike(parts[j]) && (j+1 >= parts.length || isNumberLike(parts[j+1]))) {
-                firstStatIndex = j;
-                break;
+            if (isNumberLike(parts[j])) {
+                // Heuristic: Name is between ID (0) and First Stat
+                if (j > 1) {
+                    firstStatIndex = j;
+                    break;
+                }
             }
         }
 
-        // Only process if we found a valid data structure
         if (firstStatIndex > 0) {
             const id = parts[0];
-            
             // Name is everything between ID and First Stat
-            const name = parts.slice(1, firstStatIndex).join(' ');
+            // Filter out empty strings from name parts if any
+            const nameParts = parts.slice(1, firstStatIndex).filter(p => p !== '');
+            const name = nameParts.join(' ');
             
             // Values are everything from First Stat onwards
             const values = parts.slice(firstStatIndex);
             
-            // Ensure we have enough data columns (expecting ~17 columns based on user sample)
+            // Expecting 17+ columns. 
             if (values.length >= 10) {
                 data.push({ id, name, values });
             }
@@ -131,7 +125,7 @@ const MobileReport: React.FC = () => {
       setIsSaving(true);
 
       const weeks = getWeeksForMonth(selectedYear, selectedMonth);
-      const days = weeks[selectedWeekNum]; // Date[]
+      const days = weeks[selectedWeekNum]; 
       if (!days || days.length === 0) {
           setSaveStatus({ type: 'error', message: 'Invalid week selection.' });
           setIsSaving(false);
@@ -140,7 +134,6 @@ const MobileReport: React.FC = () => {
       const lastDay = days[days.length - 1];
       const mStr = String(lastDay.getMonth() + 1).padStart(2, '0');
       const dStr = String(lastDay.getDate()).padStart(2, '0');
-      // Year might roll over if week overflows (e.g. Dec to Jan)
       const targetDate = `${lastDay.getFullYear()}-${mStr}-${dStr}`;
 
       let matchedCount = 0;
@@ -150,17 +143,28 @@ const MobileReport: React.FC = () => {
           const client = clients.find(c => c.code.toLowerCase() === row.id.toLowerCase());
           
           if (client) {
-              const lastValStr = row.values[row.values.length - 1];
+              const values = row.values;
+              
+              // Dynamically find totals based on length
+              // Company Total is always Index 7 (8th value)
+              // Agent Total is always Last Value
+              // Shareholder Total logic:
+              // If 17 cols (Legacy): Index 11.
+              // If 19 cols (Standard): Index 13.
+              
+              const compTotalIdx = 7;
+              const agentTotalIdx = values.length - 1;
+              let shareholderTotalIdx = 11;
+              if (values.length >= 19) shareholderTotalIdx = 13;
+
+              const lastValStr = values[agentTotalIdx];
               const val = parseFloat(String(lastValStr).replace(/,/g, ''));
 
-              // Create legacy object for backward compatibility, although we prefer raw array now
-              // Mapping based on 17-column structure: 
-              // 0:Bet, 7:CoTotal, 11:ShTotal, 16:AgTotal
               const mobileRaw = {
-                  memberBet: row.values[0] || '0',
-                  companyTotal: row.values[7] || '0',
-                  shareholderTotal: row.values[11] || '0', // Adjusted index for Shareholder Total
-                  agentTotal: row.values[row.values.length - 1] || '0'
+                  memberBet: values[0] || '0',
+                  companyTotal: values[compTotalIdx] || '0',
+                  shareholderTotal: values[shareholderTotalIdx] || '0',
+                  agentTotal: values[agentTotalIdx] || '0'
               };
 
               if (!isNaN(val)) {
@@ -170,7 +174,7 @@ const MobileReport: React.FC = () => {
                       b: val, 
                       s: 0, a: 0, c: 0,
                       mobileRaw, 
-                      mobileRawData: row.values // Save FULL raw data array
+                      mobileRawData: values // Save FULL raw data
                   });
                   matchedCount++;
               }
@@ -202,9 +206,26 @@ const MobileReport: React.FC = () => {
       setSaveStatus({ type: 'success', message: 'Loaded historical data into view.' });
   };
 
+  // Helper to normalize row display (pads to 19 columns if short)
+  const normalizeRow = (values: any[]) => {
+      // If 17 cols (Legacy), map to 19 structure
+      // 17 structure: [0-7 Comp, 8-11 Shareholder(4), 12-16 Agent]
+      // 19 structure: [0-7 Comp, 8-13 Shareholder(6), 14-18 Agent]
+      if (values.length === 17) {
+          return [
+              ...values.slice(0, 11), // 0-10 (Comp + Shareholder first 3)
+              '-', '-',               // Insert 2 missing Shareholder cols (Win, Fee)
+              values[11],             // Shareholder Total
+              ...values.slice(12)     // Agent
+          ];
+      }
+      return values;
+  };
+
   return (
     <div className="bg-gray-50 min-h-screen p-4 md:p-8">
         <div className="max-w-[1400px] mx-auto">
+            {/* ... (Header Section same as before) ... */}
             <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
                 <div className="flex items-center space-x-4">
                     <Link to="/sales" className="p-2 hover:bg-gray-200 rounded-full text-gray-600">
@@ -235,6 +256,7 @@ const MobileReport: React.FC = () => {
             {activeTab === 'import' && (
                 <>
                     <div className="flex flex-wrap items-center gap-3 bg-white p-2 rounded-xl shadow-sm border border-gray-200 mb-6">
+                        {/* ... (Selects and Buttons same as before) ... */}
                         <div className="flex items-center space-x-2 border-r border-gray-200 pr-3">
                             <select 
                                 value={selectedMonth} 
@@ -258,7 +280,6 @@ const MobileReport: React.FC = () => {
                             Clear
                         </button>
                         
-                        {/* Text Parse Button */}
                         <button onClick={handleParse} className="px-4 py-2 text-sm font-bold text-white bg-gray-600 hover:bg-gray-700 rounded-lg flex items-center">
                             <RefreshCw size={16} className="mr-2" /> Text Parse
                         </button>
@@ -303,25 +324,27 @@ const MobileReport: React.FC = () => {
                                     <thead className="bg-gray-100 text-gray-700 font-bold">
                                         <tr>
                                             <th className="px-4 py-3 text-left sticky left-0 bg-gray-100 z-10 border-r border-gray-200">登陆帐号 / 名字</th>
-                                            {/* Columns 0-2 */}
+                                            {/* Member (0-2) */}
                                             <th className="px-2 py-3 bg-gray-50">会员总投注</th>
                                             <th className="px-2 py-3 bg-gray-50">会员总数</th>
                                             <th className="px-2 py-3 bg-gray-50">tgmts</th>
                                             
-                                            {/* Company 3-7 */}
+                                            {/* Company (3-7) */}
                                             <th className="px-2 py-3 border-l border-gray-200">公司 营业额</th>
                                             <th className="px-2 py-3">公司 佣金</th>
                                             <th className="px-2 py-3">公司 赔出</th>
                                             <th className="px-2 py-3">公司 补费用</th>
                                             <th className="px-2 py-3 font-extrabold bg-blue-50 text-blue-800">公司 总额</th>
                                             
-                                            {/* Shareholder 8-11 */}
+                                            {/* Shareholder (8-13) - Expanded to 6 Cols */}
                                             <th className="px-2 py-3 border-l border-gray-200">股东 营业额</th>
                                             <th className="px-2 py-3">股东 佣金</th>
                                             <th className="px-2 py-3">股东 赔出</th>
+                                            <th className="px-2 py-3 text-orange-600 bg-orange-50/20">股东 赢彩</th>
+                                            <th className="px-2 py-3">股东 补费用</th>
                                             <th className="px-2 py-3 font-extrabold bg-blue-50 text-blue-800">股东 总额</th>
                                             
-                                            {/* Agent 12-16 */}
+                                            {/* Agent (14-18) */}
                                             <th className="px-2 py-3 border-l border-gray-200">总代理 营业额</th>
                                             <th className="px-2 py-3">总代理 佣金</th>
                                             <th className="px-2 py-3">总代理 赔出</th>
@@ -332,6 +355,8 @@ const MobileReport: React.FC = () => {
                                     <tbody className="divide-y divide-gray-100 font-mono">
                                         {parsedData.map((row, idx) => {
                                             const isMatched = clients.some(c => c.code.toLowerCase() === row.id.toLowerCase());
+                                            const displayValues = normalizeRow(row.values);
+                                            
                                             return (
                                             <tr key={idx} className={`hover:bg-gray-50 ${!isMatched ? 'opacity-50 bg-red-50/30' : ''}`}>
                                                 <td className="px-4 py-2 text-left sticky left-0 bg-white hover:bg-gray-50 border-r border-gray-100 z-10">
@@ -341,11 +366,11 @@ const MobileReport: React.FC = () => {
                                                         {!isMatched && <span className="text-[9px] text-red-500 font-bold px-1 border border-red-200 rounded">No Match</span>}
                                                     </div>
                                                 </td>
-                                                {row.values.map((v: any, i: number) => (
+                                                {displayValues.map((v: any, i: number) => (
                                                     <td key={i} className={`px-2 py-2 
-                                                        ${i===7||i===11?'font-bold bg-blue-50/30':''} 
-                                                        ${i===3||i===8||i===12?'border-l border-gray-100':''} 
-                                                        ${i===row.values.length-1 ? (parseFloat(String(v).replace(/,/g,'')) >= 0 ? 'text-green-700 bg-green-50 font-extrabold border-l-2 border-green-100' : 'text-red-600 bg-green-50 font-extrabold border-l-2 border-green-100') : ''}
+                                                        ${i===7||i===13?'font-bold bg-blue-50/30':''} 
+                                                        ${i===3||i===8||i===14?'border-l border-gray-100':''} 
+                                                        ${i===displayValues.length-1 ? (parseFloat(String(v).replace(/,/g,'')) >= 0 ? 'text-green-700 bg-green-50 font-extrabold border-l-2 border-green-100' : 'text-red-600 bg-green-50 font-extrabold border-l-2 border-green-100') : ''}
                                                     `}>
                                                         {v}
                                                     </td>
@@ -359,7 +384,8 @@ const MobileReport: React.FC = () => {
                     )}
                 </>
             )}
-
+            
+            {/* History Tab */}
             {activeTab === 'history' && (
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     {history.length === 0 ? (
