@@ -229,8 +229,8 @@ const DrawReport: React.FC = () => {
       }
   }
 
-  const activeWeekIndex = activeWeekNum ? Object.keys(currentMonthWeeks).map(Number).sort((a, b) => a - b).indexOf(Number(activeWeekNum)) : 0;
-  const sortedWeekNums = Object.keys(currentMonthWeeks).map(Number).sort((a, b) => a - b);
+  const activeWeekIndex = activeWeekNum ? Object.keys(currentMonthWeeks).map(Number).sort((a: number, b: number) => a - b).indexOf(Number(activeWeekNum)) : 0;
+  const sortedWeekNums = Object.keys(currentMonthWeeks).map(Number).sort((a: number, b: number) => a - b);
 
   const activeWeekDays = activeWeekNum ? currentMonthWeeks[parseInt(activeWeekNum)] : [];
 

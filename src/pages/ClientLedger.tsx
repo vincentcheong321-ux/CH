@@ -23,11 +23,16 @@ type LedgerColumn = 'main' | 'col1' | 'col2';
 
 // Helper for sorting by system-defined order
 const getRecordSortPriority = (record: LedgerRecord): number => {
-    if (record.id.startsWith('sale_')) return 1; // 收
-    if (record.id.startsWith('cred_')) return 2; // 来
-    if (record.id.startsWith('adv_')) return 3;  // 支
-    if (record.id.startsWith('draw_')) return 4;  // 欠
-    return 5; // Manual entries come last
+    // 上欠 (Draw Report or manual balance forward)
+    if (record.id.startsWith('draw_') || record.typeLabel === '上欠') return 1;
+    // 收 (Sales Opening, including aggregated view)
+    if (record.id.startsWith('sale_') || record.id === 'agg_sale_week') return 2;
+    // 来 (Cash Credit)
+    if (record.id.startsWith('cred_')) return 3;
+    // 支 (Cash Advance)
+    if (record.id.startsWith('adv_')) return 4;
+    // Manual entries
+    return 5;
 };
 
 const ClientLedger: React.FC = () => {
@@ -370,10 +375,12 @@ const ClientLedger: React.FC = () => {
                 {data.processed.map((r) => {
                     const isReflected = r.id.startsWith('sale_') || r.id.startsWith('adv_') || r.id.startsWith('draw_') || r.id === 'agg_sale_week';
                     
-                    // Formatting Logic: Negative numbers (including negative adds) get brackets and red color
                     const isNetNegative = r.operation !== 'none' && r.netChange < 0;
                     const absValue = Math.abs(r.operation === 'none' ? r.amount : r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2});
-                    const displayValue = isNetNegative ? `(${absValue})` : absValue;
+                    
+                    // BRACKET LOGIC: Only apply to '收' entries if they are negative.
+                    const useBrackets = isNetNegative && (r.typeLabel === '收' || r.id === 'agg_sale_week');
+                    const displayValue = useBrackets ? `(${absValue})` : absValue;
                     
                     let textColor = 'text-gray-600';
                     if (r.operation === 'add') {

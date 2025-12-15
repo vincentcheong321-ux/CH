@@ -86,11 +86,11 @@ export const seedData = () => {
 
 // Helper for sorting by system-defined order
 const getRecordSortPriority = (record: LedgerRecord): number => {
-    // Check prefixed IDs for system records
-    if (record.id.startsWith('sale_')) return 1; // 收
-    if (record.id.startsWith('cred_')) return 2; // 来
-    if (record.id.startsWith('adv_')) return 3;  // 支
-    if (record.id.startsWith('draw_')) return 4;  // 欠
+    // Handle manual '上欠' with high priority as well
+    if (record.id.startsWith('draw_') || record.typeLabel === '上欠') return 1;
+    if (record.id.startsWith('sale_')) return 2; // 收
+    if (record.id.startsWith('cred_')) return 3; // 来
+    if (record.id.startsWith('adv_')) return 4;  // 支
     return 5; // Manual entries come last
 };
 
