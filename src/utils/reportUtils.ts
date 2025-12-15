@@ -14,46 +14,56 @@ const getDaysInMonth = (year: number, monthIndex: number) => {
 /**
  * Generates weeks for a given month/year.
  * It ensures weeks are always full 7-day cycles (Monday to Sunday).
- * Week 1 is the week that contains the 1st of the month.
+ * 
+ * STRICT RULE: A week belongs to the month where its Monday falls.
+ * This prevents overlaps. For example, if Dec 29 (Mon) - Jan 4 (Sun), 
+ * this week belongs to December. January views will start from the first 
+ * Monday that actually falls in January (e.g., Jan 5).
  * 
  * Returns: { 1: [Date, Date...], 2: [Date...] }
  */
 export const getWeeksForMonth = (year: number, monthIndex: number): Record<number, Date[]> => {
     const weeks: Record<number, Date[]> = {};
     const firstDayOfMonth = new Date(year, monthIndex, 1);
-    const lastDayOfMonth = new Date(year, monthIndex + 1, 0);
     
-    // Find the Monday of the week containing the 1st
-    // JS getDay(): 0=Sun, 1=Mon, ..., 6=Sat
-    let dayOfWeek = firstDayOfMonth.getDay();
-    
-    // Calculate days to subtract to reach the previous Monday
-    // If Sunday (0), subtract 6 days.
-    // If Monday (1), subtract 0 days.
-    // If Tuesday (2), subtract 1 day, etc.
+    // 1. Find the Monday of the week containing the 1st of the month
+    const dayOfWeek = firstDayOfMonth.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+    // If Sun(0) -> -6 days. If Mon(1) -> -0 days. If Tue(2) -> -1 day.
     const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
     
-    const startDate = new Date(firstDayOfMonth);
-    startDate.setDate(firstDayOfMonth.getDate() - daysSinceMonday);
+    const potentialStartMonday = new Date(firstDayOfMonth);
+    potentialStartMonday.setDate(firstDayOfMonth.getDate() - daysSinceMonday);
+
+    // 2. Logic: A week belongs to the month where its Monday falls.
+    // If the Monday containing the 1st is in the PREVIOUS month, 
+    // we skip that week for this month's view (it belongs to the previous month).
+    let currentMonday = new Date(potentialStartMonday);
+    
+    if (currentMonday.getMonth() !== monthIndex) {
+        // Monday is in previous month (e.g. Dec 29), so add 7 days to start from 
+        // the first Monday OF this month (e.g. Jan 5)
+        currentMonday.setDate(currentMonday.getDate() + 7);
+    }
 
     let currentWeekNum = 1;
-    let currentDate = new Date(startDate);
 
-    // Iterate until the start of the week is beyond the last day of the month.
-    // We include any week that starts on or before the last day of the month.
-    // Since we align to Monday, 'currentDate' will always be a Monday.
-    while (currentDate <= lastDayOfMonth) {
+    // 3. Iterate as long as the Monday is within the current month
+    // We check monthIndex to ensure we don't bleed into the next month
+    while (currentMonday.getMonth() === monthIndex) {
         const weekDays: Date[] = [];
         
-        // Build a full 7-day week (Monday to Sunday)
+        // Build the full week (Mon-Sun)
+        let tempDay = new Date(currentMonday);
         for (let i = 0; i < 7; i++) {
-            weekDays.push(new Date(currentDate));
-            currentDate.setDate(currentDate.getDate() + 1);
+            weekDays.push(new Date(tempDay));
+            tempDay.setDate(tempDay.getDate() + 1);
         }
         
         weeks[currentWeekNum] = weekDays;
         currentWeekNum++;
-        // currentDate is now at the start of the next week (next Monday)
+        
+        // Move to next Monday
+        currentMonday.setDate(currentMonday.getDate() + 7);
     }
     
     return weeks;
