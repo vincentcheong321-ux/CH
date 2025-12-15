@@ -11,7 +11,6 @@ const PAPER_Z_CODES = ['Z03', 'Z05', 'Z07', 'Z15', 'Z19', 'Z20'];
 const PAPER_C_CODES = ['C03', 'C04', 'C06', 'C09', 'C13', 'C15', 'C17'];
 
 // Mapping: Mobile Code -> Paper Code (Case Insensitive)
-// Duplicated here for direct access in regeneration logic
 const MOBILE_TO_PAPER_MAP: Record<string, string> = {
     'sk3964': 'z07',  // SINGER -> 顺
     'sk3818': 'z19',  // MOOI -> 妹
@@ -96,7 +95,6 @@ const DetailedMobileTableRow = React.memo(({
     record?: SaleRecord
 }) => {
     // New Standard: Member(1), Comp(5), Share(6), Agent(5) = 17 columns
-    // Access by direct index from raw data array
     const raw = record?.mobileRawData || [];
     
     const getVal = (idx: number) => raw[idx] || '';
@@ -158,12 +156,14 @@ const ClientWeeklyCard = React.memo(({
     client, 
     dateStrings, 
     salesData, 
-    onUpdate 
+    onUpdate,
+    weekState 
 }: { 
     client: Client, 
     dateStrings: string[], 
     salesData: SaleRecord[], 
-    onUpdate: (clientId: string, dateStr: string, field1: 'b'|'a', val1: number, field2: 's'|'c', val2: number) => void 
+    onUpdate: (clientId: string, dateStr: string, field1: 'b'|'a', val1: number, field2: 's'|'c', val2: number) => void,
+    weekState: { year: number, month: number, week: number }
 }) => {
     
     // Calculate Client Totals for the Week
@@ -191,7 +191,12 @@ const ClientWeeklyCard = React.memo(({
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col h-full hover:shadow-md transition-shadow">
             {/* Card Header */}
             <div className="bg-gray-50 px-4 py-3 border-b border-gray-100 flex justify-between items-center">
-                <Link to={`/clients/${client.id}/sales`} className="flex items-center space-x-2 hover:text-blue-600 transition-colors group">
+                {/* Changed Link to point to ClientLedger with state */}
+                <Link 
+                    to={`/clients/${client.id}`} 
+                    state={weekState}
+                    className="flex items-center space-x-2 hover:text-blue-600 transition-colors group"
+                >
                     <div>
                         <div className="font-bold text-gray-800 group-hover:text-blue-600 leading-tight">{client.name}</div>
                         <div className="text-[10px] text-gray-500 font-mono">{client.code}</div>
@@ -526,7 +531,6 @@ const SalesIndex: React.FC = () => {
       return acc + (rawSum * 0.86); // Deduct 14% for display
   }, 0);
 
-  // ADJUSTMENT: Mobile Week Total based on Shareholder Total (Index 11) for top bar display
   const totalMobile = mobileColumnTotals[11] || 0;
 
   const sortedWeekKeys = Object.keys(weeksData).map(Number).sort((a,b) => a-b);
@@ -551,10 +555,8 @@ const SalesIndex: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-gray-50">
-      {/* Top Bar with Navigation and Tabs */}
+      {/* Top Bar */}
       <div className="bg-white border-b border-gray-200 z-20 shadow-sm flex-shrink-0">
-          
-          {/* Row 1: Search and Tab Switcher */}
           <div className="px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-3">
              <div className="flex items-center space-x-4">
                  <div className="flex bg-gray-100 p-1 rounded-lg">
@@ -667,7 +669,6 @@ const SalesIndex: React.FC = () => {
             <div className="flex justify-center items-center h-full"><Loader2 className="animate-spin text-gray-400" /></div>
         ) : (
             <div className="max-w-[1600px] mx-auto pb-20">
-                
                 {activeTab === 'paper' ? (
                     // Paper View
                     <div className="flex flex-col lg:flex-row gap-6">
@@ -681,6 +682,7 @@ const SalesIndex: React.FC = () => {
                                         dateStrings={activeDateStrings}
                                         salesData={salesData}
                                         onUpdate={handleUpdate}
+                                        weekState={{ year: currentYear, month: currentMonth, week: selectedWeekNum }}
                                     />
                                 ))}
                                 {zClients.length === 0 && <p className="text-gray-400 text-sm col-span-full text-center py-4">No Z-series clients found matching search.</p>}
@@ -697,6 +699,7 @@ const SalesIndex: React.FC = () => {
                                         dateStrings={activeDateStrings}
                                         salesData={salesData}
                                         onUpdate={handleUpdate}
+                                        weekState={{ year: currentYear, month: currentMonth, week: selectedWeekNum }}
                                     />
                                 ))}
                                 {cClients.length === 0 && <p className="text-gray-400 text-sm col-span-full text-center py-4">No C-series clients found matching search.</p>}
@@ -704,12 +707,11 @@ const SalesIndex: React.FC = () => {
                         </div>
                     </div>
                 ) : (
-                    // Mobile View: Fully Detailed Table
+                    // Mobile View
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse text-xs whitespace-nowrap">
                                 <thead className="bg-gray-100 font-bold text-gray-700">
-                                    {/* Header Row 1: Groups */}
                                     <tr className="bg-gray-200 text-gray-800 text-[10px] uppercase tracking-wider border-b border-gray-300">
                                         <th className="px-2 py-1 sticky left-0 bg-gray-200 z-10 border-r border-gray-300"></th>
                                         <th className="px-2 py-1 text-center border-r border-gray-300 bg-gray-200/50">Member / 会员</th>
@@ -717,28 +719,24 @@ const SalesIndex: React.FC = () => {
                                         <th colSpan={6} className="px-2 py-1 text-center border-r border-gray-300 bg-indigo-50 text-indigo-800">Shareholder / 股东</th>
                                         <th colSpan={5} className="px-2 py-1 text-center bg-green-50 text-green-800">Agent / 总代理</th>
                                     </tr>
-                                    {/* Header Row 2: Columns */}
                                     <tr className="bg-gray-100 border-b border-gray-200">
                                         <th className="px-2 py-3 sticky left-0 bg-gray-100 z-10 border-r border-gray-200 shadow-sm text-left">登陆帐号 / 名字</th>
-                                        {/* Member (1 Col) */}
+                                        {/* Member */}
                                         <th className="px-2 py-3 text-right text-gray-500 border-r border-gray-200">总投注</th>
-                                        
-                                        {/* Company (5 Cols) */}
+                                        {/* Company */}
                                         <th className="px-2 py-3 text-right text-gray-600">营业额</th>
                                         <th className="px-2 py-3 text-right text-gray-600">佣金</th>
                                         <th className="px-2 py-3 text-right text-gray-600">赔出</th>
                                         <th className="px-2 py-3 text-right text-gray-600">补费用</th>
                                         <th className="px-2 py-3 text-right font-extrabold bg-blue-50 text-blue-800 border-x border-blue-100">总额</th>
-                                        
-                                        {/* Shareholder (6 Cols) */}
+                                        {/* Shareholder */}
                                         <th className="px-2 py-3 text-right text-gray-600">营业额</th>
                                         <th className="px-2 py-3 text-right text-gray-600">佣金</th>
                                         <th className="px-2 py-3 text-right text-gray-600">赔出</th>
                                         <th className="px-2 py-3 text-right text-orange-600 bg-orange-50/20">赢彩</th>
                                         <th className="px-2 py-3 text-right text-gray-600">补费用</th>
                                         <th className="px-2 py-3 text-right font-extrabold bg-indigo-50 text-indigo-800 border-x border-indigo-100">总额</th>
-                                        
-                                        {/* Agent (5 Cols) */}
+                                        {/* Agent */}
                                         <th className="px-2 py-3 text-right text-gray-600">营业额</th>
                                         <th className="px-2 py-3 text-right text-gray-600">佣金</th>
                                         <th className="px-2 py-3 text-right text-gray-600">赔出</th>
@@ -765,29 +763,21 @@ const SalesIndex: React.FC = () => {
                                         </tr>
                                     )}
                                 </tbody>
-                                {/* Footer with Calculated Totals */}
                                 <tfoot className="bg-gray-100 border-t-2 border-gray-300 font-mono font-bold text-[10px] md:text-xs">
                                     <tr>
                                         <td className="px-2 py-3 sticky left-0 bg-gray-100 z-10 border-r border-gray-300 text-left">总额</td>
-                                        {/* Member */}
                                         <td className="px-2 py-3 text-right border-r border-gray-300 text-gray-700">{formatTotal(mobileColumnTotals[0])}</td>
-                                        
-                                        {/* Company */}
                                         <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[1])}</td>
                                         <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[2])}</td>
                                         <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[3])}</td>
                                         <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[4])}</td>
                                         <td className={`px-2 py-3 text-right bg-blue-100 border-x border-blue-200 ${getTotalColor(mobileColumnTotals[5])}`}>{formatTotal(mobileColumnTotals[5])}</td>
-                                        
-                                        {/* Shareholder */}
                                         <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[6])}</td>
                                         <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[7])}</td>
                                         <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[8])}</td>
                                         <td className="px-2 py-3 text-right text-orange-700">{formatTotal(mobileColumnTotals[9])}</td>
                                         <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[10])}</td>
                                         <td className={`px-2 py-3 text-right bg-indigo-100 border-x border-indigo-200 ${getTotalColor(mobileColumnTotals[11])}`}>{formatTotal(mobileColumnTotals[11])}</td>
-                                        
-                                        {/* Agent */}
                                         <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[12])}</td>
                                         <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[13])}</td>
                                         <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[14])}</td>
@@ -803,7 +793,6 @@ const SalesIndex: React.FC = () => {
         )}
       </div>
 
-      {/* Sticky Mobile Footer */}
       {activeTab === 'mobile' && (
         <div className="bg-purple-900 text-white p-4 sticky bottom-0 z-30 shadow-lg flex justify-between items-center lg:hidden">
             <div>

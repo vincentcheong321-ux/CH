@@ -4,13 +4,15 @@ import { getClients, getDrawBalances, saveDrawBalance, getClientBalancesPriorToD
 import { Client } from '../types';
 import { Calendar, ChevronLeft, ChevronRight, Filter, Save, Layers, RefreshCw, Loader2 } from 'lucide-react';
 import { MONTH_NAMES, getWeeksForMonth, getWeekRangeString } from '../utils/reportUtils';
+import { Link } from 'react-router-dom';
 
 // Extracted Component to prevent re-mounting on every render
-const ClientInputRow = React.memo(({ client, value, onChange, onBlur }: { 
+const ClientInputRow = React.memo(({ client, value, onChange, onBlur, navState }: { 
     client: Client, 
     value: string, 
     onChange: (id: string, val: string) => void,
-    onBlur: (id: string) => void
+    onBlur: (id: string) => void,
+    navState: any
 }) => {
     const numVal = parseFloat(value);
     const isPositive = !isNaN(numVal) && numVal > 0;
@@ -19,7 +21,7 @@ const ClientInputRow = React.memo(({ client, value, onChange, onBlur }: {
     return (
         <div className="flex items-center justify-between p-3 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
             <div className="flex-1">
-                <div className="font-bold text-gray-800 text-lg">{client.name}</div>
+                <Link to={`/clients/${client.id}`} state={navState} className="font-bold text-gray-800 text-lg hover:text-blue-600 transition-colors">{client.name}</Link>
                 <div className="text-xs text-gray-500 font-mono">{client.code}</div>
             </div>
             <div className="w-40">
@@ -49,7 +51,6 @@ const DrawReport: React.FC = () => {
   const [currentMonth, setCurrentMonth] = useState(0); 
   const [selectedDate, setSelectedDate] = useState<string>(''); 
   const [clients, setClients] = useState<Client[]>([]);
-  // Use string for input values to allow empty/typing state, parse to number on save
   const [clientBalances, setClientBalances] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -67,9 +68,7 @@ const DrawReport: React.FC = () => {
     const m = now.getMonth();
     setCurrentMonth(m);
 
-    // Find week that contains today
     const weeks = getWeeksForMonth(y, m);
-    // Find week where any day matches today
     const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
     
     const weekNum = Object.keys(weeks).find(w => {
@@ -80,11 +79,9 @@ const DrawReport: React.FC = () => {
     });
     
     if (weekNum) {
-        // Select start day of this week
         const startDay = weeks[parseInt(weekNum)][0];
         handleDateClick(startDay);
     } else {
-        // Fallback to first week of current month
         const firstWeekNum = Object.keys(weeks)[0];
         if (firstWeekNum) {
             handleDateClick(weeks[parseInt(firstWeekNum)][0]);
@@ -94,7 +91,6 @@ const DrawReport: React.FC = () => {
 
   const fetchClients = async () => {
     const list = await getClients();
-    // Filter to strictly show only paper clients
     const paperClients = list.filter(c => (c.category || 'paper') === 'paper');
     setClients(paperClients);
   };
@@ -127,7 +123,6 @@ const DrawReport: React.FC = () => {
 
   const handleInputChange = useCallback((clientId: string, val: string) => {
       if (val === '' || /^-?\d*\.?\d*$/.test(val)) {
-        // FIX: Explicitly typing `prev` prevents it from being inferred as `unknown`.
         setClientBalances((prev: Record<string, string>) => ({
             ...prev,
             [clientId]: val
@@ -136,7 +131,6 @@ const DrawReport: React.FC = () => {
   }, []);
 
   const handleInputBlur = useCallback(async (clientId: string) => {
-      // FIX: Explicitly typing `currentBalances` prevents it from being inferred as `unknown`.
       setClientBalances((currentBalances: Record<string, string>) => {
           const val = currentBalances[clientId];
           if (val !== '' && !isNaN(Number(val))) {
@@ -175,7 +169,6 @@ const DrawReport: React.FC = () => {
   };
 
   const calculateTotal = (): number => {
-    // FIX: Explicitly casting `Object.values` to `string[]` ensures type safety for `reduce`.
     const values = Object.values(clientBalances) as string[];
     return values.reduce((acc: number, val: string) => {
         const num = parseFloat(val);
@@ -205,19 +198,14 @@ const DrawReport: React.FC = () => {
       }
   };
 
-  // --- Week Grouping Logic ---
-  // FIX: Explicitly providing a generic type to `useMemo` ensures `currentMonthWeeks` is correctly typed,
-  // which resolves errors when its properties are accessed later (e.g., using `.some`).
   const currentMonthWeeks = useMemo<Record<number, Date[]>>(() => {
       return getWeeksForMonth(currentYear, currentMonth);
   }, [currentYear, currentMonth]);
 
-  // Identify active week based on selectedDate
   let activeWeekNum: string | undefined;
   
   if (selectedDate) {
       for (const [wNum, days] of Object.entries(currentMonthWeeks)) {
-          // Check if selectedDate matches any day in this week
           const match = (days as Date[]).some(d => {
               const yearStr = d.getFullYear();
               const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -235,6 +223,12 @@ const DrawReport: React.FC = () => {
   const sortedWeekNums = Object.keys(currentMonthWeeks).map(Number).sort((a: number, b: number) => a - b);
 
   const activeWeekDays = activeWeekNum ? currentMonthWeeks[parseInt(activeWeekNum)] : [];
+
+  const navState = useMemo(() => ({
+      year: currentYear,
+      month: currentMonth,
+      week: activeWeekNum ? parseInt(activeWeekNum) : 1
+  }), [currentYear, currentMonth, activeWeekNum]);
 
   const renderDateButtons = () => {
       return (
@@ -254,7 +248,7 @@ const DrawReport: React.FC = () => {
                       return (
                         <button
                             key={weekNum}
-                            onClick={() => handleDateClick(days[0])} // Select first day of week on click
+                            onClick={() => handleDateClick(days[0])}
                             className={`
                                 w-full p-3 rounded-lg font-bold transition-all flex flex-col items-center justify-center text-center
                                 ${isActiveWeek
@@ -280,7 +274,6 @@ const DrawReport: React.FC = () => {
 
   const total = calculateTotal();
 
-  // Create string for display
   const activeWeekDateRange = activeWeekDays.length > 0 
     ? getWeekRangeString(null, null, activeWeekDays)
     : `Week ${activeWeekIndex + 1}`;
@@ -370,6 +363,7 @@ const DrawReport: React.FC = () => {
                                                 value={clientBalances[c.id] || ''} 
                                                 onChange={handleInputChange}
                                                 onBlur={handleInputBlur}
+                                                navState={navState}
                                             />
                                         ))}
                                     </div>
@@ -381,6 +375,7 @@ const DrawReport: React.FC = () => {
                                                 value={clientBalances[c.id] || ''} 
                                                 onChange={handleInputChange}
                                                 onBlur={handleInputBlur}
+                                                navState={navState}
                                             />
                                         ))}
                                     </div>

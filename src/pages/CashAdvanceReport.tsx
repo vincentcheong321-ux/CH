@@ -4,13 +4,15 @@ import { getClients, getCashAdvances, saveCashAdvance } from '../services/storag
 import { Client } from '../types';
 import { Calendar, ChevronLeft, ChevronRight, Filter, Save, Banknote } from 'lucide-react';
 import { MONTH_NAMES, getWeeksForMonth, getWeekRangeString } from '../utils/reportUtils';
+import { Link } from 'react-router-dom';
 
 // Component for Individual Client Input
-const CashAdvanceInputRow = React.memo(({ client, value, onChange, onBlur }: { 
+const CashAdvanceInputRow = React.memo(({ client, value, onChange, onBlur, navState }: { 
     client: Client, 
     value: string, 
     onChange: (id: string, val: string) => void,
-    onBlur: (id: string) => void
+    onBlur: (id: string) => void,
+    navState: any
 }) => {
     const numVal = parseFloat(value);
     const hasValue = !isNaN(numVal) && numVal !== 0;
@@ -18,7 +20,7 @@ const CashAdvanceInputRow = React.memo(({ client, value, onChange, onBlur }: {
     return (
         <div className="flex items-center justify-between p-3 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
             <div className="flex-1">
-                <div className="font-bold text-gray-800 text-lg">{client.name}</div>
+                <Link to={`/clients/${client.id}`} state={navState} className="font-bold text-gray-800 text-lg hover:text-blue-600 transition-colors">{client.name}</Link>
                 <div className="text-xs text-gray-500 font-mono">{client.code}</div>
             </div>
             <div className="w-40 relative">
@@ -63,7 +65,6 @@ const CashAdvanceReport: React.FC = () => {
     const m = now.getMonth();
     setCurrentMonth(m);
 
-    // Find week that contains today
     const weeks = getWeeksForMonth(y, m);
     
     const todayStr = `${y}-${String(m+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
@@ -75,11 +76,9 @@ const CashAdvanceReport: React.FC = () => {
     });
     
     if (weekNum) {
-        // Select start day of this week
         const startDay = weeks[parseInt(weekNum)][0];
         handleDateClick(startDay);
     } else {
-        // Fallback to first week
         const firstWeekNum = Object.keys(weeks)[0];
         if (firstWeekNum) {
             handleDateClick(weeks[parseInt(firstWeekNum)][0]);
@@ -89,7 +88,6 @@ const CashAdvanceReport: React.FC = () => {
 
   const fetchClients = async () => {
     const list = await getClients();
-    // Filter only PAPER clients
     const paperClients = list.filter(c => (c.category || 'paper') === 'paper');
     setClients(paperClients);
   };
@@ -122,7 +120,6 @@ const CashAdvanceReport: React.FC = () => {
 
   const handleInputChange = useCallback((clientId: string, val: string) => {
       if (val === '' || /^-?\d*\.?\d*$/.test(val)) {
-        // FIX: Explicitly typing `prev` prevents it from being inferred as `unknown`.
         setCashAdvances((prev: Record<string, string>) => ({
             ...prev,
             [clientId]: val
@@ -131,7 +128,6 @@ const CashAdvanceReport: React.FC = () => {
   }, []);
 
   const handleInputBlur = useCallback(async (clientId: string) => {
-      // FIX: Explicitly typing `current` prevents it from being inferred as `unknown`.
       setCashAdvances((current: Record<string, string>) => {
           const val = current[clientId];
           if (val !== '' && !isNaN(Number(val))) {
@@ -144,7 +140,6 @@ const CashAdvanceReport: React.FC = () => {
   }, [selectedDate]);
 
   const calculateTotal = (): number => {
-    // FIX: Explicitly casting `Object.values` to `string[]` ensures type safety for `reduce`.
     const values = Object.values(cashAdvances) as string[];
     return values.reduce((acc: number, val: string) => {
         const num = parseFloat(val);
@@ -174,9 +169,6 @@ const CashAdvanceReport: React.FC = () => {
       }
   };
 
-  // --- Week Grouping Logic ---
-  // FIX: Explicitly providing a generic type to `useMemo` ensures `currentMonthWeeks` is correctly typed,
-  // which resolves errors when its properties are accessed later (e.g., using `.some`).
   const currentMonthWeeks = useMemo<Record<number, Date[]>>(() => {
       return getWeeksForMonth(currentYear, currentMonth);
   }, [currentYear, currentMonth]);
@@ -205,6 +197,12 @@ const CashAdvanceReport: React.FC = () => {
   const rangeTitle = activeDays.length > 0 
     ? getWeekRangeString(null, null, activeDays) 
     : `Week ${activeWeekIndex + 1}`;
+
+  const navState = useMemo(() => ({
+      year: currentYear,
+      month: currentMonth,
+      week: activeWeekNum ? parseInt(activeWeekNum) : 1
+  }), [currentYear, currentMonth, activeWeekNum]);
 
   const renderDateButtons = () => {
       return (
@@ -324,6 +322,7 @@ const CashAdvanceReport: React.FC = () => {
                                                 value={cashAdvances[c.id] || ''} 
                                                 onChange={handleInputChange}
                                                 onBlur={handleInputBlur}
+                                                navState={navState}
                                             />
                                         ))}
                                     </div>
@@ -335,6 +334,7 @@ const CashAdvanceReport: React.FC = () => {
                                                 value={cashAdvances[c.id] || ''} 
                                                 onChange={handleInputChange}
                                                 onBlur={handleInputBlur}
+                                                navState={navState}
                                             />
                                         ))}
                                     </div>

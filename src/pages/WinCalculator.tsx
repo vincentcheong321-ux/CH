@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Calculator, Trophy, RotateCcw, Plus, Trash2, Save, User, CheckCircle, Calendar, Hash, Medal, Layers, RefreshCw } from 'lucide-react';
 import { getClients, saveLedgerRecord, getWinningsByDateRange } from '../services/storageService';
 import { Client } from '../types';
@@ -69,12 +69,14 @@ const ClientWinInputRow = React.memo(({
     client, 
     value, 
     onChange, 
-    onBlur 
+    onBlur,
+    navState
 }: { 
     client: Client, 
     value: string, 
     onChange: (id: string, val: string) => void, 
-    onBlur: (id: string) => void 
+    onBlur: (id: string) => void,
+    navState: any
 }) => {
     return (
         <div className="flex items-center justify-between p-3 border-b border-gray-100 hover:bg-gray-50 transition-colors group">
@@ -83,7 +85,7 @@ const ClientWinInputRow = React.memo(({
                     {client.code.substring(0,2)}
                 </div>
                 <div>
-                    <div className="font-bold text-gray-800">{client.name}</div>
+                    <Link to={`/clients/${client.id}`} state={navState} className="font-bold text-gray-800 hover:text-blue-600 transition-colors">{client.name}</Link>
                     <div className="text-xs text-gray-500 font-mono">{client.code}</div>
                 </div>
             </div>
@@ -318,8 +320,6 @@ const WinCalculator: React.FC = () => {
         });
 
         // 2. Save to Main Ledger (Summary)
-        // User requested: "main ledger remove the date and winings total text"
-        // We set description to empty string '', so only Type Label '中' and amount are shown.
         await saveLedgerRecord({
             clientId: selectedClientId,
             date: selectedDate,
@@ -423,6 +423,21 @@ const WinCalculator: React.FC = () => {
         );
         if (foundDays) return getWeekRangeString(null, null, foundDays);
         return selectedDate;
+    }, [selectedDate]);
+
+    // Derived week state for navigation link
+    const navState = useMemo(() => {
+        const d = new Date(selectedDate);
+        const y = d.getFullYear();
+        const m = d.getMonth();
+        const weeks = getWeeksForMonth(y, m);
+        const dateStr = selectedDate;
+        let weekNum = 1;
+        const foundWeek = Object.keys(weeks).find(w => weeks[parseInt(w)].some(day => 
+            `${day.getFullYear()}-${String(day.getMonth()+1).padStart(2,'0')}-${String(day.getDate()).padStart(2,'0')}` === dateStr
+        ));
+        if (foundWeek) weekNum = parseInt(foundWeek);
+        return { year: y, month: m, week: weekNum };
     }, [selectedDate]);
 
     const midPoint = Math.ceil(clients.length / 2);
@@ -627,6 +642,7 @@ const WinCalculator: React.FC = () => {
                                     value={clientWinnings[c.id] || ''} 
                                     onChange={handleListInputChange} 
                                     onBlur={handleListInputBlur} 
+                                    navState={navState}
                                 />
                             ))}
                         </div>
@@ -638,6 +654,7 @@ const WinCalculator: React.FC = () => {
                                     value={clientWinnings[c.id] || ''} 
                                     onChange={handleListInputChange} 
                                     onBlur={handleListInputBlur} 
+                                    navState={navState}
                                 />
                             ))}
                         </div>
