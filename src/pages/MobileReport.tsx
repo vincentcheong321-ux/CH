@@ -1,10 +1,9 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { ArrowLeft, RefreshCw, Save, CheckCircle, AlertCircle, History, FileText, Loader2, Image as ImageIcon, Zap } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Save, CheckCircle, AlertCircle, History, FileText, Loader2, Zap, Calendar } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getClients, saveSaleRecord, saveMobileReportHistory, getMobileReportHistory, saveLedgerRecord, getLedgerRecords, updateLedgerRecord } from '../services/storageService';
 import { Client } from '../types';
-import { getWeeksForMonth, MONTH_NAMES } from '../utils/reportUtils';
 
 // Mapping: Mobile Code -> Paper Code (Case Insensitive)
 const MOBILE_TO_PAPER_MAP: Record<string, string> = {
@@ -20,38 +19,25 @@ const MobileReport: React.FC = () => {
   const [inputText, setInputText] = useState('');
   const [parsedData, setParsedData] = useState<any[]>([]);
   
-  // State for matchin and saving
+  // State for matching and saving
   const [clients, setClients] = useState<Client[]>([]);
   const [saveStatus, setSaveStatus] = useState<{ type: 'success' | 'error' | null, message: string }>({ type: null, message: '' });
   const [history, setHistory] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'import' | 'history'>('import');
   const [isSaving, setIsSaving] = useState(false);
   
-  // Date Selection State for Saving
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
-  const [selectedWeekNum, setSelectedWeekNum] = useState<number>(1);
+  // New Date Selection State (Default to Today)
+  const [reportDate, setReportDate] = useState(() => {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const d = String(now.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+  });
 
   useEffect(() => {
       loadClients();
       loadHistory();
-      
-      const now = new Date();
-      let y = now.getFullYear();
-      if(y < 2025) y = 2025;
-      if(y > 2026) y = 2026;
-      setSelectedYear(y);
-      setSelectedMonth(now.getMonth());
-      
-      const weeks = getWeeksForMonth(y, now.getMonth());
-      const todayStr = `${y}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-      const foundWeek = Object.keys(weeks).find(w => {
-          return weeks[parseInt(w)].some(d => {
-              const dStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-              return dStr === todayStr;
-          });
-      });
-      if (foundWeek) setSelectedWeekNum(parseInt(foundWeek));
   }, []);
 
   const loadClients = async () => {
@@ -131,19 +117,13 @@ const MobileReport: React.FC = () => {
 
   const handleSaveToSystem = async () => {
       if (parsedData.length === 0) return;
-      setIsSaving(true);
-
-      const weeks = getWeeksForMonth(selectedYear, selectedMonth);
-      const days = weeks[selectedWeekNum]; 
-      if (!days || days.length === 0) {
-          setSaveStatus({ type: 'error', message: 'Invalid week selection.' });
-          setIsSaving(false);
+      if (!reportDate) {
+          setSaveStatus({ type: 'error', message: 'Please select a date.' });
           return;
       }
-      const lastDay = days[days.length - 1];
-      const mStr = String(lastDay.getMonth() + 1).padStart(2, '0');
-      const dStr = String(lastDay.getDate()).padStart(2, '0');
-      const targetDate = `${lastDay.getFullYear()}-${mStr}-${dStr}`;
+      setIsSaving(true);
+
+      const targetDate = reportDate; // Use selected date directly
 
       let matchedCount = 0;
       let skippedCount = 0;
@@ -205,9 +185,8 @@ const MobileReport: React.FC = () => {
 
                   if (!isNaN(companyAmount) && companyAmount !== 0) {
                       // Logic: 
-                      // If Company Total > 0 (Company Won), user owes (Add to Debt).
-                      // If Company Total < 0 (Company Lost), user is credited (Subtract from Debt).
-                      // Operation logic: 'add' means increase balance (positive debt), 'subtract' means decrease.
+                      // Positive Company Total -> Client Owes -> Add to Debt (Green/Add)
+                      // Negative Company Total -> Client Claims -> Reduce Debt (Red/Subtract)
                       const operation = companyAmount >= 0 ? 'add' : 'subtract';
                       
                       await saveLedgerRecord({
@@ -234,7 +213,7 @@ const MobileReport: React.FC = () => {
 
       setIsSaving(false);
       if (matchedCount > 0) {
-          setSaveStatus({ type: 'success', message: `Updated ${matchedCount} clients & saved history for ${targetDate}.` });
+          setSaveStatus({ type: 'success', message: `Saved data for ${targetDate}. Updated ${matchedCount} clients.` });
       } else {
           setSaveStatus({ type: 'error', message: `No matching clients found. Ensure Client Codes match.` });
       }
@@ -242,20 +221,13 @@ const MobileReport: React.FC = () => {
 
   const handleRegenerateDian = async () => {
         if (parsedData.length === 0) return;
-        setIsSaving(true);
-
-        const weeks = getWeeksForMonth(selectedYear, selectedMonth);
-        const days = weeks[selectedWeekNum]; 
-        if (!days || days.length === 0) {
-            setSaveStatus({ type: 'error', message: 'Invalid week selection.' });
-            setIsSaving(false);
+        if (!reportDate) {
+            setSaveStatus({ type: 'error', message: 'Please select a date first.' });
             return;
         }
-        const lastDay = days[days.length - 1];
-        const mStr = String(lastDay.getMonth() + 1).padStart(2, '0');
-        const dStr = String(lastDay.getDate()).padStart(2, '0');
-        const targetDate = `${lastDay.getFullYear()}-${mStr}-${dStr}`;
+        setIsSaving(true);
 
+        const targetDate = reportDate;
         let updateCount = 0;
 
         for (const row of parsedData) {
@@ -305,13 +277,13 @@ const MobileReport: React.FC = () => {
             }
         }
         setIsSaving(false);
-        setSaveStatus({ type: 'success', message: `Regenerated ${updateCount} '电' records with updated logic.` });
+        setSaveStatus({ type: 'success', message: `Regenerated ${updateCount} '电' records for ${targetDate}.` });
   };
 
-  const weeksForMonth = useMemo(() => getWeeksForMonth(selectedYear, selectedMonth), [selectedYear, selectedMonth]);
-
-  const viewHistoryItem = (data: any) => {
-      setParsedData(data);
+  const viewHistoryItem = (item: any) => {
+      setParsedData(item.json_data);
+      // Set date to the report date from history
+      if (item.report_date) setReportDate(item.report_date);
       setActiveTab('import');
       setSaveStatus({ type: 'success', message: 'Loaded historical data into view.' });
   };
@@ -349,43 +321,44 @@ const MobileReport: React.FC = () => {
 
             {activeTab === 'import' && (
                 <>
-                    <div className="flex flex-wrap items-center gap-3 bg-white p-2 rounded-xl shadow-sm border border-gray-200 mb-6">
-                        <div className="flex items-center space-x-2 border-r border-gray-200 pr-3">
-                            <select 
-                                value={selectedMonth} 
-                                onChange={(e) => { setSelectedMonth(Number(e.target.value)); setSelectedWeekNum(1); }}
-                                className="bg-gray-50 border border-gray-300 text-gray-700 text-sm rounded-lg focus:ring-purple-500 focus:border-purple-500 block p-2"
-                            >
-                                {MONTH_NAMES.map((m, i) => <option key={i} value={i}>{m}</option>)}
-                            </select>
-                            <select 
-                                value={selectedWeekNum} 
-                                onChange={(e) => setSelectedWeekNum(Number(e.target.value))}
-                                className="bg-gray-50 border border-gray-300 text-gray-700 text-sm rounded-lg focus:ring-purple-500 focus:border-purple-500 block p-2"
-                            >
-                                {Object.keys(weeksForMonth).map(w => (
-                                    <option key={w} value={w}>Week {Object.keys(weeksForMonth).indexOf(w) + 1}</option>
-                                ))}
-                            </select>
+                    <div className="flex flex-col md:flex-row items-center gap-3 bg-white p-3 rounded-xl shadow-sm border border-gray-200 mb-6">
+                        {/* Date Picker */}
+                        <div className="flex items-center space-x-2 border-r border-gray-200 pr-4 mr-2">
+                            <div className="bg-gray-100 p-2 rounded-lg text-gray-600">
+                                <Calendar size={20} />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] uppercase font-bold text-gray-400">Report Date</label>
+                                <input 
+                                    type="date" 
+                                    value={reportDate} 
+                                    onChange={(e) => setReportDate(e.target.value)}
+                                    className="font-bold text-gray-800 outline-none text-sm bg-transparent"
+                                />
+                            </div>
                         </div>
 
-                        <button onClick={handleClear} className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg">
-                            Clear
-                        </button>
-                        
-                        <button onClick={handleParse} className="px-4 py-2 text-sm font-bold text-white bg-gray-600 hover:bg-gray-700 rounded-lg flex items-center">
-                            <RefreshCw size={16} className="mr-2" /> Text Parse
-                        </button>
+                        {/* Actions */}
+                        <div className="flex gap-2 flex-wrap">
+                            <button onClick={handleClear} className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg">
+                                Clear
+                            </button>
+                            
+                            <button onClick={handleParse} className="px-4 py-2 text-sm font-bold text-white bg-gray-600 hover:bg-gray-700 rounded-lg flex items-center">
+                                <RefreshCw size={16} className="mr-2" /> Parse Text
+                            </button>
+                        </div>
 
+                        {/* Save & Regenerate Actions (Visible when data exists) */}
                         {parsedData.length > 0 && (
-                            <div className="flex space-x-2 ml-auto">
+                            <div className="flex gap-2 ml-auto border-l border-gray-200 pl-4">
                                 <button 
                                     onClick={handleRegenerateDian}
                                     disabled={isSaving}
-                                    className="px-4 py-2 text-sm font-bold text-blue-700 bg-blue-100 hover:bg-blue-200 disabled:opacity-50 rounded-lg flex items-center shadow-sm"
-                                    title="Update existing '电' records with new logic"
+                                    className="px-4 py-2 text-sm font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 disabled:opacity-50 rounded-lg flex items-center border border-blue-200 shadow-sm"
+                                    title="Force update '电' records for this date"
                                 >
-                                    <Zap size={16} className="mr-2" />
+                                    <Zap size={16} className="mr-2 text-blue-600" />
                                     Regenerate 电
                                 </button>
                                 <button 
@@ -394,7 +367,7 @@ const MobileReport: React.FC = () => {
                                     className="px-4 py-2 text-sm font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded-lg flex items-center shadow-md animate-in fade-in"
                                 >
                                     {isSaving ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Save size={16} className="mr-2" />}
-                                    {isSaving ? 'Saving...' : 'Save to System'}
+                                    {isSaving ? 'Saving...' : 'Save All'}
                                 </button>
                             </div>
                         )}
@@ -524,7 +497,7 @@ const MobileReport: React.FC = () => {
                                         </div>
                                     </div>
                                     <button 
-                                        onClick={() => viewHistoryItem(item.json_data)}
+                                        onClick={() => viewHistoryItem(item)}
                                         className="px-4 py-2 text-sm font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg flex items-center"
                                     >
                                         <FileText size={16} className="mr-2" /> View Details
