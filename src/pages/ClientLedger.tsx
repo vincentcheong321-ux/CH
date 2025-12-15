@@ -17,7 +17,7 @@ import {
   getNetAmount
 } from '../services/storageService';
 import { Client, LedgerRecord, TransactionCategory } from '../types';
-import { MONTH_NAMES, getWeeksForMonth } from '../utils/reportUtils';
+import { MONTH_NAMES, getWeeksForMonth, getWeekRangeString } from '../utils/reportUtils';
 
 type LedgerColumn = 'main' | 'col1' | 'col2';
 
@@ -447,15 +447,19 @@ const ClientLedger: React.FC = () => {
         </div>
         
         <div className="bg-gray-50 border-b border-gray-200 px-4 py-2 flex justify-center space-x-2 overflow-x-auto">
-             {sortedWeekKeys.map(wk => (
-                <button 
-                    key={wk} 
-                    onClick={() => setSelectedWeekNum(Number(wk))}
-                    className={`px-3 py-1 text-xs font-bold rounded-full border transition-colors whitespace-nowrap ${selectedWeekNum === Number(wk) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'}`}
-                >
-                    Week {Object.keys(weeksData).indexOf(String(wk)) + 1}
-                </button>
-             ))}
+             {sortedWeekKeys.map(wk => {
+                const days = weeksData[Number(wk)];
+                const rangeStr = getWeekRangeString(currentYear, currentMonth, days);
+                return (
+                    <button 
+                        key={wk} 
+                        onClick={() => setSelectedWeekNum(Number(wk))}
+                        className={`px-3 py-1 text-xs font-bold rounded-full border transition-colors whitespace-nowrap ${selectedWeekNum === Number(wk) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'}`}
+                    >
+                        {rangeStr}
+                    </button>
+                );
+             })}
         </div>
       </div>
       
@@ -512,33 +516,35 @@ const ClientLedger: React.FC = () => {
             )}
         </div>
 
-        <div id="printable-area" className="relative max-w-5xl mx-auto">
-            <div className="bg-white border border-gray-200 shadow-sm min-h-[400px] relative text-lg font-serif">
-                <div style={{ height: `${verticalPadding.top}px` }} className="relative group w-full no-print-bg"><div className="absolute bottom-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResize('top', undefined, e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div></div>
+        <div className="overflow-x-auto pb-4">
+            <div id="printable-area" className="relative max-w-5xl mx-auto min-w-[700px] md:min-w-0">
+                <div className="bg-white border border-gray-200 shadow-sm min-h-[400px] relative text-lg font-serif">
+                    <div style={{ height: `${verticalPadding.top}px` }} className="relative group w-full no-print-bg"><div className="absolute bottom-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResize('top', undefined, e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div></div>
 
-                <div className="px-4 md:px-8 pb-2 md:pb-4 flex justify-between items-end mb-2 md:mb-4">
-                    <div>
-                        <h2 className="text-2xl md:text-4xl font-bold text-gray-900 uppercase tracking-widest">{client.name}</h2>
-                        {client.code && <p className="text-gray-600 mt-1 font-mono text-sm md:text-xl">{client.code}</p>}
+                    <div className="px-4 md:px-8 pb-2 md:pb-4 flex justify-between items-end mb-2 md:mb-4">
+                        <div>
+                            <h2 className="text-2xl md:text-4xl font-bold text-gray-900 uppercase tracking-widest">{client.name}</h2>
+                            {client.code && <p className="text-gray-600 mt-1 font-mono text-sm md:text-xl">{client.code}</p>}
+                        </div>
                     </div>
+
+                    <div className="flex w-full min-h-[400px] relative" ref={containerRef}>
+                        <div style={{ width: `${colWidths[0]}%` }} className="relative flex flex-col p-1 border-r border-transparent group overflow-hidden">
+                            <LedgerColumnView data={col1Ledger} footerLabel="收"/>
+                            <div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print" onMouseDown={(e) => startResize('col', 0, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div>
+                        </div>
+                        <div style={{ width: `${colWidths[1]}%` }} className="relative flex flex-col p-1 border-r border-transparent group overflow-hidden">
+                            <LedgerColumnView data={col2Ledger} footerLabel="收"/>
+                            <div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print" onMouseDown={(e) => startResize('col', 1, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div>
+                        </div>
+                        <div style={{ width: `${colWidths[2]}%` }} className="relative flex flex-col p-1 bg-gray-50/30 overflow-hidden">
+                            <LedgerColumnView data={mainLedger} footerLabel="欠"/>
+                        </div>
+                    </div>
+                    
+                    <div style={{ height: `${verticalPadding.bottom}px` }} className="relative group w-full mt-auto no-print-bg"><div className="absolute top-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResize('bottom', undefined, e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div></div>
+
                 </div>
-
-                <div className="flex w-full min-h-[400px] relative" ref={containerRef}>
-                    <div style={{ width: `${colWidths[0]}%` }} className="relative flex flex-col p-1 border-r border-transparent group">
-                        <LedgerColumnView data={col1Ledger} footerLabel="收"/>
-                        <div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print" onMouseDown={(e) => startResize('col', 0, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div>
-                    </div>
-                    <div style={{ width: `${colWidths[1]}%` }} className="relative flex flex-col p-1 border-r border-transparent group">
-                        <LedgerColumnView data={col2Ledger} footerLabel="收"/>
-                        <div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print" onMouseDown={(e) => startResize('col', 1, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div>
-                    </div>
-                    <div style={{ width: `${colWidths[2]}%` }} className="relative flex flex-col p-1 bg-gray-50/30">
-                        <LedgerColumnView data={mainLedger} footerLabel="欠"/>
-                    </div>
-                </div>
-                
-                <div style={{ height: `${verticalPadding.bottom}px` }} className="relative group w-full mt-auto no-print-bg"><div className="absolute top-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResize('bottom', undefined, e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div></div>
-
             </div>
         </div>
       </div>
