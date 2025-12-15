@@ -185,7 +185,8 @@ const ClientWeeklyCard = React.memo(({
     const clientRecords = salesData.filter(r => r.clientId === client.id);
     const rawTotal = clientRecords.reduce((acc, r) => acc + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
     
-    const totalWeek = rawTotal;
+    // Apply 14% Deduction (x 0.86)
+    const totalWeek = rawTotal * 0.86;
 
     const formatMonth = (mIndex: number) => {
         const name = MONTH_NAMES[mIndex] || "";
@@ -212,7 +213,7 @@ const ClientWeeklyCard = React.memo(({
                     </div>
                 </Link>
                 <div className="text-right">
-                    <div className="text-[9px] text-gray-400 uppercase tracking-wider font-semibold">Week Total</div>
+                    <div className="text-[9px] text-gray-400 uppercase tracking-wider font-semibold">Week Total (-14%)</div>
                     <span className={`font-mono font-bold text-sm ${totalWeek > 0 ? 'text-blue-600' : 'text-gray-900'}`}>
                         {totalWeek !== 0 ? totalWeek.toLocaleString(undefined, {minimumFractionDigits: 2}) : '-'}
                     </span>
@@ -437,7 +438,7 @@ const SalesIndex: React.FC = () => {
   const totalPaper = [...zClients, ...cClients].reduce((acc, client) => {
       const clientRecs = salesData.filter(r => r.clientId === client.id);
       const rawSum = clientRecs.reduce((sum, r) => sum + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
-      return acc + rawSum;
+      return acc + (rawSum * 0.86); // Deduct 14% for display
   }, 0);
 
   // ADJUSTMENT: Mobile Week Total based on Shareholder Total (Index 11)
@@ -501,7 +502,7 @@ const SalesIndex: React.FC = () => {
                  
                  <div className="hidden lg:flex items-center space-x-6 ml-6 pl-6 border-l border-gray-200">
                     <div className={`transition-opacity duration-300 ${activeTab === 'paper' ? 'opacity-100' : 'opacity-40'}`}>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Paper Week Total</p>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Paper Week Total (-14%)</p>
                         <p className="font-mono font-bold text-gray-800 text-lg">${totalPaper.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
                     </div>
                     <div className={`transition-opacity duration-300 ${activeTab === 'mobile' ? 'opacity-100' : 'opacity-40'}`}>
