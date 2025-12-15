@@ -120,7 +120,6 @@ const CashAdvanceReport: React.FC = () => {
       setSelectedDate(`${yearStr}-${m}-${d}`);
   };
 
-  // FIX: Added explicit type for 'prev' to prevent 'unknown' type inference issues.
   const handleInputChange = useCallback((clientId: string, val: string) => {
       if (val === '' || /^-?\d*\.?\d*$/.test(val)) {
         setCashAdvances((prev: Record<string, string>) => ({
@@ -130,7 +129,6 @@ const CashAdvanceReport: React.FC = () => {
       }
   }, []);
 
-  // FIX: Added explicit type for 'current' to prevent 'unknown' type inference issues.
   const handleInputBlur = useCallback(async (clientId: string) => {
       setCashAdvances((current: Record<string, string>) => {
           const val = current[clientId];
@@ -143,7 +141,8 @@ const CashAdvanceReport: React.FC = () => {
       });
   }, [selectedDate]);
 
-  const calculateTotal = () => {
+  // FIX: Added explicit return type to ensure `total` is a number.
+  const calculateTotal = (): number => {
       return Object.values(cashAdvances).reduce((acc, val) => {
           const num = parseFloat(val);
           return acc + (isNaN(num) ? 0 : num);
@@ -172,9 +171,8 @@ const CashAdvanceReport: React.FC = () => {
       }
   };
 
-  // --- Week Grouping Logic ---
-  // FIX: Added explicit type for useMemo to ensure correct type inference downstream.
-  const currentMonthWeeks: Record<number, Date[]> = useMemo(() => {
+  // FIX: Switched to explicitly providing a generic type for useMemo to ensure correct type inference downstream.
+  const currentMonthWeeks = useMemo<Record<number, Date[]>>(() => {
       return getWeeksForMonth(currentYear, currentMonth);
   }, [currentYear, currentMonth]);
 
@@ -182,12 +180,12 @@ const CashAdvanceReport: React.FC = () => {
   
   if (selectedDate) {
       for (const [wNum, days] of Object.entries(currentMonthWeeks)) {
-          // FIX: Added explicit cast for `days` to ensure `some` method is available.
-          const match = (days as Date[]).some(d => {
+          // FIX: Removed unnecessary cast as `days` is now correctly typed as Date[].
+          const match = days.some(d => {
               const yearStr = d.getFullYear();
               const m = String(d.getMonth() + 1).padStart(2, '0');
               const dayStr = String(d.getDate()).padStart(2, '0');
-              return `${yearStr}-${m}-${dStr}` === selectedDate;
+              return `${yearStr}-${m}-${dayStr}` === selectedDate;
           });
           if (match) {
               activeWeekNum = wNum;

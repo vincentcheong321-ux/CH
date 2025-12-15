@@ -174,7 +174,8 @@ const DrawReport: React.FC = () => {
       }
   };
 
-  const calculateTotal = () => {
+  // FIX: Added explicit return type to ensure `total` is a number.
+  const calculateTotal = (): number => {
       return Object.values(clientBalances).reduce((acc, val) => {
           const num = parseFloat(val);
           return acc + (isNaN(num) ? 0 : num);
@@ -204,8 +205,8 @@ const DrawReport: React.FC = () => {
   };
 
   // --- Week Grouping Logic ---
-  // FIX: Added explicit type for useMemo to ensure correct type inference downstream.
-  const currentMonthWeeks: Record<number, Date[]> = useMemo(() => {
+  // FIX: Switched to explicitly providing a generic type for useMemo to ensure correct type inference downstream.
+  const currentMonthWeeks = useMemo<Record<number, Date[]>>(() => {
       return getWeeksForMonth(currentYear, currentMonth);
   }, [currentYear, currentMonth]);
 
@@ -215,8 +216,8 @@ const DrawReport: React.FC = () => {
   if (selectedDate) {
       for (const [wNum, days] of Object.entries(currentMonthWeeks)) {
           // Check if selectedDate matches any day in this week
-          // FIX: Added explicit cast for `days` to ensure `some` method is available.
-          const match = (days as Date[]).some(d => {
+          // FIX: Removed unnecessary cast as `days` is now correctly typed as Date[].
+          const match = days.some(d => {
               const yearStr = d.getFullYear();
               const m = String(d.getMonth() + 1).padStart(2, '0');
               const dayStr = String(d.getDate()).padStart(2, '0');
