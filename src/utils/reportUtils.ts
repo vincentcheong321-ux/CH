@@ -13,8 +13,8 @@ const getDaysInMonth = (year: number, monthIndex: number) => {
 
 /**
  * Generates weeks for a given month/year.
- * It starts from the 1st of the month.
- * It ensures the last week of the month extends to Sunday, even if it crosses into the next month.
+ * It ensures weeks are always full 7-day cycles (Sunday to Saturday).
+ * Week 1 is the week that contains the 1st of the month.
  * 
  * Returns: { 1: [Date, Date...], 2: [Date...] }
  */
@@ -23,51 +23,30 @@ export const getWeeksForMonth = (year: number, monthIndex: number): Record<numbe
     const firstDayOfMonth = new Date(year, monthIndex, 1);
     const lastDayOfMonth = new Date(year, monthIndex + 1, 0);
     
-    let currentWeek = 1;
-    // Clone to avoid mutation issues
-    let currentDate = new Date(firstDayOfMonth);
+    // Backtrack to the Sunday of the week containing the 1st
+    // getDay() returns 0 for Sunday, 1 for Monday, etc.
+    const startDayOfWeek = firstDayOfMonth.getDay(); 
+    const startDate = new Date(firstDayOfMonth);
+    startDate.setDate(firstDayOfMonth.getDate() - startDayOfWeek);
 
-    // 1. Iterate through the current month
+    let currentWeekNum = 1;
+    let currentDate = new Date(startDate);
+
+    // Iterate until the start of the week is beyond the last day of the month
+    // We include any week that starts on or before the last day of the month.
+    // This ensures we cover all days in the current month.
     while (currentDate <= lastDayOfMonth) {
-        if (!weeks[currentWeek]) {
-            weeks[currentWeek] = [];
+        const weekDays: Date[] = [];
+        
+        // Build a full 7-day week
+        for (let i = 0; i < 7; i++) {
+            weekDays.push(new Date(currentDate));
+            currentDate.setDate(currentDate.getDate() + 1);
         }
         
-        weeks[currentWeek].push(new Date(currentDate));
-        
-        const dayOfWeek = currentDate.getDay(); // 0 is Sunday
-        
-        // If Sunday, move to next week (unless it's the very last day of iteration, handled by loop)
-        if (dayOfWeek === 0) {
-            currentWeek++;
-        }
-        
-        // Advance 1 day
-        currentDate.setDate(currentDate.getDate() + 1);
-    }
-
-    // 2. Handle Overflow: If the last populated week didn't end on a Sunday, extend it into next month.
-    const weekKeys = Object.keys(weeks).map(Number).sort((a,b) => a-b);
-    if (weekKeys.length > 0) {
-        const lastWeekKey = weekKeys[weekKeys.length - 1];
-        const lastWeekDays = weeks[lastWeekKey];
-        
-        // Check the last day in the week
-        if (lastWeekDays.length > 0) {
-            const lastDate = lastWeekDays[lastWeekDays.length - 1];
-            
-            if (lastDate.getDay() !== 0) {
-                // It's not Sunday, so keep adding days until we hit Sunday
-                const nextDate = new Date(lastDate);
-                nextDate.setDate(nextDate.getDate() + 1);
-                
-                while (true) {
-                    lastWeekDays.push(new Date(nextDate));
-                    if (nextDate.getDay() === 0) break; // Stop after adding Sunday
-                    nextDate.setDate(nextDate.getDate() + 1);
-                }
-            }
-        }
+        weeks[currentWeekNum] = weekDays;
+        currentWeekNum++;
+        // currentDate is now at the start of the next week
     }
     
     return weeks;
