@@ -1,5 +1,5 @@
 
-import React, a { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Search, User, Trash2, AlertTriangle, CheckSquare, Square, Printer, ArrowLeft, ChevronLeft, ChevronRight, Hash, Phone } from 'lucide-react';
 import { getClients, saveClient, deleteClient, getLedgerRecords, getNetAmount, fetchClientTotalBalance } from '../services/storageService';
