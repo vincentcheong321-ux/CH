@@ -1,8 +1,8 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, a { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Search, User, Trash2, AlertTriangle, CheckSquare, Square, Printer, ArrowLeft, ChevronLeft, ChevronRight, Hash, Phone } from 'lucide-react';
-import { getClients, saveClient, deleteClient, getLedgerRecords, getNetAmount } from '../services/storageService';
+import { getClients, saveClient, deleteClient, getLedgerRecords, getNetAmount, fetchClientTotalBalance } from '../services/storageService';
 import { Client, LedgerRecord } from '../types';
 import { MONTH_NAMES, getWeeksForMonth, getWeekRangeString } from '../utils/reportUtils';
 
@@ -31,22 +31,6 @@ const ClientList: React.FC = () => {
   // Calculate Week Dates
   const weeksData = useMemo<Record<number, Date[]>>(() => getWeeksForMonth(currentYear, currentMonth), [currentYear, currentMonth]);
   
-  const { selectedWeekStartDate, selectedWeekEndDate } = useMemo(() => {
-      const days = weeksData[selectedWeekNum];
-      if (!days || days.length === 0) return { selectedWeekStartDate: undefined, selectedWeekEndDate: undefined };
-      
-      const lastDay = days[days.length - 1];
-      const endDateStr = `${lastDay.getFullYear()}-${String(lastDay.getMonth()+1).padStart(2,'0')}-${String(lastDay.getDate()).padStart(2,'0')}`;
-
-      const firstDay = days[0];
-      const startDateStr = `${firstDay.getFullYear()}-${String(firstDay.getMonth()+1).padStart(2,'0')}-${String(firstDay.getDate()).padStart(2,'0')}`;
-
-      return {
-          selectedWeekStartDate: startDateStr,
-          selectedWeekEndDate: endDateStr
-      };
-  }, [weeksData, selectedWeekNum]);
-
   useEffect(() => {
     // Initialize date defaults
     const now = new Date();
@@ -146,7 +130,6 @@ const ClientList: React.FC = () => {
   );
 
   // Grid Card Component
-  // FIX: Changed component definition to use React.FC to correctly handle React's special 'key' prop.
   const ClientCard: React.FC<{ client: Client }> = ({ client }) => {
     const isSelected = selectedClientIds.has(client.id);
     
@@ -251,6 +234,16 @@ const ClientList: React.FC = () => {
   const BulkLedgerSheet: React.FC<{ client: Client }> = ({ client }) => {
       const [allRecords, setAllRecords] = useState<LedgerRecord[]>([]);
       const [isReady, setIsReady] = useState(false);
+      
+      const { selectedWeekStartDate, selectedWeekEndDate } = useMemo(() => {
+          const days = weeksData[selectedWeekNum];
+          if (!days || days.length === 0) return { selectedWeekStartDate: undefined, selectedWeekEndDate: undefined };
+          const lastDay = days[days.length - 1];
+          const endDateStr = `${lastDay.getFullYear()}-${String(lastDay.getMonth()+1).padStart(2,'0')}-${String(lastDay.getDate()).padStart(2,'0')}`;
+          const firstDay = days[0];
+          const startDateStr = `${firstDay.getFullYear()}-${String(firstDay.getMonth()+1).padStart(2,'0')}-${String(firstDay.getDate()).padStart(2,'0')}`;
+          return { selectedWeekStartDate: startDateStr, selectedWeekEndDate: endDateStr };
+      }, [weeksData, selectedWeekNum]);
 
       useEffect(() => {
           const fetchRecords = async () => {

@@ -126,7 +126,7 @@ const ClientLedger: React.FC = () => {
     }
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [id, location.state]);
 
   const loadRecords = async () => {
     if (id) {

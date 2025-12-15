@@ -144,11 +144,9 @@ const CashCredit: React.FC = () => {
   }, [selectedDate]);
 
   const calculateTotal = (): number => {
-    // FIX: Defensively cast `val` to a string before parsing. This handles cases where
-    // the type might be inferred as `unknown` within the reduce callback.
-    // FIX: Explicitly type accumulator and value to avoid `unknown` type inference issues.
-    return Object.values(cashCredits).reduce((acc: number, val: any) => {
-        const num = parseFloat(String(val));
+    // FIX: Explicitly typing the reduce callback parameters to resolve type inference error.
+    return Object.values(cashCredits).reduce((acc: number, val: string) => {
+        const num = parseFloat(val);
         return acc + (isNaN(num) ? 0 : num);
     }, 0);
   };

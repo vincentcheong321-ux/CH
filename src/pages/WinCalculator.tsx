@@ -6,18 +6,17 @@ import { getClients, saveLedgerRecord } from '../services/storageService';
 import { Client } from '../types';
 
 type GameMode = '4D' | '3D';
-type PrizePosition = '1' | '2' | '3' | 'S' | 'C'; // 1st, 2nd, 3rd, Starter, Console
+type PrizePosition = '1' | '2' | '3' | 'S' | 'C';
 
 interface WinningEntry {
   id: string;
   number: string;
   mode: GameMode;
   position: PrizePosition;
-  positionLabel: string;
-  betBig: number;
-  betSmall: number;
-  betA: number;
-  betABC: number;
+  positionLabel: string; // Chinese char
+  sides: string[]; // ['M', 'K', 'T']
+  betType: 'Big' | 'Small' | '3A' | '3ABC';
+  betAmount: number;
   winAmount: number;
 }
 
@@ -28,26 +27,26 @@ const PAYOUTS_4D = {
 
 const PAYOUTS_3D = { '3A': 720, '3ABC': 240 };
 
-const PRIZE_LABELS: Record<PrizePosition, string> = {
-    '1': '1st Prize', '2': '2nd Prize', '3': '3rd Prize', 'S': 'Starter', 'C': 'Consolation'
+const PRIZE_LABELS_CHINESE: Record<PrizePosition, string> = {
+    '1': '头', '2': '二', '3': '三', 'S': '入', 'C': '安'
 };
 
 const WinCalculator: React.FC = () => {
     const navigate = useNavigate();
     
-    // Form State for new entry
+    // Form State
     const [mode, setMode] = useState<GameMode>('4D');
     const [winningNumber, setWinningNumber] = useState('');
     const [position, setPosition] = useState<PrizePosition>('1');
+    const [sides, setSides] = useState<string[]>([]);
     const [betBig, setBetBig] = useState('');
     const [betSmall, setBetSmall] = useState('');
     const [betA, setBetA] = useState('');
     const [betABC, setBetABC] = useState('');
 
-    // List of all added entries
     const [entries, setEntries] = useState<WinningEntry[]>([]);
     
-    // Client selection for saving
+    // Client selection
     const [clients, setClients] = useState<Client[]>([]);
     const [selectedClientId, setSelectedClientId] = useState('');
     const [isSaving, setIsSaving] = useState(false);
@@ -61,43 +60,73 @@ const WinCalculator: React.FC = () => {
         fetchClients();
     }, []);
 
-    const calculateWin = (currentMode: GameMode, currentPosition: PrizePosition, bB: string, bS: string, bA: string, bABC: string): number => {
-        let total = 0;
-        if (currentMode === '4D') {
-            const bigAmt = parseFloat(bB) || 0;
-            const smallAmt = parseFloat(bS) || 0;
-            total += (bigAmt * PAYOUTS_4D.BIG[currentPosition]);
-            total += (smallAmt * PAYOUTS_4D.SMALL[currentPosition]);
-        } else {
-            const aAmt = parseFloat(bA) || 0;
-            const abcAmt = parseFloat(bABC) || 0;
-            if (currentPosition === '1') total += (aAmt * PAYOUTS_3D['3A']);
-            if (['1', '2', '3'].includes(currentPosition)) total += (abcAmt * PAYOUTS_3D['3ABC']);
-        }
-        return total;
+    // FIX: Corrected variable 's' to 'side' in the array spread.
+    const handleSideToggle = (side: string) => {
+        setSides(prev => 
+            prev.includes(side) ? prev.filter(s => s !== side) : [...prev, side].sort()
+        );
     };
 
     const handleAddEntry = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!winningNumber) return;
+        if (!winningNumber || sides.length === 0) return;
 
-        const winAmount = calculateWin(mode, position, betBig, betSmall, betA, betABC);
-        if (winAmount <= 0) return;
+        const newEntries: WinningEntry[] = [];
+        
+        if (mode === '4D') {
+            const bigAmt = parseFloat(betBig) || 0;
+            const smallAmt = parseFloat(betSmall) || 0;
 
-        const newEntry: WinningEntry = {
-            id: new Date().toISOString() + Math.random(),
-            number: winningNumber,
-            mode,
-            position,
-            positionLabel: PRIZE_LABELS[position],
-            betBig: parseFloat(betBig) || 0,
-            betSmall: parseFloat(betSmall) || 0,
-            betA: parseFloat(betA) || 0,
-            betABC: parseFloat(betABC) || 0,
-            winAmount
-        };
-        setEntries(prev => [newEntry, ...prev]);
-        handleResetForm();
+            if (bigAmt > 0) {
+                const winAmount = bigAmt * PAYOUTS_4D.BIG[position];
+                if (winAmount > 0) {
+                    newEntries.push({
+                        id: Date.now() + 'b', number: winningNumber, mode, position, sides,
+                        positionLabel: PRIZE_LABELS_CHINESE[position], betType: 'Big',
+                        betAmount: bigAmt, winAmount
+                    });
+                }
+            }
+            if (smallAmt > 0) {
+                const winAmount = smallAmt * PAYOUTS_4D.SMALL[position];
+                if (winAmount > 0) {
+                    newEntries.push({
+                        id: Date.now() + 's', number: winningNumber, mode, position, sides,
+                        positionLabel: PRIZE_LABELS_CHINESE[position], betType: 'Small',
+                        betAmount: smallAmt, winAmount
+                    });
+                }
+            }
+        } else { // 3D mode
+            const aAmt = parseFloat(betA) || 0;
+            const abcAmt = parseFloat(betABC) || 0;
+
+            if (aAmt > 0 && position === '1') {
+                const winAmount = aAmt * PAYOUTS_3D['3A'];
+                if(winAmount > 0) {
+                    newEntries.push({
+                        id: Date.now() + 'a', number: winningNumber, mode, position, sides,
+                        positionLabel: PRIZE_LABELS_CHINESE[position], betType: '3A',
+                        betAmount: aAmt, winAmount
+                    });
+                }
+            }
+            if (abcAmt > 0 && ['1', '2', '3'].includes(position)) {
+                const winAmount = abcAmt * PAYOUTS_3D['3ABC'];
+                if(winAmount > 0) {
+                     newEntries.push({
+                        id: Date.now() + 'abc', number: winningNumber, mode, position, sides,
+                        positionLabel: PRIZE_LABELS_CHINESE[position], betType: '3ABC',
+                        betAmount: abcAmt, winAmount
+                    });
+                }
+            }
+        }
+
+        if (newEntries.length > 0) {
+            setEntries(prev => [...newEntries, ...prev]);
+            handleResetForm();
+        }
     };
 
     const handleDeleteEntry = (id: string) => {
@@ -110,6 +139,7 @@ const WinCalculator: React.FC = () => {
         setBetSmall('');
         setBetA('');
         setBetABC('');
+        setSides([]);
     };
     
     const handleClearAll = () => {
@@ -123,7 +153,9 @@ const WinCalculator: React.FC = () => {
         if (!selectedClientId || entries.length === 0) return;
         
         setIsSaving(true);
-        const description = entries.map(e => `${e.number} (${e.positionLabel}) = ${e.winAmount.toFixed(2)}`).join('; ');
+        const description = entries
+            .map(e => `${e.sides.join('')} ${e.number}-${e.betAmount}-${e.winAmount.toFixed(0)} ${e.positionLabel}`)
+            .join('; ');
 
         await saveLedgerRecord({
             clientId: selectedClientId,
@@ -131,8 +163,8 @@ const WinCalculator: React.FC = () => {
             description: `Winnings: ${description}`,
             typeLabel: '中',
             amount: totalWinnings,
-            operation: 'subtract', // Company Payout
-            column: 'main',
+            operation: 'subtract', // Company Payout is a subtraction from client's debt
+            column: 'col1', // Save to Panel 1
             isVisible: true
         });
 
@@ -167,6 +199,20 @@ const WinCalculator: React.FC = () => {
 
                     <div className="p-6 space-y-6">
                         <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Sides (M/K/T)</label>
+                            <div className="grid grid-cols-3 gap-2">
+                                {['M', 'K', 'T'].map(side => (
+                                    <button
+                                        type="button" key={side} onClick={() => handleSideToggle(side)}
+                                        className={`py-2 rounded-lg border-2 font-bold transition-all text-sm ${sides.includes(side) ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-gray-200 bg-white'}`}
+                                    >
+                                        {side}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div>
                             <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Winning Number</label>
                             <input type="text" value={winningNumber} onChange={(e) => setWinningNumber(e.target.value.replace(/\D/g,'').slice(0, mode === '4D' ? 4 : 3))} className="w-full text-center text-3xl font-mono tracking-widest font-bold border-2 border-gray-200 rounded-xl py-2 focus:outline-none focus:border-blue-500 transition-all" placeholder={mode === '4D' ? '8888' : '888'} required />
                         </div>
@@ -174,12 +220,12 @@ const WinCalculator: React.FC = () => {
                         <div>
                             <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Winning Position</label>
                             <div className="grid grid-cols-3 gap-2">
-                                <button type="button" onClick={() => setPosition('1')} className={`py-2 rounded-lg border-2 font-bold transition-all text-xs ${position === '1' ? 'border-yellow-500 bg-yellow-50' : 'border-gray-100'}`}>1st Prize</button>
-                                <button type="button" onClick={() => setPosition('2')} className={`py-2 rounded-lg border-2 font-bold transition-all text-xs ${position === '2' ? 'border-gray-400 bg-gray-50' : 'border-gray-100'}`}>2nd Prize</button>
-                                <button type="button" onClick={() => setPosition('3')} className={`py-2 rounded-lg border-2 font-bold transition-all text-xs ${position === '3' ? 'border-orange-400 bg-orange-50' : 'border-gray-100'}`}>3rd Prize</button>
+                                <button type="button" onClick={() => setPosition('1')} className={`py-2 rounded-lg border-2 font-bold transition-all text-xs ${position === '1' ? 'border-yellow-500 bg-yellow-50' : 'border-gray-200 bg-white'}`}>{PRIZE_LABELS_CHINESE['1']}</button>
+                                <button type="button" onClick={() => setPosition('2')} className={`py-2 rounded-lg border-2 font-bold transition-all text-xs ${position === '2' ? 'border-gray-400 bg-gray-50' : 'border-gray-200 bg-white'}`}>{PRIZE_LABELS_CHINESE['2']}</button>
+                                <button type="button" onClick={() => setPosition('3')} className={`py-2 rounded-lg border-2 font-bold transition-all text-xs ${position === '3' ? 'border-orange-400 bg-orange-50' : 'border-gray-200 bg-white'}`}>{PRIZE_LABELS_CHINESE['3']}</button>
                                 {mode === '4D' && <>
-                                    <button type="button" onClick={() => setPosition('S')} className={`py-2 rounded-lg border-2 font-bold transition-all text-xs ${position === 'S' ? 'border-blue-500 bg-blue-50' : 'border-gray-100'}`}>Starter</button>
-                                    <button type="button" onClick={() => setPosition('C')} className={`col-span-2 py-2 rounded-lg border-2 font-bold transition-all text-xs ${position === 'C' ? 'border-blue-500 bg-blue-50' : 'border-gray-100'}`}>Consolation</button>
+                                    <button type="button" onClick={() => setPosition('S')} className={`py-2 rounded-lg border-2 font-bold transition-all text-xs ${position === 'S' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white'}`}>{PRIZE_LABELS_CHINESE['S']}</button>
+                                    <button type="button" onClick={() => setPosition('C')} className={`col-span-2 py-2 rounded-lg border-2 font-bold transition-all text-xs ${position === 'C' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white'}`}>{PRIZE_LABELS_CHINESE['C']}</button>
                                 </>}
                             </div>
                         </div>
@@ -226,9 +272,11 @@ const WinCalculator: React.FC = () => {
                                     <div className="flex items-center space-x-4">
                                         <span className="font-mono font-bold text-lg text-blue-600 bg-white px-2 py-1 rounded border border-gray-200">{entry.number}</span>
                                         <div>
-                                            <p className="font-semibold text-gray-800">{entry.positionLabel}</p>
+                                            <p className="font-semibold text-gray-800">
+                                                <span className="font-bold text-indigo-600">{entry.sides.join('')}</span> - {entry.positionLabel}
+                                            </p>
                                             <p className="text-xs text-gray-500">
-                                                {entry.mode === '4D' ? `Big: ${entry.betBig}, Small: ${entry.betSmall}` : `3A: ${entry.betA}, 3ABC: ${entry.betABC}`}
+                                                Bet on <span className="font-bold">{entry.betType}</span>: ${entry.betAmount}
                                             </p>
                                         </div>
                                     </div>
