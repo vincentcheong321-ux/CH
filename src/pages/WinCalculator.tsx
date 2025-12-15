@@ -345,7 +345,7 @@ const WinCalculator: React.FC = () => {
                         await saveLedgerRecord({
                             clientId,
                             date: selectedDate,
-                            description: 'Weekly Win Adjustment',
+                            description: '中', // Updated description
                             typeLabel: '中',
                             amount: Math.abs(diff),
                             operation: op, 
