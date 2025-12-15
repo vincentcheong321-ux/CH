@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, Link, useLocation } from 'react-router-dom';
-import { ArrowLeft, Printer, Trash2, Plus, Minus, Pencil, X, Check, AlertTriangle, ExternalLink, GripHorizontal, Hash, Zap, Download, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { ArrowLeft, Printer, Trash2, Plus, Minus, Pencil, X, Check, AlertTriangle, ExternalLink, GripHorizontal, Hash, Zap, Download, ChevronLeft, ChevronRight, Calendar, Trophy, Medal } from 'lucide-react';
 // @ts-ignore
 import html2canvas from 'html2canvas';
 import { 
@@ -23,16 +23,85 @@ type LedgerColumn = 'main' | 'col1' | 'col2';
 
 // Helper for sorting by system-defined order
 const getRecordSortPriority = (record: LedgerRecord): number => {
-    // 上欠 (Draw Report or manual balance forward)
     if (record.id.startsWith('draw_') || record.typeLabel === '上欠') return 1;
-    // 收 (Sales Opening, including aggregated view)
     if (record.id.startsWith('sale_') || record.id === 'agg_sale_week') return 2;
-    // 来 (Cash Credit)
     if (record.id.startsWith('cred_')) return 3;
-    // 支 (Cash Advance)
     if (record.id.startsWith('adv_')) return 4;
-    // Manual entries
     return 5;
+};
+
+// --- Position Badge Component ---
+const PositionBadge = ({ label }: { label: string }) => {
+    let colorClass = 'bg-gray-100 text-gray-600';
+    let text = label;
+
+    if (label.includes('头')) { colorClass = 'bg-yellow-100 text-yellow-700 border border-yellow-300'; text = '头'; }
+    else if (label.includes('二')) { colorClass = 'bg-slate-100 text-slate-700 border border-slate-300'; text = '二'; }
+    else if (label.includes('三')) { colorClass = 'bg-orange-100 text-orange-700 border border-orange-300'; text = '三'; }
+    else if (label.includes('入')) { colorClass = 'bg-blue-100 text-blue-700 border border-blue-300'; text = '入'; }
+    else if (label.includes('安')) { colorClass = 'bg-green-100 text-green-700 border border-green-300'; text = '安'; }
+
+    return (
+        <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${colorClass} shadow-sm ml-2`}>
+            {text}
+        </span>
+    );
+};
+
+// --- Winning Breakdown Component ---
+interface WinningBreakdownProps {
+    description: string;
+    totalAmount: number;
+    recordId: string;
+    onDelete: () => void;
+    onEdit: () => void;
+}
+
+const WinningBreakdown: React.FC<WinningBreakdownProps> = ({ description, totalAmount, recordId, onDelete, onEdit }) => {
+    // Parse format: "Winnings: KMT 1234-10-2500 头; ..."
+    const rawContent = description.replace(/^Winnings:\s*/i, '');
+    const entries = rawContent.split(';').map(s => s.trim()).filter(s => s);
+
+    return (
+        <div className="w-full bg-white rounded-lg border border-gray-200 p-2 shadow-sm relative group mb-2 hover:border-blue-300 transition-colors">
+             {/* Edit/Delete Actions (Absolute) */}
+             <div className="no-print opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1 absolute -top-2 -right-2 z-20 bg-white shadow-md rounded-full border border-gray-100 p-1">
+                <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-full"><Pencil size={12} /></button>
+                <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1.5 text-red-600 hover:bg-red-50 rounded-full"><Trash2 size={12} /></button>
+            </div>
+
+            <div className="space-y-1">
+                {entries.map((entry, idx) => {
+                    // Expected: "MKT 5990-6-2200 头"
+                    // Regex to split strictly
+                    // Parts: [Sides] [Number]-[Bet]-[Win] [Position]
+                    const parts = entry.match(/^([A-Z]+)\s+(\d+)-([\d.]+)-([\d.]+)\s+(.+)$/);
+                    
+                    if (parts) {
+                        const [_, sides, number, bet, win, pos] = parts;
+                        return (
+                            <div key={idx} className="flex items-center justify-between text-sm leading-tight border-b border-gray-50 last:border-0 pb-1 last:pb-0">
+                                <div className="flex items-center space-x-2">
+                                    <span className="font-bold text-gray-700 font-mono tracking-tighter text-xs">{sides}</span>
+                                    <span className="font-bold text-gray-900 font-mono text-base">{number}</span>
+                                </div>
+                                <div className="flex items-center">
+                                    <span className="text-gray-400 text-xs mr-1">{bet}-</span>
+                                    <span className="font-bold text-gray-800 font-mono">{Number(win).toLocaleString()}</span>
+                                    <PositionBadge label={pos} />
+                                </div>
+                            </div>
+                        );
+                    }
+                    // Fallback for non-standard formats
+                    return <div key={idx} className="text-xs text-gray-500">{entry}</div>;
+                })}
+            </div>
+            <div className="mt-2 pt-1 border-t border-gray-100 text-right">
+                <span className="text-lg font-mono font-bold text-red-600">{totalAmount.toLocaleString()}</span>
+            </div>
+        </div>
+    );
 };
 
 const ClientLedger: React.FC = () => {
@@ -94,26 +163,20 @@ const ClientLedger: React.FC = () => {
     };
     fetchData();
     
-    // Check if passed state from ClientList exists
     if (location.state && typeof (location.state as any).year === 'number') {
         const s = location.state as any;
         setCurrentYear(s.year);
         setCurrentMonth(s.month);
         setSelectedWeekNum(s.week);
     } else {
-        // Fallback: Auto-select current week
         const now = new Date();
         let y = now.getFullYear();
         if(y < 2025) y = 2025;
         if(y > 2026) y = 2026;
         setCurrentYear(y);
-
         const m = now.getMonth();
         setCurrentMonth(m);
-        
         const weeks = getWeeksForMonth(y, m);
-        
-        // Find week key that contains today's date string
         const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
         const foundWeek = Object.keys(weeks).find(w => {
             return weeks[parseInt(w)].some(d => {
@@ -121,16 +184,14 @@ const ClientLedger: React.FC = () => {
                 return dStr === todayStr;
             });
         });
-
         if(foundWeek) setSelectedWeekNum(parseInt(foundWeek));
     }
-
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, location.state]);
 
   const loadRecords = async () => {
     if (id) {
-      const recs = await getLedgerRecords(id); // This is now pre-sorted from storageService
+      const recs = await getLedgerRecords(id); 
       setAllRecords(recs);
     }
   };
@@ -149,29 +210,19 @@ const ClientLedger: React.FC = () => {
 
   const { weekRecords, weekTotal } = useMemo(() => {
     if (activeDateStrings.length === 0) return { weekRecords: [], weekTotal: 0 };
-    
-    // 1. Get all records for current week range
     const current = allRecords.filter(r => activeDateStrings.includes(r.date));
-    
-    // 2. Separate 'Sales Opening' records (id starts with 'sale_') from others
     const salesRecords = current.filter(r => r.id.startsWith('sale_'));
     const otherRecords = current.filter(r => !r.id.startsWith('sale_'));
-
     let finalRecords = [...otherRecords];
 
-    // 3. Aggregate Sales Records if any exist
     if (salesRecords.length > 0) {
-        // Calculation logic now safely handled by `getNetAmount` which relies on `storageService` logic
         const totalSalesNet = salesRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
-        
-        // Use the latest date from sales records for chronological sorting
         const latestDate = salesRecords.reduce((max, r) => r.date > max ? r.date : max, salesRecords[0].date);
-
         const aggregatedSale: LedgerRecord = {
-            id: 'agg_sale_week', // Virtual ID for display
+            id: 'agg_sale_week',
             clientId: id!,
             date: latestDate,
-            description: '', // Empty description so only '收' shows (Removed "Sales Opening")
+            description: '',
             typeLabel: '收',
             amount: Math.abs(totalSalesNet),
             operation: totalSalesNet >= 0 ? 'add' : 'subtract',
@@ -181,16 +232,13 @@ const ClientLedger: React.FC = () => {
         finalRecords.push(aggregatedSale);
     }
 
-    // 4. Sort aggregated list chronologically (respecting type priority)
     finalRecords.sort((a, b) => {
         if (a.date < b.date) return -1;
         if (a.date > b.date) return 1;
         return getRecordSortPriority(a) - getRecordSortPriority(b);
     });
 
-    // 5. Calculate total (should be same as summing all original 'current' records)
     const weekChange = current.reduce((acc, r) => acc + getNetAmount(r), 0);
-    
     return { weekRecords: finalRecords, weekTotal: weekChange };
   }, [allRecords, activeDateStrings, id]);
 
@@ -247,7 +295,6 @@ const ClientLedger: React.FC = () => {
 
   const handleQuickEntry = () => {
       setActiveCategory({ id: 'quick', label: '', operation: 'add', color: 'bg-blue-600 text-white' });
-      // Default to Add if not explicitly set by user later
       setCurrentOperation('add');
       setAmount(''); setDescription(''); 
   };
@@ -265,7 +312,6 @@ const ClientLedger: React.FC = () => {
     }
 
     let op = activeCategory.label === '' ? currentOperation : activeCategory.operation;
-    // REMOVED: The forced 'none' check for Panel 1 Quick Entry to allow calculation if user desires.
 
     const newRecord: Omit<LedgerRecord, 'id'> = {
       clientId: id,
@@ -279,8 +325,6 @@ const ClientLedger: React.FC = () => {
     };
 
     const saved = await saveLedgerRecord(newRecord);
-    
-    // Optimistically update and re-sort to place new manual entry correctly
     setAllRecords(prev => {
         const newArray = [...prev, saved];
         newArray.sort((a, b) => {
@@ -349,9 +393,7 @@ const ClientLedger: React.FC = () => {
 
   const calculateColumn = (columnKey: LedgerColumn) => {
       const colRecords = weekRecords.filter(r => r.column === columnKey);
-      
       const processed = colRecords.map(r => ({ ...r, netChange: getNetAmount(r) }));
-      
       const visibleProcessed = processed.filter(r => r.isVisible);
       const finalBalance = visibleProcessed.reduce((acc, curr) => acc + curr.netChange, 0);
       return { processed, finalBalance };
@@ -361,8 +403,7 @@ const ClientLedger: React.FC = () => {
   const col1Ledger = useMemo(() => calculateColumn('col1'), [weekRecords]);
   const col2Ledger = useMemo(() => calculateColumn('col2'), [weekRecords]);
 
-  const LedgerColumnView = ({ data, footerLabel = "收" }: { data: ReturnType<typeof calculateColumn>, footerLabel?: string }) => {
-      // Empty state handler
+  const LedgerColumnView = ({ data, footerLabel = "收", isPanel1 = false }: { data: ReturnType<typeof calculateColumn>, footerLabel?: string, isPanel1?: boolean }) => {
       if (data.processed.length === 0) return <div className="flex-1 min-h-[50px]" />;
 
       const isNegative = data.finalBalance < 0;
@@ -373,26 +414,32 @@ const ClientLedger: React.FC = () => {
       <div className="flex flex-col items-center w-full">
           <div className="flex flex-col w-full md:w-fit items-end">
                 {data.processed.map((r) => {
+                    // Check for Winnings Record (Panel 1 Special Display)
+                    if (isPanel1 && r.description && r.description.startsWith('Winnings:')) {
+                        return (
+                            <WinningBreakdown 
+                                key={r.id} 
+                                description={r.description} 
+                                totalAmount={r.amount}
+                                recordId={r.id}
+                                onDelete={() => requestDeleteRecord(r.id)}
+                                onEdit={() => setEditingRecord(r)}
+                            />
+                        );
+                    }
+
                     const isReflected = r.id.startsWith('sale_') || r.id.startsWith('adv_') || r.id.startsWith('draw_') || r.id === 'agg_sale_week' || r.id.startsWith('cred_');
-                    
                     const isNetNegative = r.operation !== 'none' && r.netChange < 0;
                     const absValue = Math.abs(r.operation === 'none' ? r.amount : r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2});
-                    
-                    // BRACKET LOGIC: Only apply to '收' entries if they are negative.
                     const useBrackets = isNetNegative && (r.typeLabel === '收' || r.id === 'agg_sale_week');
                     const displayValue = useBrackets ? `(${absValue})` : absValue;
                     
                     let textColor = 'text-gray-600';
-                    if (r.operation === 'add') {
-                        // FORCE RED if net negative, even if op is 'add'
-                        textColor = isNetNegative ? 'text-red-700' : 'text-green-700';
-                    } else if (r.operation === 'subtract') {
-                        textColor = 'text-red-700';
-                    }
+                    if (r.operation === 'add') textColor = isNetNegative ? 'text-red-700' : 'text-green-700';
+                    else if (r.operation === 'subtract') textColor = 'text-red-700';
 
                     return (
                         <div key={r.id} className={`group flex justify-between md:justify-end items-center leading-none relative gap-1 md:gap-1.5 w-full md:w-auto py-1 ${!r.isVisible ? 'opacity-30 grayscale no-print' : ''}`}>
-                            {/* Disable Edit/Delete for Reflected Records */}
                             {!isReflected && (
                                 <div className="no-print opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1 absolute -left-16 z-10 bg-white shadow-sm rounded border border-gray-100 p-1">
                                     <button onClick={() => setEditingRecord(r)} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Pencil size={12} /></button>
@@ -400,7 +447,6 @@ const ClientLedger: React.FC = () => {
                                 </div>
                             )}
                             <div className={`text-sm md:text-lg font-bold uppercase tracking-wide text-gray-700 w-1/3 md:w-auto text-left md:text-right`}>{r.typeLabel}</div>
-                            {/* Note Text Size Increased */}
                             <div className="flex-1 text-right">
                                 {r.description && <div className="text-sm md:text-base text-gray-700 font-medium mr-1 md:mr-2 truncate inline-block">{r.description}</div>}
                             </div>
@@ -411,14 +457,18 @@ const ClientLedger: React.FC = () => {
                     );
                 })}
           </div>
-          <div className="mt-2 pt-2 flex flex-col items-end w-full md:w-fit border-t-2 border-gray-900">
-                <div className="flex items-center gap-2 justify-between w-full md:justify-end">
-                    <span className="text-sm md:text-lg font-bold text-gray-900 uppercase">{displayLabel}</span>
-                    <span className={`text-lg md:text-2xl font-mono font-bold w-auto md:w-32 text-right ${data.finalBalance >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
-                        {data.finalBalance < 0 ? `(${Math.abs(data.finalBalance).toLocaleString(undefined, {minimumFractionDigits: 2})})` : data.finalBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}
-                    </span>
-                </div>
-          </div>
+          
+          {/* Hide Total Footer if it is Panel 1 */}
+          {!isPanel1 && (
+              <div className="mt-2 pt-2 flex flex-col items-end w-full md:w-fit border-t-2 border-gray-900">
+                    <div className="flex items-center gap-2 justify-between w-full md:justify-end">
+                        <span className="text-sm md:text-lg font-bold text-gray-900 uppercase">{displayLabel}</span>
+                        <span className={`text-lg md:text-2xl font-mono font-bold w-auto md:w-32 text-right ${data.finalBalance >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
+                            {data.finalBalance < 0 ? `(${Math.abs(data.finalBalance).toLocaleString(undefined, {minimumFractionDigits: 2})})` : data.finalBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}
+                        </span>
+                    </div>
+              </div>
+          )}
       </div>
   )};
 
@@ -453,8 +503,6 @@ const ClientLedger: React.FC = () => {
   }, [sortedWeekKeys, selectedWeekNum]);
 
   if (!client) return <div className="p-8">Loading...</div>;
-
-  const totalOwed = col1Ledger.processed.length > 0 ? col1Ledger.finalBalance : mainLedger.finalBalance;
 
   return (
     <div className="bg-gray-100 min-h-screen pb-20">
@@ -582,7 +630,7 @@ const ClientLedger: React.FC = () => {
 
                         <div className="flex flex-col md:flex-row w-full min-h-[400px] relative" ref={containerRef}>
                             <div style={{ width: isMobile ? '100%' : `${colWidths[0]}%` }} className={`relative flex-col p-1 border-r border-transparent group overflow-hidden ${isMobile && activeColumn !== 'col1' ? 'hidden' : 'flex'}`}>
-                                <LedgerColumnView data={col1Ledger} footerLabel="收"/>
+                                <LedgerColumnView data={col1Ledger} footerLabel="收" isPanel1={true}/>
                                 <div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print" onMouseDown={(e) => startResize('col', 0, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div>
                             </div>
                             <div style={{ width: isMobile ? '100%' : `${colWidths[1]}%` }} className={`relative flex-col p-1 border-r border-transparent group overflow-hidden ${isMobile && activeColumn !== 'col2' ? 'hidden' : 'flex'}`}>
