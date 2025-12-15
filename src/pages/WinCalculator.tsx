@@ -79,17 +79,17 @@ const ClientWinInputRow = React.memo(({
     navState: any
 }) => {
     return (
-        <div className="flex items-center justify-between p-3 border-b border-gray-100 hover:bg-gray-50 transition-colors group relative">
-            <div className="flex items-center space-x-3 relative z-10">
+        <div className="flex items-center justify-between p-3 border-b border-gray-100 hover:bg-gray-50 transition-colors group">
+            <div className="flex items-center space-x-3">
                 <div className="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center text-red-600 font-bold text-xs">
                     {client.code.substring(0,2)}
                 </div>
                 <div>
-                    <Link to={`/clients/${client.id}`} state={navState} className="font-bold text-gray-800 hover:text-blue-600 transition-colors relative z-20 block">{client.name}</Link>
+                    <Link to={`/clients/${client.id}`} state={navState} className="font-bold text-gray-800 hover:text-blue-600 transition-colors">{client.name}</Link>
                     <div className="text-xs text-gray-500 font-mono">{client.code}</div>
                 </div>
             </div>
-            <div className="w-32 relative z-10">
+            <div className="w-32 relative">
                 <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-xs">$</span>
                 <input 
                     type="text" 
@@ -393,12 +393,7 @@ const WinCalculator: React.FC = () => {
                     
                     if (newVal !== oldVal) {
                         const diff = newVal - oldVal;
-                        // Manual adjust always reflects new total desired.
-                        // If new value > old value (positive diff), we need to SUBTRACT more (because winning is a subtract op).
-                        // But standard operation logic: 
-                        // To increase a red number, we add another red number ('subtract' op).
-                        // To decrease a red number, we add a green number ('add' op).
-                        const op = diff > 0 ? 'subtract' : 'add'; 
+                        const op = diff < 0 ? 'add' : 'subtract'; 
                         
                         await saveLedgerRecord({
                             clientId,
@@ -407,7 +402,7 @@ const WinCalculator: React.FC = () => {
                             typeLabel: '中',
                             amount: Math.abs(diff),
                             operation: op, 
-                            column: 'main', // Save to MAIN ledger as requested
+                            column: 'col1',
                             isVisible: true
                         });
                     }

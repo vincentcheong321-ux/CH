@@ -32,13 +32,13 @@ const Dashboard: React.FC = () => {
         const drawTotal = await getTotalDrawReceivables();
         const allDraws = await getAllDrawRecords();
 
-        // Calculate Ledger Balance correctly using Promise.all
-        const clientBalances = await Promise.all(clients.map(c => getClientBalance(c.id)));
-        const ledgerBalanceSum = clientBalances.reduce((sum, bal) => sum + bal, 0);
+        // Calculate Ledger Balance (Old method)
+        let ledgerBalanceSum = 0;
+        // clients.forEach(c => {
+        //     ledgerBalanceSum += getClientBalance(c.id);
+        // });
 
         // Combine Ledger Balances with Draw Report Balances
-        // Note: Depending on business logic, this might be additive or mutually exclusive.
-        // Assuming additive for "Total Receivables" snapshot.
         const totalReceivables = ledgerBalanceSum + drawTotal;
 
         const assetsIn = assets.filter(a => a.type === 'IN').reduce((acc, curr) => acc + curr.amount, 0);
