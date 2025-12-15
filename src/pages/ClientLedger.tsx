@@ -250,13 +250,15 @@ const ClientLedger: React.FC = () => {
     }
 
     // Sort by custom priority
+    // New Order: 上欠 -> 收 -> 电 -> 中 -> 来 -> 支 -> Manual
     const getPriority = (record: LedgerRecord): number => {
         if (record.id.startsWith('draw_') || record.typeLabel === '上欠') return 1;
-        if (record.id.startsWith('sale_') || record.id === 'agg_sale_week') return 2;
-        if (record.id.startsWith('cred_')) return 3;
-        if (record.id.startsWith('adv_')) return 4;
-        if (record.typeLabel === '中') return 6; // Winnings at the bottom
-        return 5;
+        if (record.id.startsWith('sale_') || record.id === 'agg_sale_week' || record.typeLabel === '收') return 2;
+        if (record.typeLabel === '电') return 3;
+        if (record.typeLabel === '中') return 4;
+        if (record.id.startsWith('cred_') || record.typeLabel === '来') return 5;
+        if (record.id.startsWith('adv_') || record.typeLabel === '支' || record.typeLabel === '支钱') return 6;
+        return 7;
     };
 
     finalRecords.sort((a, b) => {
