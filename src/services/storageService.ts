@@ -126,10 +126,17 @@ const mapJournalToLedgerRecord = (row: any): LedgerRecord => {
                 const s = Number(row.data.s) || 0;
                 const a = Number(row.data.a) || 0;
                 const c = Number(row.data.c) || 0;
-                const total = b + s + a + c; // FORCE SUM LOGIC
+                const rawTotal = b + s + a + c; // FORCE SUM LOGIC
                 
-                baseRecord.amount = Math.abs(total);
-                baseRecord.operation = total >= 0 ? 'add' : 'subtract';
+                // User Request: "tally with week total -14%"
+                // Apply 14% deduction ONLY for Paper Sales (records without mobileRaw data)
+                let finalTotal = rawTotal;
+                if (!row.data.mobileRaw && !row.data.mobileRawData) {
+                    finalTotal = rawTotal * 0.86;
+                }
+                
+                baseRecord.amount = Math.abs(finalTotal);
+                baseRecord.operation = finalTotal >= 0 ? 'add' : 'subtract';
             } else {
                 baseRecord.operation = row.amount >= 0 ? 'add' : 'subtract';
             }
