@@ -21,18 +21,61 @@ export const getCategories = (): TransactionCategory[] => {
     { id: '5', label: '上欠', operation: 'add', color: 'bg-green-100 text-green-800' },
     { id: '6', label: '%', operation: 'subtract', color: 'bg-red-100 text-red-800' },
     { id: '7', label: '来', operation: 'subtract', color: 'bg-red-100 text-red-800' },
-    { id: '8', label: '电', operation: 'subtract', color: 'bg-red-100 text-red-800' },
+    { id: '8', label: '电', operation: 'add', color: 'bg-green-100 text-green-800' },
   ];
 
   if (categories.length === 0) {
     categories = defaults;
     localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories));
   } else {
-      // Ensure '电' exists if migrating
-      if (!categories.find(c => c.label === '电')) {
-          categories.push({ id: generateId(), label: '电', operation: 'subtract', color: 'bg-red-100 text-red-800' });
-          localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories));
-      }
+    // Migration Logic: Fix colors and operations for existing categories
+    let updated = false;
+    
+    // Check for '上欠'
+    if (!categories.find(c => c.label === '上欠')) {
+        categories.push({ id: generateId(), label: '上欠', operation: 'add', color: 'bg-green-100 text-green-800' });
+        updated = true;
+    }
+
+    // Check for '%'
+    if (!categories.find(c => c.label === '%')) {
+        categories.push({ id: generateId(), label: '%', operation: 'subtract', color: 'bg-red-100 text-red-800' });
+        updated = true;
+    }
+
+    // Check for '来'
+    if (!categories.find(c => c.label === '来')) {
+        categories.push({ id: generateId(), label: '来', operation: 'subtract', color: 'bg-red-100 text-red-800' });
+        updated = true;
+    }
+
+    // Check for '电' - ensure it exists and is set to ADD (Green)
+    const dianIndex = categories.findIndex(c => c.label === '电');
+    if (dianIndex === -1) {
+        categories.push({ id: generateId(), label: '电', operation: 'add', color: 'bg-green-100 text-green-800' });
+        updated = true;
+    } else if (categories[dianIndex].operation !== 'add') {
+        // Fix existing '电' if it was set to subtract
+        categories[dianIndex] = { ...categories[dianIndex], operation: 'add', color: 'bg-green-100 text-green-800' };
+        updated = true;
+    }
+
+    // Standardize colors
+    categories = categories.map(c => {
+        if (c.operation === 'add' && c.color.includes('bg-blue-100')) {
+            updated = true;
+            return { ...c, color: 'bg-green-100 text-green-800' };
+        }
+        if (c.label === '出' && c.color.includes('bg-orange-100')) {
+            updated = true;
+            return { ...c, color: 'bg-red-100 text-red-800' };
+        }
+        return c;
+    });
+
+    if (updated) {
+        localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories));
+    }
   }
   return categories;
 };
