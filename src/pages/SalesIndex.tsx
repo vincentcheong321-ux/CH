@@ -1,14 +1,24 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, ChevronLeft, ChevronRight, Loader2, Calendar, Smartphone, FileText, DollarSign, RefreshCw, FileSpreadsheet } from 'lucide-react';
-import { getClients, getSalesForDates, saveSaleRecord } from '../services/storageService';
+import { Search, ChevronLeft, ChevronRight, Loader2, Calendar, Smartphone, FileText, DollarSign, RefreshCw, FileSpreadsheet, Zap, CheckCircle } from 'lucide-react';
+import { getClients, getSalesForDates, saveSaleRecord, getLedgerRecords, updateLedgerRecord, saveLedgerRecord } from '../services/storageService';
 import { Client, SaleRecord } from '../types';
 import { MONTH_NAMES, getWeeksForMonth } from '../utils/reportUtils';
 
 // Specific Display Codes
 const PAPER_Z_CODES = ['Z03', 'Z05', 'Z07', 'Z15', 'Z19', 'Z20'];
 const PAPER_C_CODES = ['C03', 'C04', 'C06', 'C09', 'C13', 'C15', 'C17'];
+
+// Mapping: Mobile Code -> Paper Code (Case Insensitive)
+// Duplicated here for direct access in regeneration logic
+const MOBILE_TO_PAPER_MAP: Record<string, string> = {
+    'sk3964': 'z07',  // SINGER -> 顺
+    'sk3818': 'z19',  // MOOI -> 妹
+    'sk3619': 'c13',  // ZHONG -> 中
+    'sk8959': 'c17',  // YEE -> 仪
+    'vc9486': '9486'  // vincent -> 张
+};
 
 // --- Helper: Composite Input for B/S or A/C ---
 const CompositeInput = React.memo(({ 
@@ -90,13 +100,6 @@ const DetailedMobileTableRow = React.memo(({
     const raw = record?.mobileRawData || [];
     
     const getVal = (idx: number) => raw[idx] || '';
-
-    // If array is shorter than expected, it might return empty strings, which is fine.
-    // Index mapping:
-    // 0: Member Bet
-    // 1-5: Company
-    // 6-11: Shareholder
-    // 12-16: Agent
 
     const fmt = (val: string | number) => {
         if (!val || val === '-') return '-';
@@ -262,6 +265,10 @@ const SalesIndex: React.FC = () => {
   
   // Tab state
   const [activeTab, setActiveTab] = useState<'paper' | 'mobile'>('paper');
+  
+  // Regeneration State
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [regenMessage, setRegenMessage] = useState<string | null>(null);
 
   // Initial Load: Set to "Today"
   useEffect(() => {
@@ -366,6 +373,82 @@ const SalesIndex: React.FC = () => {
       await saveSaleRecord(savePayload);
 
   }, [salesData]);
+
+  const handleRegenerateDianFromList = async () => {
+      if (salesData.length === 0) return;
+      setIsRegenerating(true);
+      setRegenMessage(null);
+
+      let updateCount = 0;
+
+      try {
+          for (const record of salesData) {
+              // 1. Get Mobile Client code from the sales record
+              const mobileClient = clients.find(c => c.id === record.clientId);
+              if (!mobileClient || !mobileClient.code) continue;
+
+              // 2. Check if this client maps to a Paper client
+              const mappedPaperCode = MOBILE_TO_PAPER_MAP[mobileClient.code.toLowerCase()];
+              if (mappedPaperCode) {
+                  const paperClient = clients.find(c => c.code.toLowerCase() === mappedPaperCode.toLowerCase());
+                  if (paperClient) {
+                      // 3. Extract Company Total from stored raw data
+                      // Index 5 is Company Total based on Mobile Report Structure
+                      const rawData = record.mobileRawData;
+                      if (!rawData || rawData.length < 6) continue;
+
+                      const companyTotalRaw = rawData[5];
+                      const companyAmount = parseFloat(String(companyTotalRaw).replace(/,/g, ''));
+
+                      if (!isNaN(companyAmount) && companyAmount !== 0) {
+                          // 4. Find existing Ledger record to update
+                          // NOTE: getLedgerRecords fetches ALL records for client.
+                          // Optimization: In a real large app we would fetch specifically for date/type.
+                          // Here we fetch all and filter locally.
+                          const records = await getLedgerRecords(paperClient.id);
+                          const existingDian = records.find(r => 
+                              r.date === record.date && 
+                              r.typeLabel === '电' && 
+                              r.column === 'main'
+                          );
+
+                          // Logic REVERSED: 
+                          // Positive Company Total -> Subtract from Ledger (Red)
+                          // Negative Company Total -> Add to Ledger (Green)
+                          const operation = companyAmount >= 0 ? 'subtract' : 'add';
+                          const amount = Math.abs(companyAmount);
+
+                          if (existingDian) {
+                              await updateLedgerRecord(existingDian.id, {
+                                  amount: amount,
+                                  operation: operation
+                              });
+                          } else {
+                              await saveLedgerRecord({
+                                  clientId: paperClient.id,
+                                  date: record.date,
+                                  description: '',
+                                  typeLabel: '电',
+                                  amount: amount,
+                                  operation: operation,
+                                  column: 'main',
+                                  isVisible: true
+                              });
+                          }
+                          updateCount++;
+                      }
+                  }
+              }
+          }
+          setRegenMessage(`Successfully updated ${updateCount} '电' records.`);
+          setTimeout(() => setRegenMessage(null), 3000);
+      } catch (error) {
+          console.error("Regeneration failed", error);
+          setRegenMessage("Failed to regenerate records.");
+      } finally {
+          setIsRegenerating(false);
+      }
+  };
 
   const handlePrevMonth = () => {
       if (currentMonth === 0) {
@@ -515,14 +598,25 @@ const SalesIndex: React.FC = () => {
                     />
                 </div>
                 {activeTab === 'mobile' && (
-                    <button
-                        onClick={() => navigate('/sales/mobile-report')}
-                        className="flex items-center px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 shadow-sm text-sm font-bold whitespace-nowrap"
-                        title="Import/View External Report"
-                    >
-                        <FileSpreadsheet size={16} className="mr-2" />
-                        Report
-                    </button>
+                    <>
+                        <button
+                            onClick={handleRegenerateDianFromList}
+                            disabled={isRegenerating || filteredMobileClients.length === 0}
+                            className="flex items-center px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 shadow-sm text-sm font-bold whitespace-nowrap disabled:opacity-50"
+                            title="Update Main Ledger for Paper Clients from this mobile data"
+                        >
+                            <Zap size={16} className={`mr-2 ${isRegenerating ? 'text-blue-500' : 'text-blue-700'}`} />
+                            {isRegenerating ? 'Updating...' : 'Regenerate 电'}
+                        </button>
+                        <button
+                            onClick={() => navigate('/sales/mobile-report')}
+                            className="flex items-center px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 shadow-sm text-sm font-bold whitespace-nowrap"
+                            title="Import/View External Report"
+                        >
+                            <FileSpreadsheet size={16} className="mr-2" />
+                            Report
+                        </button>
+                    </>
                 )}
             </div>
           </div>
@@ -559,6 +653,13 @@ const SalesIndex: React.FC = () => {
                 </button>
           </div>
       </div>
+
+      {regenMessage && (
+        <div className="bg-green-50 border-b border-green-200 px-4 py-2 text-green-800 text-sm font-bold flex items-center justify-center animate-in fade-in slide-in-from-top-2">
+            <CheckCircle size={16} className="mr-2" />
+            {regenMessage}
+        </div>
+      )}
 
       {/* Main Content */}
       <div className="flex-1 overflow-auto bg-gray-100 p-4">

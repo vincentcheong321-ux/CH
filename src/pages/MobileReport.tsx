@@ -184,10 +184,10 @@ const MobileReport: React.FC = () => {
                   const companyAmount = parseFloat(String(companyTotalRaw).replace(/,/g, ''));
 
                   if (!isNaN(companyAmount) && companyAmount !== 0) {
-                      // Logic: 
-                      // Positive Company Total -> Client Owes -> Add to Debt (Green/Add)
-                      // Negative Company Total -> Client Claims -> Reduce Debt (Red/Subtract)
-                      const operation = companyAmount >= 0 ? 'add' : 'subtract';
+                      // Logic REVERSED: 
+                      // Positive Company Total -> Subtract from Ledger (Red)
+                      // Negative Company Total -> Add to Ledger (Green)
+                      const operation = companyAmount >= 0 ? 'subtract' : 'add';
                       
                       await saveLedgerRecord({
                           clientId: paperClient.id,
@@ -250,8 +250,10 @@ const MobileReport: React.FC = () => {
                             r.column === 'main'
                         );
 
-                        // Force Addition logic: Positive Company Total -> Add Debt
-                        const operation = companyAmount >= 0 ? 'add' : 'subtract';
+                        // Logic REVERSED: 
+                        // Positive Company Total -> Subtract from Ledger (Red)
+                        // Negative Company Total -> Add to Ledger (Green)
+                        const operation = companyAmount >= 0 ? 'subtract' : 'add';
                         const amount = Math.abs(companyAmount);
 
                         if (existingDian) {
