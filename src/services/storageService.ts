@@ -450,6 +450,48 @@ export const calculateSpecialCarryForwardBalance = async (clientId: string, clie
     return sum;
 };
 
+// NEW: Save special panel 1 balance (Restores the "Bring Forward" to Panel 1)
+export const saveSpecialPanel1Balance = async (clientId: string, date: string, amount: number) => {
+    if (supabase) {
+        const { data: records } = await supabase.from('financial_journal')
+            .select('*')
+            .eq('client_id', clientId)
+            .eq('entry_date', date)
+            .eq('entry_type', 'MANUAL');
+        
+        // Find existing "上欠" in "col1" for this date
+        const existing = records?.find(r => r.data?.typeLabel === '上欠' && r.data?.column === 'col1');
+
+        const operation = amount >= 0 ? 'add' : 'subtract';
+        
+        if (existing) {
+            await supabase.from('financial_journal').update({
+                amount: amount, 
+                data: {
+                    ...existing.data,
+                    description: '上欠',
+                    typeLabel: '上欠',
+                    operation: operation,
+                    column: 'col1'
+                }
+            }).eq('id', existing.id);
+        } else {
+            await supabase.from('financial_journal').insert({
+                client_id: clientId,
+                entry_date: date,
+                entry_type: 'MANUAL',
+                amount: amount,
+                data: {
+                    description: '上欠',
+                    typeLabel: '上欠',
+                    operation: operation,
+                    column: 'col1'
+                }
+            });
+        }
+    }
+};
+
 // --- Mobile Report ---
 export const saveMobileReportHistory = async (date: string, rawData: any[]) => {
     if (supabase) await supabase.from('mobile_report_history').insert([{ report_date: date, json_data: rawData }]);

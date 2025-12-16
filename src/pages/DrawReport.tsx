@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { getClients, getDrawBalances, saveDrawBalance, getClientBalancesPriorToDate, calculateSpecialCarryForwardBalance } from '../services/storageService';
+import { getClients, getDrawBalances, saveDrawBalance, getClientBalancesPriorToDate, calculateSpecialCarryForwardBalance, saveSpecialPanel1Balance } from '../services/storageService';
 import { Client } from '../types';
 import { Calendar, ChevronLeft, ChevronRight, Filter, Save, Layers, RefreshCw, Loader2 } from 'lucide-react';
 import { MONTH_NAMES, getWeeksForMonth, getWeekRangeString } from '../utils/reportUtils';
@@ -161,7 +161,10 @@ const DrawReport: React.FC = () => {
                   const specialBalance = await calculateSpecialCarryForwardBalance(client.id, codeUpper, selectedDate);
                   
                   newBalances[client.id] = specialBalance.toString();
+                  // Save for Report Total
                   await saveDrawBalance(selectedDate, client.id, specialBalance);
+                  // Save to Panel 1 as a visible record
+                  await saveSpecialPanel1Balance(client.id, selectedDate, specialBalance);
               } else {
                   // Standard Case
                   const bal = prevBalances[client.id] || 0;
