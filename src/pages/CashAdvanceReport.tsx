@@ -23,7 +23,6 @@ const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, se
             if (c) setClientName(c.name);
 
             // Determine Week Range (Mon - Sun)
-            // selectedDate is assumed to be the Monday (start) of the week from the UI logic
             const startObj = new Date(selectedDate);
             const endObj = new Date(startObj);
             endObj.setDate(endObj.getDate() + 6);
@@ -41,14 +40,12 @@ const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, se
             setBalance(bal);
 
             // 2. Show Records for the Whole Week belonging to MAIN LEDGER
-            // This ensures manual entries entered on any day of the week appear
             const weekRecords = records.filter(r => 
                 r.date >= startStr && 
                 r.date <= endStr && 
                 (r.column === 'main' || !r.column)
             );
             
-            // Sort by Date then ID/Creation
             weekRecords.sort((a, b) => a.date.localeCompare(b.date));
 
             setDailyRecords(weekRecords);
@@ -80,7 +77,7 @@ const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, se
                         <div key={r.id} className="flex justify-between items-center px-3 py-1.5 md:px-4 md:py-3 text-[11px] md:text-sm bg-white hover:bg-gray-50">
                             <div className="flex flex-col min-w-0 mr-2">
                                 <div className="text-gray-700 truncate font-medium">
-                                    <span className="inline-block w-8 text-gray-400 text-xs font-mono">{r.date.slice(5)}</span>
+                                    <span className="inline-block w-12 text-gray-400 text-xs font-mono">{r.date.slice(5)}</span>
                                     {r.typeLabel} {r.description ? <span className="text-gray-500 font-normal">- {r.description}</span> : ''}
                                 </div>
                             </div>

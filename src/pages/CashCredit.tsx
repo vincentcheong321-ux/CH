@@ -76,7 +76,7 @@ const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, se
                         <div key={r.id} className="flex justify-between items-center px-3 py-1.5 md:px-4 md:py-3 text-[11px] md:text-sm bg-white hover:bg-gray-50">
                             <div className="flex flex-col min-w-0 mr-2">
                                 <div className="text-gray-700 truncate font-medium">
-                                    <span className="inline-block w-8 text-gray-400 text-xs font-mono">{r.date.slice(5)}</span>
+                                    <span className="inline-block w-12 text-gray-400 text-xs font-mono">{r.date.slice(5)}</span>
                                     {r.typeLabel} {r.description ? <span className="text-gray-500 font-normal">- {r.description}</span> : ''}
                                 </div>
                             </div>
