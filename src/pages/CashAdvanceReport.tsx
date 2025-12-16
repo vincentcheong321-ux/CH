@@ -9,7 +9,7 @@ import { Link } from 'react-router-dom';
 // Preview Component
 const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, selectedDate: string }) => {
     const [balance, setBalance] = useState<number | null>(null);
-    const [allRecords, setAllRecords] = useState<LedgerRecord[]>([]);
+    const [dailyRecords, setDailyRecords] = useState<LedgerRecord[]>([]);
     const [loading, setLoading] = useState(true);
     const [clientName, setClientName] = useState('');
 
@@ -21,7 +21,7 @@ const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, se
             const c = clients.find(cl => cl.id === clientId);
             if (c) setClientName(c.name);
 
-            // 1. Calculate Balance UP TO selectedDate (Inclusive) for context
+            // 1. Calculate Balance UP TO selectedDate (Inclusive)
             const historicRecords = records.filter(r => r.date <= selectedDate);
             
             // Calculate Balance Logic (Panel 1 Priority)
@@ -36,12 +36,9 @@ const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, se
             }
             setBalance(bal);
 
-            // 2. Show ALL Transactions sorted Descending
-            const sorted = [...records].sort((a, b) => {
-                if (a.date !== b.date) return new Date(b.date).getTime() - new Date(a.date).getTime();
-                return 0; // Stable sort fallback
-            });
-            setAllRecords(sorted);
+            // 2. Show ONLY Selected Date Records
+            const daily = records.filter(r => r.date === selectedDate);
+            setDailyRecords(daily);
             
             setLoading(false);
         };
@@ -51,41 +48,34 @@ const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, se
     if (loading) return null;
 
     return (
-        <div className="fixed bottom-0 right-0 md:bottom-8 md:right-8 bg-white border border-gray-200 shadow-2xl rounded-t-xl md:rounded-xl z-50 w-full md:w-[450px] overflow-hidden animate-in slide-in-from-bottom-10 fade-in duration-300 flex flex-col max-h-[80vh] md:max-h-[600px]">
-            <div className="bg-gray-900 text-white p-4 flex justify-between items-center flex-shrink-0 shadow-md z-10">
+        <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-8 md:bottom-8 bg-white border border-gray-200 shadow-2xl rounded-xl z-50 md:w-[450px] overflow-hidden animate-in slide-in-from-bottom-10 fade-in duration-300 flex flex-col max-h-[50vh] md:max-h-[600px]">
+            <div className="bg-gray-900 text-white p-3 md:p-4 flex justify-between items-center flex-shrink-0 shadow-md z-10">
                 <div className="flex flex-col overflow-hidden mr-2">
-                    <span className="font-bold truncate text-lg">{clientName}</span>
-                    <span className="text-xs text-gray-400">Balance as of {selectedDate}</span>
+                    <span className="font-bold truncate text-base md:text-lg">{clientName}</span>
+                    <span className="text-[10px] md:text-xs text-gray-400">Balance as of {selectedDate}</span>
                 </div>
-                <span className={`font-mono font-bold text-2xl whitespace-nowrap ${balance! >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                <span className={`font-mono font-bold text-xl md:text-2xl whitespace-nowrap ${balance! >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     ${Math.abs(balance!).toLocaleString()}
                 </span>
             </div>
-            <div className="flex-1 bg-gray-50 overflow-y-auto">
-                <div className="sticky top-0 bg-gray-100 px-4 py-2 border-b border-gray-200 text-xs font-bold text-gray-500 uppercase tracking-wider z-0">
-                    Full Ledger History
+            <div className="flex-1 bg-gray-50 overflow-y-auto p-0">
+                <div className="sticky top-0 bg-gray-100 px-4 py-2 border-b border-gray-200 text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider z-0">
+                    {selectedDate} Activity
                 </div>
                 <div className="divide-y divide-gray-200">
-                    {allRecords.map(r => {
-                        const isSelectedDate = r.date === selectedDate;
-                        return (
-                            <div key={r.id} className={`flex justify-between items-center px-4 py-3 text-sm transition-colors ${isSelectedDate ? 'bg-yellow-50 ring-inset ring-2 ring-yellow-400/20' : 'bg-white hover:bg-gray-50'}`}>
-                                <div className="flex flex-col min-w-0 mr-4">
-                                    <div className="flex items-center space-x-2">
-                                        <span className={`font-bold font-mono text-xs ${isSelectedDate ? 'text-gray-900' : 'text-gray-500'}`}>{r.date}</span>
-                                        {isSelectedDate && <span className="bg-yellow-200 text-yellow-800 text-[10px] px-1.5 rounded font-bold">CURRENT</span>}
-                                    </div>
-                                    <div className="text-gray-700 truncate font-medium">
-                                        {r.typeLabel} {r.description ? <span className="text-gray-500 font-normal">- {r.description}</span> : ''}
-                                    </div>
+                    {dailyRecords.map(r => (
+                        <div key={r.id} className="flex justify-between items-center px-4 py-2 md:py-3 text-xs md:text-sm bg-white hover:bg-gray-50">
+                            <div className="flex flex-col min-w-0 mr-4">
+                                <div className="text-gray-700 truncate font-medium">
+                                    {r.typeLabel} {r.description ? <span className="text-gray-500 font-normal">- {r.description}</span> : ''}
                                 </div>
-                                <span className={`font-mono font-bold text-base flex-shrink-0 ${r.operation === 'add' ? 'text-green-600' : r.operation === 'subtract' ? 'text-red-600' : 'text-gray-400'}`}>
-                                    {r.operation === 'add' ? '+' : r.operation === 'subtract' ? '-' : ''}{r.amount.toLocaleString()}
-                                </span>
                             </div>
-                        );
-                    })}
-                    {allRecords.length === 0 && <p className="p-8 text-center text-sm text-gray-400 italic">No transactions recorded.</p>}
+                            <span className={`font-mono font-bold text-sm md:text-base flex-shrink-0 ${r.operation === 'add' ? 'text-green-600' : r.operation === 'subtract' ? 'text-red-600' : 'text-gray-400'}`}>
+                                {r.operation === 'add' ? '+' : r.operation === 'subtract' ? '-' : ''}{r.amount.toLocaleString()}
+                            </span>
+                        </div>
+                    ))}
+                    {dailyRecords.length === 0 && <p className="p-6 text-center text-xs text-gray-400 italic">No activity on this date.</p>}
                 </div>
             </div>
         </div>
