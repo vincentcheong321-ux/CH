@@ -191,7 +191,7 @@ const CashCredit: React.FC = () => {
       const mapped: Record<string, string> = {};
       
       clients.forEach(c => {
-          mapped[c.id] = data[c.id] !== undefined ? data[c.id].toString() : '';
+          mapped[c.id] = data[c.id] !== undefined ? data[c.id].toFixed(2) : '';
       });
       
       setCashCredits(mapped);
@@ -215,14 +215,17 @@ const CashCredit: React.FC = () => {
   }, []);
 
   const handleInputBlur = useCallback(async (clientId: string) => {
-      setCashCredits((current: Record<string, string>) => {
-          const val = current[clientId];
+      setCashCredits((prev: Record<string, string>) => {
+          const val = prev[clientId];
+          const newMap = { ...prev };
           if (val !== '' && !isNaN(Number(val))) {
-              saveCashCredit(selectedDate, clientId, parseFloat(val));
+              const numVal = parseFloat(val);
+              saveCashCredit(selectedDate, clientId, numVal);
+              newMap[clientId] = numVal.toFixed(2);
           } else if (val === '') {
               saveCashCredit(selectedDate, clientId, 0);
           }
-          return current;
+          return newMap;
       });
       
       if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
@@ -466,7 +469,7 @@ const CashCredit: React.FC = () => {
                     <div className="sticky bottom-0 bg-gray-900 text-white p-4 shadow-lg flex justify-between items-center z-20">
                          <div className="text-sm font-medium uppercase tracking-wider text-gray-400">Total Cash Credit</div>
                          <div className="text-2xl font-mono font-bold text-blue-400">
-                             ${total.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                             ${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                          </div>
                     </div>
                 </div>

@@ -197,7 +197,7 @@ const DrawReport: React.FC = () => {
       const mapped: Record<string, string> = {};
       
       clients.forEach(c => {
-          mapped[c.id] = data[c.id] !== undefined ? data[c.id].toString() : '';
+          mapped[c.id] = data[c.id] !== undefined ? data[c.id].toFixed(2) : '';
       });
       
       setClientBalances(mapped);
@@ -221,14 +221,17 @@ const DrawReport: React.FC = () => {
   }, []);
 
   const handleInputBlur = useCallback(async (clientId: string) => {
-      setClientBalances((currentBalances: Record<string, string>) => {
-          const val = currentBalances[clientId];
+      setClientBalances((prev: Record<string, string>) => {
+          const val = prev[clientId];
+          const newMap = { ...prev };
           if (val !== '' && !isNaN(Number(val))) {
-              saveDrawBalance(selectedDate, clientId, parseFloat(val));
+              const numVal = parseFloat(val);
+              saveDrawBalance(selectedDate, clientId, numVal);
+              newMap[clientId] = numVal.toFixed(2);
           } else if (val === '') {
               saveDrawBalance(selectedDate, clientId, 0);
           }
-          return currentBalances;
+          return newMap;
       });
       
       // Cancel previous timeout if it exists
@@ -275,7 +278,7 @@ const DrawReport: React.FC = () => {
               } else {
                   // Standard Case (Uses Main Ledger Total by default, or Panel 1 for C13 if in list)
                   const bal = prevBalances[client.id] || 0;
-                  newBalances[client.id] = bal.toString();
+                  newBalances[client.id] = bal.toFixed(2);
                   await saveDrawBalance(selectedDate, client.id, bal);
               }
           }
@@ -528,7 +531,7 @@ const DrawReport: React.FC = () => {
                     <div className="sticky bottom-0 bg-gray-900 text-white p-4 shadow-lg flex justify-between items-center z-20">
                          <div className="text-sm font-medium uppercase tracking-wider text-gray-400">Total Company Balance</div>
                          <div className={`text-2xl font-mono font-bold ${total >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                             {total > 0 ? '+' : ''}{total.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                             {total > 0 ? '+' : ''}{total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                          </div>
                     </div>
                 </div>

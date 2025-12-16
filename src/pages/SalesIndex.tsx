@@ -170,7 +170,7 @@ const ClientWeeklyCard = React.memo(({
     const clientRecords = salesData.filter(r => r.clientId === client.id);
     const rawTotal = clientRecords.reduce((acc, r) => acc + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
     
-    // Apply 14% Deduction (x 0.86)
+    // Apply 14% Deduction (x 0.86) for display on CARD (Client View)
     const totalWeek = rawTotal * 0.86;
 
     const formatMonth = (mIndex: number) => {
@@ -525,11 +525,15 @@ const SalesIndex: React.FC = () => {
       return totals;
   }, [filteredMobileClients, salesData]);
 
-  const totalPaper = [...zClients, ...cClients].reduce((acc, client) => {
+  // Updated Paper Totals Calculation: Raw, Company, Client
+  const totalPaperRaw = [...zClients, ...cClients].reduce((acc, client) => {
       const clientRecs = salesData.filter(r => r.clientId === client.id);
       const rawSum = clientRecs.reduce((sum, r) => sum + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
-      return acc + (rawSum * 0.86); // Deduct 14% for display
+      return acc + rawSum;
   }, 0);
+
+  const totalPaperCompany = totalPaperRaw * 0.83; // Gross - 17%
+  const totalPaperClient = totalPaperRaw * 0.86; // Gross - 14%
 
   const totalMobile = mobileColumnTotals[11] || 0;
 
@@ -576,13 +580,26 @@ const SalesIndex: React.FC = () => {
                     </button>
                  </div>
                  
+                 {/* Updated Header Totals */}
                  <div className="hidden lg:flex items-center space-x-6 ml-6 pl-6 border-l border-gray-200">
-                    <div className={`transition-opacity duration-300 ${activeTab === 'paper' ? 'opacity-100' : 'opacity-40'}`}>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Paper Week Total (-14%)</p>
-                        <p className="font-mono font-bold text-gray-800 text-lg">${totalPaper.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                    <div className={`transition-opacity duration-300 flex space-x-6 ${activeTab === 'paper' ? 'opacity-100' : 'opacity-40'}`}>
+                        <div>
+                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Raw Total</p>
+                            <p className="font-mono font-bold text-gray-600 text-lg">${totalPaperRaw.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                        </div>
+                        <div>
+                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Company (-17%)</p>
+                            <p className="font-mono font-bold text-blue-700 text-lg">${totalPaperCompany.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                        </div>
+                        <div>
+                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Client (-14%)</p>
+                            <p className="font-mono font-bold text-green-700 text-lg">${totalPaperClient.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                        </div>
                     </div>
-                    <div className={`transition-opacity duration-300 ${activeTab === 'mobile' ? 'opacity-100' : 'opacity-40'}`}>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Mobile Week Total (Shareholder)</p>
+                    
+                    {/* Mobile Total (unchanged) */}
+                    <div className={`transition-opacity duration-300 border-l border-gray-200 pl-6 ${activeTab === 'mobile' ? 'opacity-100' : 'opacity-40'}`}>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Mobile Shareholder Total</p>
                         <p className="font-mono font-bold text-purple-600 text-lg">${totalMobile.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
                     </div>
                  </div>
