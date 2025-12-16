@@ -12,6 +12,7 @@ const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, se
     const [dailyRecords, setDailyRecords] = useState<LedgerRecord[]>([]);
     const [loading, setLoading] = useState(true);
     const [clientName, setClientName] = useState('');
+    const [weekRange, setWeekRange] = useState('');
 
     useEffect(() => {
         const load = async () => {
@@ -21,21 +22,33 @@ const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, se
             const c = clients.find(cl => cl.id === clientId);
             if (c) setClientName(c.name);
 
-            // Normalize Date Check (handle potential T00:00:00 timestamps)
-            const isSameDate = (d1: string, d2: string) => d1.split('T')[0] === d2.split('T')[0];
-            const isBeforeOrSame = (d1: string, d2: string) => d1.split('T')[0] <= d2.split('T')[0];
+            // Determine Week Range (Mon - Sun)
+            const startObj = new Date(selectedDate);
+            const endObj = new Date(startObj);
+            endObj.setDate(endObj.getDate() + 6);
+            
+            const startStr = startObj.toISOString().split('T')[0];
+            const endStr = endObj.toISOString().split('T')[0];
+            
+            setWeekRange(`${startStr} to ${endStr}`);
 
-            // 1. Calculate Balance UP TO selectedDate (Inclusive) - STRICTLY MAIN LEDGER
-            const historicRecords = records.filter(r => isBeforeOrSame(r.date, selectedDate));
+            // 1. Calculate Balance UP TO End of Week (Inclusive) - STRICTLY MAIN LEDGER
+            const historicRecords = records.filter(r => r.date <= endStr);
             const mainHistoric = historicRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
             
             const bal = mainHistoric.reduce((acc, r) => acc + getNetAmount(r), 0);
             setBalance(bal);
 
-            // 2. Show ONLY Selected Date Records belonging to MAIN LEDGER
-            const daily = records.filter(r => isSameDate(r.date, selectedDate) && (r.column === 'main' || !r.column));
-            setDailyRecords(daily);
+            // 2. Show Records for the Whole Week belonging to MAIN LEDGER
+            const weekRecords = records.filter(r => 
+                r.date >= startStr && 
+                r.date <= endStr && 
+                (r.column === 'main' || !r.column)
+            );
             
+            weekRecords.sort((a, b) => a.date.localeCompare(b.date));
+
+            setDailyRecords(weekRecords);
             setLoading(false);
         };
         load();
@@ -48,7 +61,7 @@ const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, se
             <div className="bg-gray-900 text-white p-2 md:p-4 flex justify-between items-center flex-shrink-0 shadow-md z-10">
                 <div className="flex flex-col overflow-hidden mr-2">
                     <span className="font-bold truncate text-sm md:text-lg">{clientName}</span>
-                    <span className="text-[10px] md:text-xs text-gray-400">Balance as of {selectedDate}</span>
+                    <span className="text-[10px] md:text-xs text-gray-400">Balance as of Week End</span>
                 </div>
                 <span className={`font-mono font-bold text-lg md:text-2xl whitespace-nowrap ${balance! >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     ${Math.abs(balance!).toLocaleString()}
@@ -56,13 +69,14 @@ const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, se
             </div>
             <div className="flex-1 bg-gray-50 overflow-y-auto p-0">
                 <div className="sticky top-0 bg-gray-100 px-3 py-1.5 md:px-4 md:py-2 border-b border-gray-200 text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider z-0">
-                    {selectedDate} Main Ledger
+                    Week: {weekRange}
                 </div>
                 <div className="divide-y divide-gray-200">
                     {dailyRecords.map(r => (
                         <div key={r.id} className="flex justify-between items-center px-3 py-1.5 md:px-4 md:py-3 text-[11px] md:text-sm bg-white hover:bg-gray-50">
                             <div className="flex flex-col min-w-0 mr-2">
                                 <div className="text-gray-700 truncate font-medium">
+                                    <span className="inline-block w-8 text-gray-400 text-xs font-mono">{r.date.slice(5)}</span>
                                     {r.typeLabel} {r.description ? <span className="text-gray-500 font-normal">- {r.description}</span> : ''}
                                 </div>
                             </div>
@@ -71,7 +85,7 @@ const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, se
                             </span>
                         </div>
                     ))}
-                    {dailyRecords.length === 0 && <p className="p-4 text-center text-[10px] md:text-xs text-gray-400 italic">No main ledger activity.</p>}
+                    {dailyRecords.length === 0 && <p className="p-4 text-center text-[10px] md:text-xs text-gray-400 italic">No main ledger activity for this week.</p>}
                 </div>
             </div>
         </div>
