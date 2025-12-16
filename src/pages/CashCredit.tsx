@@ -9,7 +9,7 @@ import { Link } from 'react-router-dom';
 // Preview Component
 const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, selectedDate: string }) => {
     const [balance, setBalance] = useState<number | null>(null);
-    const [dailyRecords, setDailyRecords] = useState<LedgerRecord[]>([]);
+    const [allRecords, setAllRecords] = useState<LedgerRecord[]>([]);
     const [loading, setLoading] = useState(true);
     const [clientName, setClientName] = useState('');
 
@@ -36,9 +36,12 @@ const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, se
             }
             setBalance(bal);
 
-            // 2. Show Transactions strictly ON selectedDate
-            const daily = records.filter(r => r.date === selectedDate);
-            setDailyRecords(daily);
+            // 2. Show ALL Transactions sorted Descending
+            const sorted = [...records].sort((a, b) => {
+                if (a.date !== b.date) return new Date(b.date).getTime() - new Date(a.date).getTime();
+                return 0;
+            });
+            setAllRecords(sorted);
             
             setLoading(false);
         };
@@ -48,28 +51,41 @@ const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, se
     if (loading) return null;
 
     return (
-        <div className="fixed bottom-0 right-0 md:bottom-8 md:right-8 bg-white border border-gray-200 shadow-2xl rounded-t-xl md:rounded-xl z-50 w-full md:w-80 overflow-hidden animate-in slide-in-from-bottom-10 fade-in duration-300">
-            <div className="bg-gray-900 text-white p-3 flex justify-between items-center">
+        <div className="fixed bottom-0 right-0 md:bottom-8 md:right-8 bg-white border border-gray-200 shadow-2xl rounded-t-xl md:rounded-xl z-50 w-full md:w-[450px] overflow-hidden animate-in slide-in-from-bottom-10 fade-in duration-300 flex flex-col max-h-[80vh] md:max-h-[600px]">
+            <div className="bg-gray-900 text-white p-4 flex justify-between items-center flex-shrink-0 shadow-md z-10">
                 <div className="flex flex-col overflow-hidden mr-2">
-                    <span className="font-bold truncate text-sm">{clientName}</span>
-                    <span className="text-[10px] text-gray-400">{selectedDate}</span>
+                    <span className="font-bold truncate text-lg">{clientName}</span>
+                    <span className="text-xs text-gray-400">Balance as of {selectedDate}</span>
                 </div>
-                <span className={`font-mono font-bold text-lg whitespace-nowrap ${balance! >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                <span className={`font-mono font-bold text-2xl whitespace-nowrap ${balance! >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     ${Math.abs(balance!).toLocaleString()}
                 </span>
             </div>
-            <div className="p-3 bg-gray-50 max-h-[200px] overflow-y-auto">
-                <p className="text-[10px] text-gray-400 font-bold uppercase mb-2">Transactions on this Date</p>
-                <div className="space-y-2">
-                    {dailyRecords.map(r => (
-                        <div key={r.id} className="flex justify-between text-xs border-b border-gray-100 pb-1 last:border-0">
-                            <span className="text-gray-600 truncate max-w-[60%]">{r.typeLabel} {r.description ? `- ${r.description}` : ''}</span>
-                            <span className={`font-mono font-bold ${r.operation === 'add' ? 'text-green-600' : r.operation === 'subtract' ? 'text-red-600' : 'text-gray-400'}`}>
-                                {r.operation === 'add' ? '+' : r.operation === 'subtract' ? '-' : ''}{r.amount.toLocaleString()}
-                            </span>
-                        </div>
-                    ))}
-                    {dailyRecords.length === 0 && <p className="text-xs text-gray-400 italic">No transactions found for {selectedDate}.</p>}
+            <div className="flex-1 bg-gray-50 overflow-y-auto">
+                <div className="sticky top-0 bg-gray-100 px-4 py-2 border-b border-gray-200 text-xs font-bold text-gray-500 uppercase tracking-wider z-0">
+                    Full Ledger History
+                </div>
+                <div className="divide-y divide-gray-200">
+                    {allRecords.map(r => {
+                        const isSelectedDate = r.date === selectedDate;
+                        return (
+                            <div key={r.id} className={`flex justify-between items-center px-4 py-3 text-sm transition-colors ${isSelectedDate ? 'bg-yellow-50 ring-inset ring-2 ring-yellow-400/20' : 'bg-white hover:bg-gray-50'}`}>
+                                <div className="flex flex-col min-w-0 mr-4">
+                                    <div className="flex items-center space-x-2">
+                                        <span className={`font-bold font-mono text-xs ${isSelectedDate ? 'text-gray-900' : 'text-gray-500'}`}>{r.date}</span>
+                                        {isSelectedDate && <span className="bg-yellow-200 text-yellow-800 text-[10px] px-1.5 rounded font-bold">CURRENT</span>}
+                                    </div>
+                                    <div className="text-gray-700 truncate font-medium">
+                                        {r.typeLabel} {r.description ? <span className="text-gray-500 font-normal">- {r.description}</span> : ''}
+                                    </div>
+                                </div>
+                                <span className={`font-mono font-bold text-base flex-shrink-0 ${r.operation === 'add' ? 'text-green-600' : r.operation === 'subtract' ? 'text-red-600' : 'text-gray-400'}`}>
+                                    {r.operation === 'add' ? '+' : r.operation === 'subtract' ? '-' : ''}{r.amount.toLocaleString()}
+                                </span>
+                            </div>
+                        );
+                    })}
+                    {allRecords.length === 0 && <p className="p-8 text-center text-sm text-gray-400 italic">No transactions recorded.</p>}
                 </div>
             </div>
         </div>
