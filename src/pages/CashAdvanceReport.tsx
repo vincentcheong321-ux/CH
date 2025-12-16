@@ -7,9 +7,9 @@ import { MONTH_NAMES, getWeeksForMonth, getWeekRangeString } from '../utils/repo
 import { Link } from 'react-router-dom';
 
 // Preview Component
-const LedgerPreviewOverlay = ({ clientId }: { clientId: string }) => {
+const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, selectedDate: string }) => {
     const [balance, setBalance] = useState<number | null>(null);
-    const [recent, setRecent] = useState<LedgerRecord[]>([]);
+    const [dailyRecords, setDailyRecords] = useState<LedgerRecord[]>([]);
     const [loading, setLoading] = useState(true);
     const [clientName, setClientName] = useState('');
 
@@ -21,9 +21,12 @@ const LedgerPreviewOverlay = ({ clientId }: { clientId: string }) => {
             const c = clients.find(cl => cl.id === clientId);
             if (c) setClientName(c.name);
 
+            // 1. Calculate Balance UP TO selectedDate (Inclusive)
+            const historicRecords = records.filter(r => r.date <= selectedDate);
+            
             // Calculate Balance Logic (Panel 1 Priority)
-            const col1Records = records.filter(r => r.column === 'col1' && r.isVisible);
-            const mainRecords = records.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
+            const col1Records = historicRecords.filter(r => r.column === 'col1' && r.isVisible);
+            const mainRecords = historicRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
             
             let bal = 0;
             if (col1Records.length > 0) {
@@ -33,28 +36,32 @@ const LedgerPreviewOverlay = ({ clientId }: { clientId: string }) => {
             }
             setBalance(bal);
 
-            // Recent 3 transactions
-            const sorted = [...records].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-            setRecent(sorted.slice(0, 3));
+            // 2. Show Transactions strictly ON selectedDate
+            const daily = records.filter(r => r.date === selectedDate);
+            setDailyRecords(daily);
+            
             setLoading(false);
         };
         load();
-    }, [clientId]);
+    }, [clientId, selectedDate]);
 
     if (loading) return null;
 
     return (
         <div className="fixed bottom-0 right-0 md:bottom-8 md:right-8 bg-white border border-gray-200 shadow-2xl rounded-t-xl md:rounded-xl z-50 w-full md:w-80 overflow-hidden animate-in slide-in-from-bottom-10 fade-in duration-300">
             <div className="bg-gray-900 text-white p-3 flex justify-between items-center">
-                <span className="font-bold truncate">{clientName}</span>
-                <span className={`font-mono font-bold ${balance! >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                <div className="flex flex-col overflow-hidden mr-2">
+                    <span className="font-bold truncate text-sm">{clientName}</span>
+                    <span className="text-[10px] text-gray-400">{selectedDate}</span>
+                </div>
+                <span className={`font-mono font-bold text-lg whitespace-nowrap ${balance! >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     ${Math.abs(balance!).toLocaleString()}
                 </span>
             </div>
-            <div className="p-3 bg-gray-50">
-                <p className="text-[10px] text-gray-400 font-bold uppercase mb-2">Recent Transactions</p>
+            <div className="p-3 bg-gray-50 max-h-[200px] overflow-y-auto">
+                <p className="text-[10px] text-gray-400 font-bold uppercase mb-2">Transactions on this Date</p>
                 <div className="space-y-2">
-                    {recent.map(r => (
+                    {dailyRecords.map(r => (
                         <div key={r.id} className="flex justify-between text-xs border-b border-gray-100 pb-1 last:border-0">
                             <span className="text-gray-600 truncate max-w-[60%]">{r.typeLabel} {r.description ? `- ${r.description}` : ''}</span>
                             <span className={`font-mono font-bold ${r.operation === 'add' ? 'text-green-600' : r.operation === 'subtract' ? 'text-red-600' : 'text-gray-400'}`}>
@@ -62,7 +69,7 @@ const LedgerPreviewOverlay = ({ clientId }: { clientId: string }) => {
                             </span>
                         </div>
                     ))}
-                    {recent.length === 0 && <p className="text-xs text-gray-400 italic">No recent history.</p>}
+                    {dailyRecords.length === 0 && <p className="text-xs text-gray-400 italic">No transactions found for {selectedDate}.</p>}
                 </div>
             </div>
         </div>
@@ -331,7 +338,7 @@ const CashAdvanceReport: React.FC = () => {
   return (
     <div className="flex flex-col lg:flex-row gap-6 min-h-screen pb-20 relative">
        {/* Preview Overlay */}
-       {previewClientId && <LedgerPreviewOverlay clientId={previewClientId} />}
+       {previewClientId && <LedgerPreviewOverlay clientId={previewClientId} selectedDate={selectedDate} />}
 
        {/* Left Sidebar */}
        <div className="lg:w-80 flex-shrink-0 no-print hidden lg:block">
