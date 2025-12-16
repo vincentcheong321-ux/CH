@@ -361,6 +361,76 @@ export const saveDrawBalance = async (date: string, clientId: string, balance: n
     }
 };
 
+// --- SPECIAL CARRY FORWARD LOGIC (Z21 & C19) ---
+export const generateSpecialCarryForward = async (clientId: string, clientCode: string, targetDate: string) => {
+    if (!supabase) return;
+
+    // 1. Find the most recent date BEFORE targetDate that has Panel 1 records
+    // We fetch all records for client in col1 prior to target, ordered descending
+    const { data: allPrev } = await supabase
+        .from('financial_journal')
+        .select('*')
+        .eq('client_id', clientId)
+        // Filter by data->column in application logic as Supabase simple filtering on jsonb keys varies
+        // But we can filter by client and date first
+        .lt('entry_date', targetDate)
+        .order('entry_date', { ascending: false });
+
+    if (!allPrev || allPrev.length === 0) return;
+
+    // Filter for Col1 only manually if needed, and find the latest date group
+    const col1Records = allPrev.filter(r => r.data?.column === 'col1');
+    if (col1Records.length === 0) return;
+
+    const lastDate = col1Records[0].entry_date;
+    
+    // Get all Panel 1 records for that specific date
+    const sourceRows = col1Records.filter(r => r.entry_date === lastDate);
+
+    // Map to LedgerRecord to use standard sorting
+    const mappedSource = sourceRows.map(mapJournalToLedgerRecord);
+    
+    // Sort to determine "First Row", "Second Row" etc.
+    mappedSource.sort((a, b) => getRecordSortPriority(a) - getRecordSortPriority(b));
+
+    // Logic per client
+    let recordsToClone: LedgerRecord[] = [];
+
+    if (clientCode.toUpperCase() === 'Z21') {
+        // Z21: Copy ALL. First row becomes 'none' (Slashed)
+        recordsToClone = mappedSource.map((r, index) => {
+            if (index === 0) {
+                return { 
+                    ...r, 
+                    operation: 'none', 
+                    // No change to description text needed if we rely on operation 'none' for styling,
+                    // but visual strike-through is requested. handled in ClientLedger.
+                };
+            }
+            return r;
+        });
+    } else if (clientCode.toUpperCase() === 'C19') {
+        // C19: Copy ALL EXCEPT first row
+        recordsToClone = mappedSource.slice(1);
+    } else {
+        return; // Should not happen if guard in UI works
+    }
+
+    // Insert cloned records into new date
+    for (const rec of recordsToClone) {
+        await saveLedgerRecord({
+            clientId: clientId,
+            date: targetDate,
+            description: rec.description,
+            typeLabel: rec.typeLabel,
+            amount: rec.amount,
+            operation: rec.operation,
+            column: 'col1', // Ensure it stays in Panel 1
+            isVisible: true
+        });
+    }
+};
+
 // --- Mobile Report ---
 export const saveMobileReportHistory = async (date: string, rawData: any[]) => {
     if (supabase) await supabase.from('mobile_report_history').insert([{ report_date: date, json_data: rawData }]);

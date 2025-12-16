@@ -502,10 +502,12 @@ const ClientLedger: React.FC = () => {
                     const absValue = Math.abs(r.operation === 'none' ? r.amount : r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2});
                     const useBrackets = isNetNegative && (r.typeLabel === '收' || r.id === 'agg_sale_week');
                     const displayValue = useBrackets ? `(${absValue})` : absValue;
+                    const isCrossedOut = r.operation === 'none';
                     
                     let textColor = 'text-gray-600';
                     if (r.operation === 'add') textColor = isNetNegative ? 'text-red-700' : 'text-green-700';
                     else if (r.operation === 'subtract') textColor = 'text-red-700';
+                    else if (r.operation === 'none') textColor = 'text-gray-400';
 
                     return (
                         <div key={r.id} className={`group flex justify-between md:justify-end items-center leading-none relative gap-1 md:gap-1.5 w-full md:w-auto py-1 ${!r.isVisible ? 'opacity-30 grayscale no-print' : ''}`}>
@@ -514,11 +516,11 @@ const ClientLedger: React.FC = () => {
                                 <button onClick={() => requestDeleteRecord(r.id)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 size={10} /></button>
                             </div>
                             
-                            <div className={`text-sm md:text-lg font-bold uppercase tracking-wide text-gray-700 w-1/3 md:w-auto text-left md:text-right`}>{r.typeLabel}</div>
+                            <div className={`text-sm md:text-lg font-bold uppercase tracking-wide w-1/3 md:w-auto text-left md:text-right ${isCrossedOut ? 'text-gray-400 line-through decoration-gray-400' : 'text-gray-700'}`}>{r.typeLabel}</div>
                             <div className="flex-1 text-right">
-                                {r.description && r.description !== r.typeLabel && <div className="text-sm md:text-base text-gray-700 font-medium mr-1 md:mr-2 truncate inline-block">{r.description}</div>}
+                                {r.description && r.description !== r.typeLabel && <div className={`text-sm md:text-base font-medium mr-1 md:mr-2 truncate inline-block ${isCrossedOut ? 'text-gray-400 line-through decoration-gray-400' : 'text-gray-700'}`}>{r.description}</div>}
                             </div>
-                            <div className={`text-base md:text-xl font-mono font-bold w-24 md:w-28 text-right ${textColor}`}>
+                            <div className={`text-base md:text-xl font-mono font-bold w-24 md:w-28 text-right ${textColor} ${isCrossedOut ? 'line-through decoration-gray-400' : ''}`}>
                                 {displayValue}
                             </div>
                         </div>

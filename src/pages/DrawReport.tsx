@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { getClients, getDrawBalances, saveDrawBalance, getClientBalancesPriorToDate } from '../services/storageService';
+import { getClients, getDrawBalances, saveDrawBalance, getClientBalancesPriorToDate, generateSpecialCarryForward } from '../services/storageService';
 import { Client } from '../types';
 import { Calendar, ChevronLeft, ChevronRight, Filter, Save, Layers, RefreshCw, Loader2 } from 'lucide-react';
 import { MONTH_NAMES, getWeeksForMonth, getWeekRangeString } from '../utils/reportUtils';
@@ -153,9 +153,22 @@ const DrawReport: React.FC = () => {
           const newBalances: Record<string, string> = {};
           
           for (const client of clients) {
-              const bal = prevBalances[client.id] || 0;
-              newBalances[client.id] = bal.toString();
-              await saveDrawBalance(selectedDate, client.id, bal);
+              const codeUpper = client.code?.toUpperCase();
+              
+              // Special Logic for Z21 and C19
+              if (codeUpper === 'Z21' || codeUpper === 'C19') {
+                  // Special Case: Do NOT generate '上欠' in Main Ledger.
+                  // Instead, clone Panel 1 records from previous week.
+                  await generateSpecialCarryForward(client.id, codeUpper, selectedDate);
+                  // Ensure input shows blank or existing value to avoid confusion, 
+                  // as "Draw Balance" input typically maps to Main Ledger "上欠".
+                  newBalances[client.id] = ''; 
+              } else {
+                  // Standard Case
+                  const bal = prevBalances[client.id] || 0;
+                  newBalances[client.id] = bal.toString();
+                  await saveDrawBalance(selectedDate, client.id, bal);
+              }
           }
           
           setClientBalances(newBalances);
