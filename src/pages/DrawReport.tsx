@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { getClients, getDrawBalances, saveDrawBalance, getClientBalancesPriorToDate, generateSpecialCarryForward, getLedgerRecords, getNetAmount } from '../services/storageService';
 import { Client, LedgerRecord } from '../types';
 import { Calendar, ChevronLeft, ChevronRight, Filter, Save, Layers, RefreshCw, Loader2 } from 'lucide-react';
@@ -119,6 +119,9 @@ const DrawReport: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [previewClientId, setPreviewClientId] = useState<string | null>(null);
+  
+  // Timeout reference to manage blur/focus race conditions
+  const blurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     fetchClients();
@@ -205,10 +208,23 @@ const DrawReport: React.FC = () => {
           }
           return currentBalances;
       });
-      setTimeout(() => setPreviewClientId(null), 200);
+      
+      // Cancel previous timeout if it exists
+      if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+      
+      // Set new timeout to hide preview
+      blurTimeoutRef.current = setTimeout(() => {
+          setPreviewClientId(null);
+          blurTimeoutRef.current = null;
+      }, 200);
   }, [selectedDate]);
 
   const handleInputFocus = useCallback((clientId: string) => {
+      // Cancel pending hide since we are focusing a new input
+      if (blurTimeoutRef.current) {
+          clearTimeout(blurTimeoutRef.current);
+          blurTimeoutRef.current = null;
+      }
       setPreviewClientId(clientId);
   }, []);
 

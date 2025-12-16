@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { getClients, getCashCredits, saveCashCredit, getLedgerRecords, getNetAmount } from '../services/storageService';
 import { Client, LedgerRecord } from '../types';
 import { Calendar, ChevronLeft, ChevronRight, Filter, Save, CreditCard } from 'lucide-react';
@@ -116,6 +116,7 @@ const CashCredit: React.FC = () => {
   const [cashCredits, setCashCredits] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [previewClientId, setPreviewClientId] = useState<string | null>(null);
+  const blurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     fetchClients();
@@ -202,11 +203,19 @@ const CashCredit: React.FC = () => {
           }
           return current;
       });
-      // Delay to allow clicking inside preview before closing? No, standard behavior is close on blur.
-      setTimeout(() => setPreviewClientId(null), 200);
+      
+      if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+      blurTimeoutRef.current = setTimeout(() => {
+          setPreviewClientId(null);
+          blurTimeoutRef.current = null;
+      }, 200);
   }, [selectedDate]);
 
   const handleInputFocus = useCallback((clientId: string) => {
+      if (blurTimeoutRef.current) {
+          clearTimeout(blurTimeoutRef.current);
+          blurTimeoutRef.current = null;
+      }
       setPreviewClientId(clientId);
   }, []);
 

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { getClients, getCashAdvances, saveCashAdvance, getLedgerRecords, getNetAmount } from '../services/storageService';
 import { Client, LedgerRecord } from '../types';
 import { Calendar, ChevronLeft, ChevronRight, Filter, Save, Banknote } from 'lucide-react';
@@ -116,6 +116,7 @@ const CashAdvanceReport: React.FC = () => {
   const [cashAdvances, setCashAdvances] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [previewClientId, setPreviewClientId] = useState<string | null>(null);
+  const blurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     fetchClients();
@@ -202,11 +203,19 @@ const CashAdvanceReport: React.FC = () => {
           }
           return current;
       });
-      // Delay clearing preview to allow interaction if needed, or clear immediately
-      setTimeout(() => setPreviewClientId(null), 200);
+      
+      if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+      blurTimeoutRef.current = setTimeout(() => {
+          setPreviewClientId(null);
+          blurTimeoutRef.current = null;
+      }, 200);
   }, [selectedDate]);
 
   const handleInputFocus = useCallback((clientId: string) => {
+      if (blurTimeoutRef.current) {
+          clearTimeout(blurTimeoutRef.current);
+          blurTimeoutRef.current = null;
+      }
       setPreviewClientId(clientId);
   }, []);
 
