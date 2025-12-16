@@ -21,23 +21,19 @@ const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, se
             const c = clients.find(cl => cl.id === clientId);
             if (c) setClientName(c.name);
 
-            // 1. Calculate Balance UP TO selectedDate (Inclusive)
-            const historicRecords = records.filter(r => r.date <= selectedDate);
+            // Normalize Date Check (handle potential T00:00:00 timestamps)
+            const isSameDate = (d1: string, d2: string) => d1.split('T')[0] === d2.split('T')[0];
+            const isBeforeOrSame = (d1: string, d2: string) => d1.split('T')[0] <= d2.split('T')[0];
+
+            // 1. Calculate Balance UP TO selectedDate (Inclusive) - STRICTLY MAIN LEDGER
+            const historicRecords = records.filter(r => isBeforeOrSame(r.date, selectedDate));
+            const mainHistoric = historicRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
             
-            // Calculate Balance Logic (Panel 1 Priority)
-            const col1Records = historicRecords.filter(r => r.column === 'col1' && r.isVisible);
-            const mainRecords = historicRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
-            
-            let bal = 0;
-            if (col1Records.length > 0) {
-                bal = col1Records.reduce((acc, r) => acc + getNetAmount(r), 0);
-            } else {
-                bal = mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
-            }
+            const bal = mainHistoric.reduce((acc, r) => acc + getNetAmount(r), 0);
             setBalance(bal);
 
             // 2. Show ONLY Selected Date Records belonging to MAIN LEDGER
-            const daily = records.filter(r => r.date === selectedDate && (r.column === 'main' || !r.column));
+            const daily = records.filter(r => isSameDate(r.date, selectedDate) && (r.column === 'main' || !r.column));
             setDailyRecords(daily);
             
             setLoading(false);
