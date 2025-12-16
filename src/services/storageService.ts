@@ -365,10 +365,10 @@ export const saveDrawBalance = async (date: string, clientId: string, balance: n
 export const calculateSpecialCarryForwardBalance = async (clientId: string, clientCode: string, targetDate: string): Promise<number> => {
     if (!supabase) return 0;
 
-    // 1. Fetch records older than target date
-    // Increased lookback to 90 days to catch full panel history if records accumulate over time
+    // Fetch records older than target date (to capture "Previous Week")
+    // Use a wide window to be safe, e.g. 45 days
     const lookbackDate = new Date(targetDate);
-    lookbackDate.setDate(lookbackDate.getDate() - 90);
+    lookbackDate.setDate(lookbackDate.getDate() - 45);
     const lookbackStr = lookbackDate.toISOString().split('T')[0];
 
     const { data: recentRecords } = await supabase
@@ -380,23 +380,33 @@ export const calculateSpecialCarryForwardBalance = async (clientId: string, clie
 
     if (!recentRecords || recentRecords.length === 0) return 0;
 
-    // 2. Filter for Panel 1 (col1)
+    // Filter for Panel 1 (col1)
     const col1Records = recentRecords.filter(r => r.data?.column === 'col1');
     if (col1Records.length === 0) return 0;
 
-    // 3. Map to LedgerRecord
-    const mappedCluster = col1Records.map(mapJournalToLedgerRecord);
+    // Identify the latest week cluster
+    // Sort descending to find latest date
+    col1Records.sort((a, b) => new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime());
+    const latestDateStr = col1Records[0].entry_date;
+    const latestDate = new Date(latestDateStr);
+    
+    // Group records within 7 days of the latest date
+    const clusterStart = new Date(latestDate);
+    clusterStart.setDate(clusterStart.getDate() - 7);
+    
+    const latestClusterRaw = col1Records.filter(r => {
+        const d = new Date(r.entry_date);
+        return d >= clusterStart && d <= latestDate;
+    });
 
-    // 4. SORT ASCENDING (Oldest first)
-    // IMPORTANT: This matches the visual order in the ledger (Date ASC, then Priority)
-    // Removing row index 0 means removing the TOP row displayed.
+    if (latestClusterRaw.length === 0) return 0;
+
+    // Map to LedgerRecord
+    const mappedCluster = latestClusterRaw.map(mapJournalToLedgerRecord);
+
+    // SORT ASCENDING (Oldest first) to identify "First Rows"
     mappedCluster.sort((a, b) => {
-        // Primary: Entry Date
-        if (a.date !== b.date) {
-            return new Date(a.date).getTime() - new Date(b.date).getTime();
-        }
-
-        // Secondary: Parse typeLabel as "DD/MM" if entry dates are identical
+        // Parsing logic for date labels (e.g. 17/11) to ensure correct day sort within same month
         const parseDateLabel = (lbl: string) => {
             const parts = lbl.match(/^(\d{1,2})\/(\d{1,2})$/);
             if (parts) return parseInt(parts[2]) * 100 + parseInt(parts[1]); 
@@ -404,30 +414,26 @@ export const calculateSpecialCarryForwardBalance = async (clientId: string, clie
         };
         const scoreA = parseDateLabel(a.typeLabel);
         const scoreB = parseDateLabel(b.typeLabel);
-        
-        if (scoreA !== 0 && scoreB !== 0) {
-            return scoreA - scoreB; 
-        }
-
-        // Fallback: Priority
+        if (scoreA !== 0 && scoreB !== 0) return scoreA - scoreB;
+        // Fallback to priority sort or date sort
+        if (a.date !== b.date) return new Date(a.date).getTime() - new Date(b.date).getTime();
         return getRecordSortPriority(a) - getRecordSortPriority(b);
     });
 
-    // 5. Select Rows to Sum
+    // Rule:
+    // Z21 -> Sum of first 4 rows
+    // C19 -> Sum of first 5 rows
     let rowsToSum: LedgerRecord[] = [];
     
     if (clientCode.toUpperCase() === 'Z21') {
-        // Z21: Remove 1st row (Index 0). Sum next 4 rows (Index 1,2,3,4)
-        rowsToSum = mappedCluster.slice(1, 5); 
+        rowsToSum = mappedCluster.slice(0, 4);
     } else if (clientCode.toUpperCase() === 'C19') {
-        // C19: Remove 1st row (Index 0). Sum next 5 rows (Index 1,2,3,4,5)
-        // This ensures we start from the "second row" (index 1) as requested.
-        rowsToSum = mappedCluster.slice(1, 6);
+        rowsToSum = mappedCluster.slice(0, 5);
     } else {
         return 0; 
     }
 
-    // 6. Calculate Sum
+    // Calculate Sum
     const sum = rowsToSum.reduce((acc, r) => acc + getNetAmount(r), 0);
     return sum;
 };
