@@ -32,14 +32,7 @@ const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, se
             
             setWeekRange(`${startStr} to ${endStr}`);
 
-            // 1. Calculate Balance UP TO End of Week (Inclusive) - STRICTLY MAIN LEDGER
-            const historicRecords = records.filter(r => r.date <= endStr);
-            const mainHistoric = historicRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
-            
-            const bal = mainHistoric.reduce((acc, r) => acc + getNetAmount(r), 0);
-            setBalance(bal);
-
-            // 2. Show Records for the Whole Week belonging to MAIN LEDGER
+            // 1. Show Records for the Whole Week belonging to MAIN LEDGER
             const weekRecords = records.filter(r => 
                 r.date >= startStr && 
                 r.date <= endStr && 
@@ -48,6 +41,11 @@ const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, se
             
             weekRecords.sort((a, b) => a.date.localeCompare(b.date));
 
+            // 2. Calculate Balance strictly based on this week's visible records
+            const visibleWeekRecords = weekRecords.filter(r => r.isVisible);
+            const bal = visibleWeekRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
+            
+            setBalance(bal);
             setDailyRecords(weekRecords);
             
             setLoading(false);
@@ -258,16 +256,16 @@ const DrawReport: React.FC = () => {
 
       setGenerating(true);
       try {
-          const prevBalances = await getClientBalancesPriorToDate(selectedDate);
+          // PASS CLIENTS LIST to apply C13/Z21 Logic
+          const prevBalances = await getClientBalancesPriorToDate(selectedDate, clients);
           
           const newBalances: Record<string, string> = {};
           
           for (const client of clients) {
               const codeUpper = client.code?.toUpperCase();
               
-              // Special Logic for Z21 and C19
-              // Rule: Generate balance by Summing first 4 rows (Z21) or 5 rows (C19) of previous week
-              // AND copy those rows to the new date in Panel 1
+              // Special Logic for Z21 and C19 (Row Copying)
+              // This overrides prevBalances logic if applicable
               if (codeUpper === 'Z21' || codeUpper === 'C19') {
                   const specialBalance = await generateSpecialCarryForward(client.id, codeUpper, selectedDate);
                   
@@ -275,7 +273,7 @@ const DrawReport: React.FC = () => {
                   // Save for Report Total
                   await saveDrawBalance(selectedDate, client.id, specialBalance);
               } else {
-                  // Standard Case
+                  // Standard Case (Uses Main Ledger Total by default, or Panel 1 for C13 if in list)
                   const bal = prevBalances[client.id] || 0;
                   newBalances[client.id] = bal.toString();
                   await saveDrawBalance(selectedDate, client.id, bal);

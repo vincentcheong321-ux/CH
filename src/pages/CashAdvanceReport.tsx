@@ -32,14 +32,7 @@ const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, se
             
             setWeekRange(`${startStr} to ${endStr}`);
 
-            // 1. Calculate Balance UP TO End of Week (Inclusive) - STRICTLY MAIN LEDGER
-            const historicRecords = records.filter(r => r.date <= endStr);
-            const mainHistoric = historicRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
-            
-            const bal = mainHistoric.reduce((acc, r) => acc + getNetAmount(r), 0);
-            setBalance(bal);
-
-            // 2. Show Records for the Whole Week belonging to MAIN LEDGER
+            // 1. Show Records for the Whole Week belonging to MAIN LEDGER
             const weekRecords = records.filter(r => 
                 r.date >= startStr && 
                 r.date <= endStr && 
@@ -48,6 +41,11 @@ const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, se
             
             weekRecords.sort((a, b) => a.date.localeCompare(b.date));
 
+            // 2. Calculate Balance strictly based on this week's visible records
+            const visibleWeekRecords = weekRecords.filter(r => r.isVisible);
+            const bal = visibleWeekRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
+            
+            setBalance(bal);
             setDailyRecords(weekRecords);
             
             setLoading(false);

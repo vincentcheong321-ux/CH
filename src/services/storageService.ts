@@ -571,7 +571,7 @@ export const fetchClientTotalBalance = async (clientId: string): Promise<number>
     return mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
 };
 
-export const getClientBalancesPriorToDate = async (dateLimit: string): Promise<Record<string, number>> => {
+export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: Client[]): Promise<Record<string, number>> => {
     if (supabase) {
         const { data } = await supabase.from('financial_journal').select('*').lt('entry_date', dateLimit).order('entry_date', { ascending: true });
         if (!data) return {};
@@ -586,6 +586,9 @@ export const getClientBalancesPriorToDate = async (dateLimit: string): Promise<R
         const balances: Record<string, number> = {};
         Object.keys(clientRecords).forEach(clientId => {
             const records = clientRecords[clientId];
+            const client = clients?.find(c => c.id === clientId);
+            const clientCode = client?.code?.toUpperCase() || '';
+
             records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
             
             const latestSnapshot = records.find(r => r.id.startsWith('draw_') || r.typeLabel === '上欠');
@@ -600,9 +603,20 @@ export const getClientBalancesPriorToDate = async (dateLimit: string): Promise<R
                 });
             }
 
-            const col1Records = effectiveRecords.filter(r => r.column === 'col1' && r.isVisible);
-            if (col1Records.length > 0) balances[clientId] = col1Records.reduce((acc, r) => acc + getNetAmount(r), 0);
-            else {
+            // Logic: C13 and Z21 check Panel 1 first. Everyone else uses Main Ledger total.
+            // Note: Z21/C19 are often overwritten by generateSpecialCarryForward later, 
+            // but if they fall through to here (e.g. not enough history for special logic), 
+            // we apply the "Panel 1 priority" rule as requested ("except for special client c13 and z21").
+            if (clientCode === 'C13' || clientCode === 'Z21') {
+                const col1Records = effectiveRecords.filter(r => r.column === 'col1' && r.isVisible);
+                if (col1Records.length > 0) {
+                    balances[clientId] = col1Records.reduce((acc, r) => acc + getNetAmount(r), 0);
+                } else {
+                    const mainRecords = effectiveRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
+                    balances[clientId] = mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
+                }
+            } else {
+                // Default: ALWAYS Main Ledger total
                 const mainRecords = effectiveRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
                 balances[clientId] = mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
             }
