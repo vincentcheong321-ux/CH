@@ -365,55 +365,113 @@ export const saveDrawBalance = async (date: string, clientId: string, balance: n
 export const generateSpecialCarryForward = async (clientId: string, clientCode: string, targetDate: string) => {
     if (!supabase) return;
 
-    // 1. Find the most recent date BEFORE targetDate that has Panel 1 records
-    // We fetch all records for client in col1 prior to target, ordered descending
-    const { data: allPrev } = await supabase
+    // 1. Calculate Previous Week Range based on targetDate (assuming targetDate is usually Monday or within the current new week)
+    // We want to capture the records from the week immediately preceding the targetDate.
+    // E.g., if targetDate is Mon 29/12, we want records from Mon 22/12 to Sun 28/12.
+    // If targetDate is 08/12, prev week is 01/12 to 07/12.
+    // HOWEVER, the records might have dates spread across that previous week.
+    // Let's broaden the search to the previous 7 days from targetDate.
+    
+    const d = new Date(targetDate);
+    // Move back 7 days to get into the previous week window
+    d.setDate(d.getDate() - 7);
+    const rangeEnd = targetDate; // Non-inclusive usually for 'lt'
+    
+    // We'll search for records OLDER than targetDate.
+    // But to be precise for Z21/C19 who have specific date labels, we should grab ALL Panel 1 records
+    // that are 'active' in the previous block.
+    // The safest way is to fetch the *latest batch* of Panel 1 records.
+    // "Latest Batch" means records grouped by the most recent week they appeared in.
+    
+    // Let's fetch the last 30 days of Panel 1 records for this client to ensure we catch stragglers
+    const lookbackDate = new Date(targetDate);
+    lookbackDate.setDate(lookbackDate.getDate() - 30);
+    const lookbackStr = lookbackDate.toISOString().split('T')[0];
+
+    const { data: recentRecords } = await supabase
         .from('financial_journal')
         .select('*')
         .eq('client_id', clientId)
-        // Filter by data->column in application logic as Supabase simple filtering on jsonb keys varies
-        // But we can filter by client and date first
         .lt('entry_date', targetDate)
-        .order('entry_date', { ascending: false });
+        .gte('entry_date', lookbackStr);
 
-    if (!allPrev || allPrev.length === 0) return;
+    if (!recentRecords || recentRecords.length === 0) return;
 
-    // Filter for Col1 only manually if needed, and find the latest date group
-    const col1Records = allPrev.filter(r => r.data?.column === 'col1');
+    // Filter for Panel 1 (col1)
+    const col1Records = recentRecords.filter(r => r.data?.column === 'col1');
     if (col1Records.length === 0) return;
 
-    const lastDate = col1Records[0].entry_date;
+    // Now we need to isolate the "Previous Week's" set.
+    // Since records might have different entry_dates (e.g. 17/11, 24/11), we can't just group by one date.
+    // We should assume that ALL records found in the lookback period that haven't been superseded are part of the set?
+    // Actually, usually carry-forward creates new records.
+    // So the previous set of records likely shares a `created_at` timestamp close to each other, or are within a 7-day window.
+    // Let's group by ISO Week or just take the records from the *latest 7-day window* found in the data.
     
-    // Get all Panel 1 records for that specific date
-    const sourceRows = col1Records.filter(r => r.entry_date === lastDate);
-
-    // Map to LedgerRecord to use standard sorting
-    const mappedSource = sourceRows.map(mapJournalToLedgerRecord);
+    // 1. Find the latest entry_date in the set
+    col1Records.sort((a, b) => new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime());
+    const latestDateStr = col1Records[0].entry_date;
+    const latestDate = new Date(latestDateStr);
     
-    // Sort to determine "First Row", "Second Row" etc.
-    mappedSource.sort((a, b) => getRecordSortPriority(a) - getRecordSortPriority(b));
+    // 2. Define a window around that latest date (e.g., the Monday-Sunday of that week)
+    // This allows capturing 17/11, 24/11 if they were entered on different days but belong to the same logical "week" block?
+    // Actually, if the user manually entered them, they have exact dates.
+    // If we want to capture the "entire panel 1", we essentially want all records that would be visible.
+    // The simplest heuristic: Take all Col1 records from the *last available week* that has data.
+    
+    // Calculate the Monday of the week containing 'latestDate'
+    const day = latestDate.getDay(); 
+    const diff = latestDate.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+    const mondayOfLatestWeek = new Date(latestDate);
+    mondayOfLatestWeek.setDate(diff);
+    mondayOfLatestWeek.setHours(0,0,0,0);
+    
+    const sundayOfLatestWeek = new Date(mondayOfLatestWeek);
+    sundayOfLatestWeek.setDate(mondayOfLatestWeek.getDate() + 6);
+    sundayOfLatestWeek.setHours(23,59,59,999);
 
-    // Logic per client
+    const sourceRowsRaw = col1Records.filter(r => {
+        const rDate = new Date(r.entry_date);
+        return rDate >= mondayOfLatestWeek && rDate <= sundayOfLatestWeek;
+    });
+
+    if (sourceRowsRaw.length === 0) return;
+
+    // Map to LedgerRecord
+    const mappedSource = sourceRowsRaw.map(mapJournalToLedgerRecord);
+
+    // SORTING: This is critical for "Remove First Row".
+    // We must sort chronologically based on the content.
+    // If the typeLabel is a date "17/11", we parse it.
+    mappedSource.sort((a, b) => {
+        // Try to parse typeLabel as "DD/MM"
+        const parseDateLabel = (lbl: string) => {
+            const parts = lbl.match(/^(\d{1,2})\/(\d{1,2})$/);
+            if (parts) {
+                // assume current year or deduce
+                return parseInt(parts[2]) * 100 + parseInt(parts[1]); // MMDD score
+            }
+            return 0;
+        };
+        const scoreA = parseDateLabel(a.typeLabel);
+        const scoreB = parseDateLabel(b.typeLabel);
+        
+        if (scoreA !== 0 && scoreB !== 0) {
+            return scoreA - scoreB;
+        }
+        
+        // Fallback to standard priority
+        return getRecordSortPriority(a) - getRecordSortPriority(b);
+    });
+
+    // Apply Logic
     let recordsToClone: LedgerRecord[] = [];
 
-    if (clientCode.toUpperCase() === 'Z21') {
-        // Z21: Copy ALL. First row becomes 'none' (Slashed)
-        recordsToClone = mappedSource.map((r, index) => {
-            if (index === 0) {
-                return { 
-                    ...r, 
-                    operation: 'none', 
-                    // No change to description text needed if we rely on operation 'none' for styling,
-                    // but visual strike-through is requested. handled in ClientLedger.
-                };
-            }
-            return r;
-        });
-    } else if (clientCode.toUpperCase() === 'C19') {
-        // C19: Copy ALL EXCEPT first row
+    if (clientCode.toUpperCase() === 'Z21' || clientCode.toUpperCase() === 'C19') {
+        // BOTH Z21 and C19: Copy ALL EXCEPT first row
         recordsToClone = mappedSource.slice(1);
     } else {
-        return; // Should not happen if guard in UI works
+        return; 
     }
 
     // Insert cloned records into new date
