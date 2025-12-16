@@ -516,7 +516,7 @@ const ClientLedger: React.FC = () => {
                             
                             <div className={`text-sm md:text-lg font-bold uppercase tracking-wide text-gray-700 w-1/3 md:w-auto text-left md:text-right`}>{r.typeLabel}</div>
                             <div className="flex-1 text-right">
-                                {r.description && <div className="text-sm md:text-base text-gray-700 font-medium mr-1 md:mr-2 truncate inline-block">{r.description}</div>}
+                                {r.description && r.description !== r.typeLabel && <div className="text-sm md:text-base text-gray-700 font-medium mr-1 md:mr-2 truncate inline-block">{r.description}</div>}
                             </div>
                             <div className={`text-base md:text-xl font-mono font-bold w-24 md:w-28 text-right ${textColor}`}>
                                 {displayValue}
