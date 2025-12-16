@@ -162,7 +162,8 @@ const WinCalculator: React.FC = () => {
             const data = await getWinningsByDateRange(sStr, eStr);
             const mapped: Record<string, string> = {};
             clients.forEach(c => {
-                mapped[c.id] = data[c.id] ? data[c.id].toString() : '';
+                // FIXED: Ensure 2 decimal places string format
+                mapped[c.id] = data[c.id] ? data[c.id].toFixed(2) : '';
             });
             setClientWinnings(mapped);
         } else {
@@ -295,7 +296,8 @@ const WinCalculator: React.FC = () => {
             const record = prev as Record<string, string>;
             const raw = record[selectedClientId];
             const currentVal = parseFloat(raw || '0') || 0;
-            return { ...record, [selectedClientId]: (currentVal + totalWinnings).toString() };
+            // FIXED: Ensure 2 decimal update in local state
+            return { ...record, [selectedClientId]: (currentVal + totalWinnings).toFixed(2) };
         });
 
         setIsSaving(false);
@@ -319,6 +321,11 @@ const WinCalculator: React.FC = () => {
             const typedCurrent = current as Record<string, string>;
             const newVal = parseFloat(typedCurrent[clientId]) || 0;
             
+            // Format on blur
+            if (typedCurrent[clientId] !== '') {
+                typedCurrent[clientId] = newVal.toFixed(2);
+            }
+
             (async () => {
                 const d = new Date(selectedDate);
                 const weeks = getWeeksForMonth(d.getFullYear(), d.getMonth());
@@ -356,7 +363,7 @@ const WinCalculator: React.FC = () => {
                 }
             })();
 
-            return typedCurrent;
+            return { ...typedCurrent }; // Force re-render with new reference
         });
     }, [selectedDate]);
 

@@ -1,17 +1,81 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { getClients, getCashCredits, saveCashCredit } from '../services/storageService';
-import { Client } from '../types';
+import { getClients, getCashCredits, saveCashCredit, getLedgerRecords, getNetAmount } from '../services/storageService';
+import { Client, LedgerRecord } from '../types';
 import { Calendar, ChevronLeft, ChevronRight, Filter, Save, CreditCard } from 'lucide-react';
 import { MONTH_NAMES, getWeeksForMonth, getWeekRangeString } from '../utils/reportUtils';
 import { Link } from 'react-router-dom';
 
+// Preview Component
+const LedgerPreviewOverlay = ({ clientId }: { clientId: string }) => {
+    const [balance, setBalance] = useState<number | null>(null);
+    const [recent, setRecent] = useState<LedgerRecord[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [clientName, setClientName] = useState('');
+
+    useEffect(() => {
+        const load = async () => {
+            setLoading(true);
+            const records = await getLedgerRecords(clientId);
+            const clients = await getClients();
+            const c = clients.find(cl => cl.id === clientId);
+            if (c) setClientName(c.name);
+
+            // Calculate Balance Logic (Panel 1 Priority)
+            const col1Records = records.filter(r => r.column === 'col1' && r.isVisible);
+            const mainRecords = records.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
+            
+            let bal = 0;
+            if (col1Records.length > 0) {
+                bal = col1Records.reduce((acc, r) => acc + getNetAmount(r), 0);
+            } else {
+                bal = mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
+            }
+            setBalance(bal);
+
+            // Recent 3 transactions
+            const sorted = [...records].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            setRecent(sorted.slice(0, 3));
+            setLoading(false);
+        };
+        load();
+    }, [clientId]);
+
+    if (loading) return null;
+
+    return (
+        <div className="fixed bottom-0 right-0 md:bottom-8 md:right-8 bg-white border border-gray-200 shadow-2xl rounded-t-xl md:rounded-xl z-50 w-full md:w-80 overflow-hidden animate-in slide-in-from-bottom-10 fade-in duration-300">
+            <div className="bg-gray-900 text-white p-3 flex justify-between items-center">
+                <span className="font-bold truncate">{clientName}</span>
+                <span className={`font-mono font-bold ${balance! >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    ${Math.abs(balance!).toLocaleString()}
+                </span>
+            </div>
+            <div className="p-3 bg-gray-50">
+                <p className="text-[10px] text-gray-400 font-bold uppercase mb-2">Recent Transactions</p>
+                <div className="space-y-2">
+                    {recent.map(r => (
+                        <div key={r.id} className="flex justify-between text-xs border-b border-gray-100 pb-1 last:border-0">
+                            <span className="text-gray-600 truncate max-w-[60%]">{r.typeLabel} {r.description ? `- ${r.description}` : ''}</span>
+                            <span className={`font-mono font-bold ${r.operation === 'add' ? 'text-green-600' : r.operation === 'subtract' ? 'text-red-600' : 'text-gray-400'}`}>
+                                {r.operation === 'add' ? '+' : r.operation === 'subtract' ? '-' : ''}{r.amount.toLocaleString()}
+                            </span>
+                        </div>
+                    ))}
+                    {recent.length === 0 && <p className="text-xs text-gray-400 italic">No recent history.</p>}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 // Component for Individual Client Input
-const CashCreditInputRow = React.memo(({ client, value, onChange, onBlur, navState }: { 
+const CashCreditInputRow = React.memo(({ client, value, onChange, onBlur, onFocus, navState }: { 
     client: Client, 
     value: string, 
     onChange: (id: string, val: string) => void,
     onBlur: (id: string) => void,
+    onFocus: (id: string) => void,
     navState: any
 }) => {
     const numVal = parseFloat(value);
@@ -32,7 +96,7 @@ const CashCreditInputRow = React.memo(({ client, value, onChange, onBlur, navSta
                     value={value}
                     onChange={(e) => onChange(client.id, e.target.value)}
                     onBlur={() => onBlur(client.id)}
-                    onFocus={(e) => e.target.select()}
+                    onFocus={() => onFocus(client.id)}
                     className={`
                         w-full pl-6 pr-2 py-1 text-right font-mono font-bold rounded border
                         focus:outline-none focus:ring-2 focus:ring-blue-500
@@ -51,6 +115,7 @@ const CashCredit: React.FC = () => {
   const [clients, setClients] = useState<Client[]>([]);
   const [cashCredits, setCashCredits] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+  const [previewClientId, setPreviewClientId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchClients();
@@ -137,7 +202,13 @@ const CashCredit: React.FC = () => {
           }
           return current;
       });
+      // Delay to allow clicking inside preview before closing? No, standard behavior is close on blur.
+      setTimeout(() => setPreviewClientId(null), 200);
   }, [selectedDate]);
+
+  const handleInputFocus = useCallback((clientId: string) => {
+      setPreviewClientId(clientId);
+  }, []);
 
   const calculateTotal = (): number => {
     const values = Object.values(cashCredits) as string[];
@@ -249,7 +320,10 @@ const CashCredit: React.FC = () => {
   const total = calculateTotal();
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 min-h-screen pb-20">
+    <div className="flex flex-col lg:flex-row gap-6 min-h-screen pb-20 relative">
+        {/* Preview Overlay */}
+       {previewClientId && <LedgerPreviewOverlay clientId={previewClientId} />}
+
        {/* Left Sidebar */}
        <div className="lg:w-80 flex-shrink-0 no-print hidden lg:block">
             <h1 className="text-2xl font-bold text-gray-800 mb-2 flex items-center">
@@ -285,11 +359,14 @@ const CashCredit: React.FC = () => {
                             </div>
                         </div>
 
-                         {/* Mobile Pills */}
+                         {/* Mobile Pills with Sunday Date */}
                          <div className="flex lg:hidden space-x-2 bg-gray-200 p-1 rounded-lg w-fit overflow-x-auto max-w-full mb-2">
                             {sortedWeekNums.map((weekNum, idx) => {
                                 const days = currentMonthWeeks[weekNum];
                                 const isActive = weekNum.toString() === activeWeekNum;
+                                const sunday = days[6];
+                                const sunLabel = sunday ? `${sunday.getDate().toString().padStart(2,'0')}/${(sunday.getMonth()+1).toString().padStart(2,'0')}` : `W${idx+1}`;
+                                
                                 return (
                                     <button
                                         key={weekNum}
@@ -301,7 +378,7 @@ const CashCredit: React.FC = () => {
                                                 : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}
                                         `}
                                     >
-                                        Week {idx + 1}
+                                        Sun {sunLabel}
                                     </button>
                                 );
                             })}
@@ -322,6 +399,7 @@ const CashCredit: React.FC = () => {
                                                 value={cashCredits[c.id] || ''} 
                                                 onChange={handleInputChange}
                                                 onBlur={handleInputBlur}
+                                                onFocus={handleInputFocus}
                                                 navState={navState}
                                             />
                                         ))}
@@ -334,6 +412,7 @@ const CashCredit: React.FC = () => {
                                                 value={cashCredits[c.id] || ''} 
                                                 onChange={handleInputChange}
                                                 onBlur={handleInputBlur}
+                                                onFocus={handleInputFocus}
                                                 navState={navState}
                                             />
                                         ))}
