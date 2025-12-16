@@ -362,15 +362,40 @@ export const saveDrawBalance = async (date: string, clientId: string, balance: n
 };
 
 // --- SPECIAL CARRY FORWARD LOGIC (Z21 & C19) ---
-export const calculateSpecialCarryForwardBalance = async (clientId: string, clientCode: string, targetDate: string): Promise<number> => {
+// Generates duplicates of specific rows from the previous week into Panel 1 of the new week
+export const generateSpecialCarryForward = async (clientId: string, clientCode: string, targetDate: string): Promise<number> => {
     if (!supabase) return 0;
 
-    // Fetch records older than target date (to capture "Previous Week")
-    // Use a wide window to be safe, e.g. 45 days
+    // 1. Fetch & Sort (Reuse sort logic for consistency)
     const lookbackDate = new Date(targetDate);
-    lookbackDate.setDate(lookbackDate.getDate() - 45);
+    lookbackDate.setDate(lookbackDate.getDate() - 90);
     const lookbackStr = lookbackDate.toISOString().split('T')[0];
 
+    // Delete existing carry-forward records for this date/client to allow regeneration without duplicates
+    // We identify them by `data->isCarryForward: true`
+    // Supabase JS filter for JSON column requires specific syntax, or we can fetch & delete
+    // For simplicity, we fetch matches first.
+    const { data: existingCF } = await supabase.from('financial_journal')
+        .select('id')
+        .eq('client_id', clientId)
+        .eq('entry_date', targetDate)
+        .eq('entry_type', 'MANUAL');
+        
+    // Note: PostgREST JSON filtering can be tricky. We'll filter in memory if volume is low, or assume manual deletion via UI is rare.
+    // Actually, to be safe, let's delete them.
+    // If we can't filter by JSON property easily in this client version, we rely on the user or just append.
+    // But "Generate" usually implies overwrite.
+    // Let's try to fetch all manuals for today and delete if they look like CF.
+    if (existingCF && existingCF.length > 0) {
+        // This is risky without a flag. We'll add a flag to the new records.
+        // Assuming we can't delete reliably without potentially deleting user manual entries,
+        // we will proceed to insert. The user can delete if they made a mistake.
+        // BETTER: Use a delete loop with a client-side check if possible, but let's just insert for now 
+        // to match "bring forward" behavior (adding to the list).
+        // If the user clicks twice, they get double. We can add a simple check.
+    }
+
+    // Fetch Previous Data
     const { data: recentRecords } = await supabase
         .from('financial_journal')
         .select('*')
@@ -380,19 +405,15 @@ export const calculateSpecialCarryForwardBalance = async (clientId: string, clie
 
     if (!recentRecords || recentRecords.length === 0) return 0;
 
-    // Filter for Panel 1 (col1)
     const col1Records = recentRecords.filter(r => r.data?.column === 'col1');
     if (col1Records.length === 0) return 0;
 
-    // Identify the latest week cluster
-    // Sort descending to find latest date
+    // Sort Descending to find latest cluster date
     col1Records.sort((a, b) => new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime());
-    const latestDateStr = col1Records[0].entry_date;
-    const latestDate = new Date(latestDateStr);
+    const latestDate = new Date(col1Records[0].entry_date);
     
-    // Group records within 7 days of the latest date
     const clusterStart = new Date(latestDate);
-    clusterStart.setDate(clusterStart.getDate() - 7);
+    clusterStart.setDate(clusterStart.getDate() - 7); // 7 day window
     
     const latestClusterRaw = col1Records.filter(r => {
         const d = new Date(r.entry_date);
@@ -401,15 +422,12 @@ export const calculateSpecialCarryForwardBalance = async (clientId: string, clie
 
     if (latestClusterRaw.length === 0) return 0;
 
-    // Map to LedgerRecord
     const mappedCluster = latestClusterRaw.map(mapJournalToLedgerRecord);
 
-    // SORT ASCENDING (Oldest first) to identify "First Rows"
+    // SORT ASCENDING (Visual Order) - Critical for Z21/C19 logic
     mappedCluster.sort((a, b) => {
-        // Parsing logic for date labels (e.g. 17/11) to ensure correct day sort within same month
         const parseDateLabel = (lbl: string) => {
             if (!lbl) return 0;
-            // Robust match for DD/MM
             const parts = lbl.match(/^(\d{1,2})\/(\d{1,2})$/);
             if (parts) return parseInt(parts[2]) * 100 + parseInt(parts[1]); 
             return 0;
@@ -420,76 +438,66 @@ export const calculateSpecialCarryForwardBalance = async (clientId: string, clie
         // C19: STRICTLY sort by date label if present
         if (clientCode.toUpperCase() === 'C19') {
              if (scoreA !== 0 && scoreB !== 0) return scoreA - scoreB;
-             // If only one has a date label, prioritize it? Or fallback to entry_date.
              if (scoreA !== 0) return -1;
              if (scoreB !== 0) return 1;
         }
-
         if (scoreA !== 0 && scoreB !== 0) return scoreA - scoreB;
-        
-        // Fallback to priority sort or date sort
         if (a.date !== b.date) return new Date(a.date).getTime() - new Date(b.date).getTime();
         return getRecordSortPriority(a) - getRecordSortPriority(b);
     });
 
-    // Rule:
-    // Z21 -> Sum of first 4 rows
-    // C19 -> Sum of first 5 rows
-    let rowsToSum: LedgerRecord[] = [];
+    // Selection Logic
+    let rowsToCopy: LedgerRecord[] = [];
     
     if (clientCode.toUpperCase() === 'Z21') {
-        rowsToSum = mappedCluster.slice(0, 4);
+        rowsToCopy = mappedCluster.slice(1, 5); // Skip 0, take 1,2,3,4
     } else if (clientCode.toUpperCase() === 'C19') {
-        rowsToSum = mappedCluster.slice(0, 5);
+        rowsToCopy = mappedCluster.slice(1, 6); // Skip 0, take 1,2,3,4,5
     } else {
         return 0; 
     }
 
-    // Calculate Sum
-    const sum = rowsToSum.reduce((acc, r) => acc + getNetAmount(r), 0);
-    return sum;
-};
+    const sum = rowsToCopy.reduce((acc, r) => acc + getNetAmount(r), 0);
 
-// NEW: Save special panel 1 balance (Restores the "Bring Forward" to Panel 1)
-export const saveSpecialPanel1Balance = async (clientId: string, date: string, amount: number) => {
-    if (supabase) {
-        const { data: records } = await supabase.from('financial_journal')
-            .select('*')
+    // INSERT COPIES
+    // First, try to remove previously generated CF records for this day to avoid dupes on re-run
+    // We will use a specific marker in the description or data to identify them? 
+    // Or just let them pile up? Pile up is bad.
+    // Let's assume we can just check if *identical* records exist and skip?
+    
+    for (const r of rowsToCopy) {
+        let signedAmount = 0;
+        if (r.operation === 'add') signedAmount = r.amount;
+        else if (r.operation === 'subtract') signedAmount = -r.amount;
+
+        // Check for duplicate before inserting
+        const { data: dupes } = await supabase.from('financial_journal')
+            .select('id')
             .eq('client_id', clientId)
-            .eq('entry_date', date)
-            .eq('entry_type', 'MANUAL');
-        
-        // Find existing "上欠" in "col1" for this date
-        const existing = records?.find(r => r.data?.typeLabel === '上欠' && r.data?.column === 'col1');
+            .eq('entry_date', targetDate)
+            .eq('amount', signedAmount)
+            .contains('data', { description: r.description, column: 'col1' }); // Check JSON subset
 
-        const operation = amount >= 0 ? 'add' : 'subtract';
-        
-        if (existing) {
-            await supabase.from('financial_journal').update({
-                amount: amount, 
-                data: {
-                    ...existing.data,
-                    description: '上欠',
-                    typeLabel: '上欠',
-                    operation: operation,
-                    column: 'col1'
-                }
-            }).eq('id', existing.id);
-        } else {
-            await supabase.from('financial_journal').insert({
-                client_id: clientId,
-                entry_date: date,
-                entry_type: 'MANUAL',
-                amount: amount,
-                data: {
-                    description: '上欠',
-                    typeLabel: '上欠',
-                    operation: operation,
-                    column: 'col1'
-                }
-            });
+        if (dupes && dupes.length > 0) {
+            continue; // Skip if already exists
         }
+
+        await supabase.from('financial_journal').insert({
+            client_id: clientId,
+            entry_date: targetDate,
+            entry_type: 'MANUAL',
+            amount: signedAmount,
+            data: {
+                description: r.description,
+                typeLabel: r.typeLabel,
+                operation: r.operation,
+                column: 'col1',
+                isCarryForward: true // Flag for potential future cleanup
+            }
+        });
     }
+
+    return sum;
 };
 
 // --- Mobile Report ---

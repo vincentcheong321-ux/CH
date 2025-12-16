@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { getClients, getDrawBalances, saveDrawBalance, getClientBalancesPriorToDate, calculateSpecialCarryForwardBalance, saveSpecialPanel1Balance } from '../services/storageService';
+import { getClients, getDrawBalances, saveDrawBalance, getClientBalancesPriorToDate, generateSpecialCarryForward } from '../services/storageService';
 import { Client } from '../types';
 import { Calendar, ChevronLeft, ChevronRight, Filter, Save, Layers, RefreshCw, Loader2 } from 'lucide-react';
 import { MONTH_NAMES, getWeeksForMonth, getWeekRangeString } from '../utils/reportUtils';
@@ -157,14 +157,13 @@ const DrawReport: React.FC = () => {
               
               // Special Logic for Z21 and C19
               // Rule: Generate balance by Summing first 4 rows (Z21) or 5 rows (C19) of previous week
+              // AND copy those rows to the new date in Panel 1
               if (codeUpper === 'Z21' || codeUpper === 'C19') {
-                  const specialBalance = await calculateSpecialCarryForwardBalance(client.id, codeUpper, selectedDate);
+                  const specialBalance = await generateSpecialCarryForward(client.id, codeUpper, selectedDate);
                   
                   newBalances[client.id] = specialBalance.toString();
                   // Save for Report Total
                   await saveDrawBalance(selectedDate, client.id, specialBalance);
-                  // Save to Panel 1 as a visible record
-                  await saveSpecialPanel1Balance(client.id, selectedDate, specialBalance);
               } else {
                   // Standard Case
                   const bal = prevBalances[client.id] || 0;
