@@ -467,7 +467,19 @@ const ClientLedger: React.FC = () => {
       return { processed, finalBalance };
   };
 
-  const mainLedger = useMemo(() => calculateColumn('main'), [weekRecords]);
+  const mainLedger = useMemo(() => {
+      const data = calculateColumn('main');
+      
+      // SPECIAL LOGIC: Hide '上欠' records for Z21 and C19 from Main Ledger view
+      if (client && (client.code.toUpperCase() === 'Z21' || client.code.toUpperCase() === 'C19')) {
+          data.processed = data.processed.filter(r => r.typeLabel !== '上欠');
+          // Recalculate visual balance for the column (keeping data integrity, just hiding from column calc)
+          const visibleProcessed = data.processed.filter(r => r.isVisible);
+          data.finalBalance = visibleProcessed.reduce((acc, curr) => acc + curr.netChange, 0);
+      }
+      return data;
+  }, [weekRecords, client]);
+
   const col1Ledger = useMemo(() => calculateColumn('col1'), [weekRecords]);
   const col2Ledger = useMemo(() => calculateColumn('col2'), [weekRecords]);
 
@@ -483,7 +495,6 @@ const ClientLedger: React.FC = () => {
           <div className="flex flex-col w-full md:w-fit items-end">
                 {data.processed.map((r) => {
                     // Check for Winnings Record (Panel 1 Special Display)
-                    // Robust check: contains "Winnings:"
                     if (isPanel1 && r.description && r.description.includes('Winnings:')) {
                         return (
                             <WinningBreakdown 
@@ -497,12 +508,11 @@ const ClientLedger: React.FC = () => {
                         );
                     }
 
-                    const isReflected = r.id.startsWith('sale_') || r.id.startsWith('adv_') || r.id.startsWith('draw_') || r.id === 'agg_sale_week' || r.id.startsWith('cred_');
+                    const isCrossedOut = r.operation === 'none';
                     const isNetNegative = r.operation !== 'none' && r.netChange < 0;
                     const absValue = Math.abs(r.operation === 'none' ? r.amount : r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2});
                     const useBrackets = isNetNegative && (r.typeLabel === '收' || r.id === 'agg_sale_week');
                     const displayValue = useBrackets ? `(${absValue})` : absValue;
-                    const isCrossedOut = r.operation === 'none';
                     
                     let textColor = 'text-gray-600';
                     if (r.operation === 'add') textColor = isNetNegative ? 'text-red-700' : 'text-green-700';

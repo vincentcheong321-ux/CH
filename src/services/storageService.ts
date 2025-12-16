@@ -408,13 +408,25 @@ export const calculateSpecialCarryForwardBalance = async (clientId: string, clie
     mappedCluster.sort((a, b) => {
         // Parsing logic for date labels (e.g. 17/11) to ensure correct day sort within same month
         const parseDateLabel = (lbl: string) => {
+            if (!lbl) return 0;
+            // Robust match for DD/MM
             const parts = lbl.match(/^(\d{1,2})\/(\d{1,2})$/);
             if (parts) return parseInt(parts[2]) * 100 + parseInt(parts[1]); 
             return 0;
         };
         const scoreA = parseDateLabel(a.typeLabel);
         const scoreB = parseDateLabel(b.typeLabel);
+        
+        // C19: STRICTLY sort by date label if present
+        if (clientCode.toUpperCase() === 'C19') {
+             if (scoreA !== 0 && scoreB !== 0) return scoreA - scoreB;
+             // If only one has a date label, prioritize it? Or fallback to entry_date.
+             if (scoreA !== 0) return -1;
+             if (scoreB !== 0) return 1;
+        }
+
         if (scoreA !== 0 && scoreB !== 0) return scoreA - scoreB;
+        
         // Fallback to priority sort or date sort
         if (a.date !== b.date) return new Date(a.date).getTime() - new Date(b.date).getTime();
         return getRecordSortPriority(a) - getRecordSortPriority(b);
