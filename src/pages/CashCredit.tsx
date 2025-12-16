@@ -36,8 +36,8 @@ const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, se
             }
             setBalance(bal);
 
-            // 2. Show ONLY Selected Date Records
-            const daily = records.filter(r => r.date === selectedDate);
+            // 2. Show ONLY Selected Date Records belonging to MAIN LEDGER
+            const daily = records.filter(r => r.date === selectedDate && (r.column === 'main' || !r.column));
             setDailyRecords(daily);
             
             setLoading(false);
@@ -48,34 +48,34 @@ const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, se
     if (loading) return null;
 
     return (
-        <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-8 md:bottom-8 bg-white border border-gray-200 shadow-2xl rounded-xl z-50 md:w-[450px] overflow-hidden animate-in slide-in-from-bottom-10 fade-in duration-300 flex flex-col max-h-[50vh] md:max-h-[600px]">
-            <div className="bg-gray-900 text-white p-3 md:p-4 flex justify-between items-center flex-shrink-0 shadow-md z-10">
+        <div className="fixed bottom-2 left-2 right-2 md:left-auto md:right-8 md:bottom-8 bg-white border border-gray-200 shadow-2xl rounded-xl z-50 md:w-[450px] overflow-hidden animate-in slide-in-from-bottom-10 fade-in duration-300 flex flex-col max-h-[40vh] md:max-h-[600px]">
+            <div className="bg-gray-900 text-white p-2 md:p-4 flex justify-between items-center flex-shrink-0 shadow-md z-10">
                 <div className="flex flex-col overflow-hidden mr-2">
-                    <span className="font-bold truncate text-base md:text-lg">{clientName}</span>
+                    <span className="font-bold truncate text-sm md:text-lg">{clientName}</span>
                     <span className="text-[10px] md:text-xs text-gray-400">Balance as of {selectedDate}</span>
                 </div>
-                <span className={`font-mono font-bold text-xl md:text-2xl whitespace-nowrap ${balance! >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                <span className={`font-mono font-bold text-lg md:text-2xl whitespace-nowrap ${balance! >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     ${Math.abs(balance!).toLocaleString()}
                 </span>
             </div>
             <div className="flex-1 bg-gray-50 overflow-y-auto p-0">
-                <div className="sticky top-0 bg-gray-100 px-4 py-2 border-b border-gray-200 text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider z-0">
-                    {selectedDate} Activity
+                <div className="sticky top-0 bg-gray-100 px-3 py-1.5 md:px-4 md:py-2 border-b border-gray-200 text-[10px] md:text-xs font-bold text-gray-500 uppercase tracking-wider z-0">
+                    {selectedDate} Main Ledger
                 </div>
                 <div className="divide-y divide-gray-200">
                     {dailyRecords.map(r => (
-                        <div key={r.id} className="flex justify-between items-center px-4 py-2 md:py-3 text-xs md:text-sm bg-white hover:bg-gray-50">
-                            <div className="flex flex-col min-w-0 mr-4">
+                        <div key={r.id} className="flex justify-between items-center px-3 py-1.5 md:px-4 md:py-3 text-[11px] md:text-sm bg-white hover:bg-gray-50">
+                            <div className="flex flex-col min-w-0 mr-2">
                                 <div className="text-gray-700 truncate font-medium">
                                     {r.typeLabel} {r.description ? <span className="text-gray-500 font-normal">- {r.description}</span> : ''}
                                 </div>
                             </div>
-                            <span className={`font-mono font-bold text-sm md:text-base flex-shrink-0 ${r.operation === 'add' ? 'text-green-600' : r.operation === 'subtract' ? 'text-red-600' : 'text-gray-400'}`}>
+                            <span className={`font-mono font-bold text-xs md:text-base flex-shrink-0 ${r.operation === 'add' ? 'text-green-600' : r.operation === 'subtract' ? 'text-red-600' : 'text-gray-400'}`}>
                                 {r.operation === 'add' ? '+' : r.operation === 'subtract' ? '-' : ''}{r.amount.toLocaleString()}
                             </span>
                         </div>
                     ))}
-                    {dailyRecords.length === 0 && <p className="p-6 text-center text-xs text-gray-400 italic">No activity on this date.</p>}
+                    {dailyRecords.length === 0 && <p className="p-4 text-center text-[10px] md:text-xs text-gray-400 italic">No main ledger activity.</p>}
                 </div>
             </div>
         </div>
@@ -366,23 +366,32 @@ const CashCredit: React.FC = () => {
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col flex-1 relative">
                     {/* Header */}
                     <div className="bg-gray-50 p-4 border-b border-gray-200 sticky top-0 z-10">
-                        <div className="flex justify-between items-center mb-4">
-                            <div>
-                                <h2 className="text-xl font-bold text-gray-900 flex items-center">
-                                    <CreditCard size={20} className="mr-2 text-blue-600" />
-                                    {rangeTitle}
-                                </h2>
-                                <p className="text-gray-500 font-medium text-sm mt-1">
-                                    {MONTH_NAMES[currentMonth]} {currentYear} • Week {activeWeekIndex + 1}
-                                </p>
+                        <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center mb-4 gap-2">
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <h2 className="text-xl font-bold text-gray-900 flex items-center">
+                                        <CreditCard size={20} className="mr-2 text-blue-600" />
+                                        <span className="lg:hidden">Cash Credit</span>
+                                        <span className="hidden lg:inline">{rangeTitle}</span>
+                                    </h2>
+                                    <p className="text-gray-500 font-medium text-sm mt-1 hidden lg:block">
+                                        {MONTH_NAMES[currentMonth]} {currentYear} • Week {activeWeekIndex + 1}
+                                    </p>
+                                </div>
+                                 {/* Mobile Month Nav */}
+                                 <div className="flex lg:hidden items-center bg-white rounded-lg border border-gray-200 shadow-sm p-0.5">
+                                     <button onClick={prevMonth} disabled={currentYear === 2025 && currentMonth === 0} className="p-1.5 hover:bg-gray-50 rounded-md disabled:opacity-30"><ChevronLeft size={16}/></button>
+                                     <span className="text-xs font-bold px-2 w-20 text-center">{MONTH_NAMES[currentMonth].slice(0,3)} {currentYear}</span>
+                                     <button onClick={nextMonth} disabled={currentYear === 2026 && currentMonth === 11} className="p-1.5 hover:bg-gray-50 rounded-md disabled:opacity-30"><ChevronRight size={16}/></button>
+                                </div>
                             </div>
-                            <div className="flex items-center text-xs text-gray-500 bg-yellow-50 px-3 py-1 rounded-full border border-yellow-200">
+                            <div className="flex items-center text-xs text-gray-500 bg-yellow-50 px-3 py-1 rounded-full border border-yellow-200 w-fit">
                                 <Save size={14} className="mr-1" /> Auto-saves on exit
                             </div>
                         </div>
 
                          {/* Mobile Pills with Sunday Date */}
-                         <div className="flex lg:hidden space-x-2 bg-gray-200 p-1 rounded-lg w-fit overflow-x-auto max-w-full mb-2">
+                         <div className="flex lg:hidden space-x-2 bg-gray-200 p-1 rounded-lg w-full overflow-x-auto mb-2 no-scrollbar">
                             {sortedWeekNums.map((weekNum, idx) => {
                                 const days = currentMonthWeeks[weekNum];
                                 const isActive = weekNum.toString() === activeWeekNum;
@@ -394,7 +403,7 @@ const CashCredit: React.FC = () => {
                                         key={weekNum}
                                         onClick={() => handleDateClick(days[0])}
                                         className={`
-                                            px-4 py-1.5 rounded-md text-sm font-bold transition-all whitespace-nowrap
+                                            px-4 py-1.5 rounded-md text-sm font-bold transition-all whitespace-nowrap flex-shrink-0
                                             ${isActive 
                                                 ? 'bg-white text-blue-600 shadow-sm' 
                                                 : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'}
