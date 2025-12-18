@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { getClients, fetchClientTotalBalance } from '../services/storageService';
 import { Client } from '../types';
-import { TrendingUp, Calendar, Loader2, ArrowUpRight, DollarSign, Wallet } from 'lucide-react';
+import { TrendingUp, Calendar, Loader2, DollarSign, Wallet } from 'lucide-react';
 import { MONTH_NAMES, getWeeksForMonth } from '../utils/reportUtils';
 import { supabase } from '../supabaseClient';
 
@@ -15,6 +15,14 @@ const Summary: React.FC = () => {
   const [weeklyData, setWeeklyData] = useState<{date: string, total: number}[]>([]);
   const [activeTab, setActiveTab] = useState<'weekly' | 'clients'>('weekly');
   const [loading, setLoading] = useState(true);
+
+  // Helper to get YYYY-MM-DD from a local Date object without timezone shift
+  const formatLocalDate = (d: Date) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -42,8 +50,9 @@ const Summary: React.FC = () => {
                     for (let m = 0; m < 12; m++) {
                         const weeks = getWeeksForMonth(y, m);
                         Object.values(weeks).forEach(days => {
-                            const startStr = days[0].toISOString().split('T')[0];
-                            const endStr = days[6].toISOString().split('T')[0]; // SUNDAY
+                            // Use local formatting to avoid 00:00:00 UTC shifting to previous day
+                            const startStr = formatLocalDate(days[0]);
+                            const endStr = formatLocalDate(days[6]); // SUNDAY
                             allWeeks.push({ start: startStr, end: endStr, label: endStr });
                         });
                     }
@@ -69,10 +78,12 @@ const Summary: React.FC = () => {
                     let earnings = 0;
                     if (isMobileProfile) {
                         // Mobile Earnings = abs(idx 11: Shareholder Total)
+                        // This matches SalesIndex calculation for Mobile Earnings
                         const shareholderTotalStr = row.data?.mobileRawData?.[11] || '0';
                         earnings = Math.abs(parseFloat(String(shareholderTotalStr).replace(/,/g, '')) || 0);
                     } else if (isValidPaper) {
                         // Paper Earnings = abs((Raw * 0.83) - (Raw * 0.86))
+                        // This matches SalesIndex calculation for Paper Earnings
                         const b = row.data?.b || 0;
                         const s = row.data?.s || 0;
                         const a = row.data?.a || 0;
@@ -115,7 +126,7 @@ const Summary: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
             <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Financial Summary</h1>
-            <p className="text-gray-500 mt-1">Cross-check profit net between systems.</p>
+            <p className="text-gray-500 mt-1">Calculated from Sales Opening earnings.</p>
         </div>
         
         <div className="bg-gray-200 p-1 rounded-2xl flex self-start md:self-auto shadow-inner">

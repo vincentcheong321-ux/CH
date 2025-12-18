@@ -19,7 +19,7 @@ const MOBILE_TO_PAPER_MAP: Record<string, string> = {
     'vc9486': '9486'  // vincent -> 张
 };
 
-// FIX: Added missing formatTotal utility function for numeric formatting in tables
+// FIX: Utility function for numeric formatting in tables
 const formatTotal = (val: number) => {
     if (!val || val === 0) return '-';
     return val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -407,7 +407,7 @@ const SalesIndex: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-gray-50">
-      {/* Top Header - Tabs and Navigation */}
+      {/* Top Header - Tabs and Navigation (REVERTED TO SIMPLER DESIGN) */}
       <div className="bg-white border-b border-gray-200 z-20 shadow-sm flex-shrink-0">
           <div className="px-4 py-3 flex flex-col sm:flex-row justify-between items-center gap-3">
              <div className="flex items-center w-full sm:w-auto">
@@ -446,34 +446,31 @@ const SalesIndex: React.FC = () => {
                 <button onClick={loadData} className="ml-auto p-2 text-gray-400 hover:text-blue-600 hover:bg-white rounded-full transition-colors border border-transparent hover:border-gray-200"><RefreshCw size={16} className={loading ? 'animate-spin' : ''} /></button>
           </div>
 
-          {/* Totals Bar - Redesigned for Mobile and Colors updated to Orange */}
-          <div className="bg-white border-t border-gray-100 px-4 py-3 overflow-hidden">
-                <div className="flex flex-col md:flex-row md:items-center gap-4">
-                    {/* Metric Cards - Flexible Grid on Mobile */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 flex-1">
-                        {activeTab === 'paper' ? (
-                            <>
-                                <div className="flex flex-col"><span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Total</span><span className="font-mono font-bold text-gray-800 text-base md:text-lg">${totalPaperRaw.toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
-                                <div className="flex flex-col"><span className="text-[10px] text-blue-500 font-bold uppercase tracking-widest">Comp (17%)</span><span className="font-mono font-bold text-blue-600 text-base md:text-lg">${Math.abs(totalPaperCompany).toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
-                                <div className="flex flex-col"><span className="text-[10px] text-red-500 font-bold uppercase tracking-widest">Client (14%)</span><span className="font-mono font-bold text-red-600 text-base md:text-lg">${Math.abs(totalPaperClient).toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
-                                <div className="flex flex-col"><span className="text-[10px] text-orange-600 font-bold uppercase tracking-widest">Earnings</span><span className="font-mono font-bold text-orange-600 text-base md:text-lg">${Math.abs(totalPaperEarnings).toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
-                            </>
-                        ) : (
-                            <>
-                                <div className="flex flex-col"><span className="text-[10px] text-purple-400 font-bold uppercase tracking-widest">公司总额</span><span className="font-mono font-bold text-purple-600 text-base md:text-lg">${totalMobileAgent.toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
-                                <div className="flex flex-col"><span className="text-[10px] text-blue-500 font-bold uppercase tracking-widest">会员总数</span><span className="font-mono font-bold text-blue-600 text-base md:text-lg">${totalMobileCompany.toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
-                                <div className="col-span-2 flex flex-col"><span className="text-[10px] text-orange-600 font-bold uppercase tracking-widest">Earnings</span><span className="font-mono font-bold text-orange-600 text-base md:text-lg">${Math.abs(totalMobileShareholder).toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
-                            </>
-                        )}
-                    </div>
+          {/* Totals Bar - Simplified Scrollable Row for Paper/Mobile Compatibility */}
+          <div className="bg-white border-t border-gray-100 px-4 py-2 overflow-x-auto no-scrollbar">
+                <div className="flex items-center min-w-max space-x-6 md:space-x-10">
+                    {activeTab === 'paper' ? (
+                        <>
+                            <div className="flex flex-col"><span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Total</span><span className="font-mono font-bold text-gray-800 text-sm md:text-base">${totalPaperRaw.toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
+                            <div className="flex flex-col"><span className="text-[9px] text-blue-500 font-bold uppercase tracking-widest">Comp (17%)</span><span className="font-mono font-bold text-blue-600 text-sm md:text-base">${Math.abs(totalPaperCompany).toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
+                            <div className="flex flex-col"><span className="text-[9px] text-red-500 font-bold uppercase tracking-widest">Client (14%)</span><span className="font-mono font-bold text-red-600 text-sm md:text-base">${Math.abs(totalPaperClient).toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
+                            <div className="flex flex-col"><span className="text-[9px] text-orange-600 font-bold uppercase tracking-widest">Earnings</span><span className="font-mono font-bold text-orange-600 text-sm md:text-base">${Math.abs(totalPaperEarnings).toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
+                        </>
+                    ) : (
+                        <>
+                            <div className="flex flex-col"><span className="text-[9px] text-purple-400 font-bold uppercase tracking-widest">公司总额</span><span className="font-mono font-bold text-purple-600 text-sm md:text-base">${totalMobileAgent.toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
+                            <div className="flex flex-col"><span className="text-[9px] text-blue-500 font-bold uppercase tracking-widest">会员总数</span><span className="font-mono font-bold text-blue-600 text-sm md:text-base">${totalMobileCompany.toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
+                            <div className="flex flex-col"><span className="text-[9px] text-orange-600 font-bold uppercase tracking-widest">Earnings</span><span className="font-mono font-bold text-orange-600 text-sm md:text-base">${Math.abs(totalMobileShareholder).toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
+                        </>
+                    )}
                     
-                    {/* Weekly Total Earning relocated to follow the list metrics */}
-                    <div className="h-12 w-px bg-gray-100 hidden md:block"></div>
-                    <div className="bg-emerald-50 px-5 py-2.5 rounded-2xl border border-emerald-100 flex items-center shadow-sm w-full md:w-auto">
-                        <TrendingUp size={24} className="text-emerald-500 mr-4" />
+                    {/* Weekly Total Earning relocated to follow the metrics */}
+                    <div className="h-8 w-px bg-gray-100 hidden md:block"></div>
+                    <div className="bg-emerald-50 px-4 py-1.5 rounded-xl border border-emerald-100 flex items-center shadow-sm">
+                        <TrendingUp size={16} className="text-emerald-500 mr-3" />
                         <div className="flex flex-col">
-                            <span className="text-[10px] text-emerald-600 font-black uppercase tracking-widest leading-none mb-1.5">Weekly Total Earning</span>
-                            <span className="font-mono font-black text-emerald-700 text-lg md:text-2xl leading-none">${totalWeeklyProfit.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                            <span className="text-[9px] text-emerald-600 font-black uppercase tracking-widest leading-none mb-1">Weekly Total Earning</span>
+                            <span className="font-mono font-black text-emerald-700 text-base md:text-xl leading-none">${totalWeeklyProfit.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                         </div>
                     </div>
                 </div>
