@@ -25,24 +25,22 @@ const Summary: React.FC = () => {
         setClientData(summary);
 
         // 2. REDEFINED: Fetch Weekly Earnings from Sales Opening (Paper & Mobile Earnings)
-        // We fetch all records of type 'SALE' and group them by week
+        // Grouping by SUNDAY cutoff.
         if (supabase) {
             const { data: sales } = await supabase.from('financial_journal').select('*').eq('entry_type', 'SALE');
             
             if (sales) {
-                // Determine weeks for current relevant years
-                const currentYear = new Date().getFullYear();
-                // Map of week-end-date -> total earnings
+                // Map of Sunday-Date -> total earnings
                 const weeklyEarningsMap = new Map<string, { total: number, count: number }>();
 
-                // Define weeks (Mon-Sun) across 2025-2026 for grouping
+                // Define all valid weeks in our system across 2025-2026
                 const allWeeks: { start: string, end: string, label: string }[] = [];
                 for (let y = 2025; y <= 2026; y++) {
                     for (let m = 0; m < 12; m++) {
                         const weeks = getWeeksForMonth(y, m);
                         Object.values(weeks).forEach(days => {
                             const startStr = days[0].toISOString().split('T')[0];
-                            const endStr = days[6].toISOString().split('T')[0];
+                            const endStr = days[6].toISOString().split('T')[0]; // SUNDAY
                             allWeeks.push({ start: startStr, end: endStr, label: endStr });
                         });
                     }
@@ -51,6 +49,7 @@ const Summary: React.FC = () => {
                 sales.forEach(row => {
                     const client = clients.find(c => c.id === row.client_id);
                     const date = row.entry_date;
+                    // Find which Mon-Sun week this date belongs to
                     const week = allWeeks.find(w => date >= w.start && date <= w.end);
                     if (!week) return;
 
@@ -84,6 +83,7 @@ const Summary: React.FC = () => {
                     count: data.count
                 }));
 
+                // Sort newest week (Sunday) first
                 weeklyList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
                 setWeeklyData(weeklyList);
             }
@@ -134,7 +134,7 @@ const Summary: React.FC = () => {
                         +${totalWeeklyEarnings.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                 </div>
-                <p className="text-sm text-gray-400 mt-2">Sum of Paper (-17% vs -14%) + Mobile Earnings</p>
+                <p className="text-sm text-gray-400 mt-2">Sum of Paper + Mobile Earnings</p>
             </div>
             <div className="absolute right-0 bottom-0 p-6 opacity-5">
                 <TrendingUp size={100} className="text-emerald-600" />
@@ -170,7 +170,7 @@ const Summary: React.FC = () => {
                 <table className="w-full text-left">
                 <thead className="bg-gray-50 text-gray-500 text-[10px] uppercase font-bold tracking-widest">
                     <tr>
-                    <th className="px-6 py-4">Week Ending</th>
+                    <th className="px-6 py-4">Week Ending (Sun)</th>
                     <th className="px-6 py-4">Category</th>
                     <th className="px-6 py-4 text-right">Transactions</th>
                     <th className="px-6 py-4 text-right">Net Profit</th>
@@ -193,7 +193,7 @@ const Summary: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 text-right">
                             <span className="font-bold text-lg text-emerald-600">
-                                +${week.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                +${Math.abs(week.total).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </span>
                         </td>
                     </tr>

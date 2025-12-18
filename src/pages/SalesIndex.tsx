@@ -381,10 +381,10 @@ const SalesIndex: React.FC = () => {
   const totalPaperClient = totalPaperRaw * 0.86; 
   const totalPaperEarnings = totalPaperCompany - totalPaperClient;
 
-  // Mobile Totals
-  const totalMobileAgent = mobileColumnTotals[16] || 0;
-  const totalMobileCompany = mobileColumnTotals[5] || 0;
-  const totalMobileShareholder = mobileColumnTotals[11] || 0;
+  // Mobile Totals (Absolute and Aligned)
+  const totalMobileAgent = Math.abs(mobileColumnTotals[16] || 0);
+  const totalMobileCompany = Math.abs(mobileColumnTotals[5] || 0);
+  const totalMobileShareholder = Math.abs(mobileColumnTotals[11] || 0);
 
   const sortedWeekKeys = Object.keys(weeksData).map(Number).sort((a,b) => a-b);
   useEffect(() => { if (sortedWeekKeys.length > 0 && !sortedWeekKeys.includes(selectedWeekNum)) setSelectedWeekNum(sortedWeekKeys[0]); }, [sortedWeekKeys, selectedWeekNum]);
@@ -417,11 +417,11 @@ const SalesIndex: React.FC = () => {
                         </div>
                         <div>
                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Company (-17%)</p>
-                            <p className="font-mono font-bold text-blue-600 text-lg">${totalPaperCompany.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                            <p className="font-mono font-bold text-blue-600 text-lg">${Math.abs(totalPaperCompany).toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
                         </div>
                         <div>
                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Client (-14%)</p>
-                            <p className="font-mono font-bold text-red-600 text-lg">${totalPaperClient.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                            <p className="font-mono font-bold text-red-600 text-lg">${Math.abs(totalPaperClient).toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
                         </div>
                         <div>
                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Earnings</p>
@@ -432,15 +432,15 @@ const SalesIndex: React.FC = () => {
                     <div className={`transition-opacity duration-300 border-l border-gray-200 pl-6 flex space-x-6 ${activeTab === 'mobile' ? 'opacity-100' : 'opacity-40'}`}>
                         <div>
                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">公司总额</p>
-                            <p className="font-mono font-bold text-purple-600 text-lg">${totalMobileAgent.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                            <p className="font-mono font-bold text-blue-600 text-lg">${totalMobileAgent.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
                         </div>
                         <div>
                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">会员总数</p>
-                            <p className="font-mono font-bold text-blue-600 text-lg">${totalMobileCompany.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                            <p className="font-mono font-bold text-red-600 text-lg">${totalMobileCompany.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
                         </div>
                         <div>
                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Earnings</p>
-                            <p className="font-mono font-bold text-green-600 text-lg">${Math.abs(totalMobileShareholder).toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                            <p className="font-mono font-bold text-green-600 text-lg">${totalMobileShareholder.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
                         </div>
                     </div>
                  </div>
