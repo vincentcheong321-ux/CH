@@ -21,7 +21,6 @@ const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, se
             const c = clients.find(cl => cl.id === clientId);
             if (c) setClientName(c.name);
 
-            // Determine Week Range (Mon - Sun) based on selected date
             const dateObj = new Date(selectedDate);
             const dayOfWeek = dateObj.getDay(); 
             const diffToMon = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
@@ -79,8 +78,8 @@ const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, se
     );
 };
 
-const TransactionRow = React.memo(({ client, value, onChange, onBlur, onFocus, type, navState }: { 
-    client: Client, value: string, onChange: (id: string, val: string) => void, onBlur: (id: string) => void, onFocus: (id: string) => void, type: 'ADV' | 'CRED', navState: any 
+const TransactionRow = React.memo(({ client, value, onChange, onBlur, onFocus, onRemove, type, navState }: { 
+    client: Client, value: string, onChange: (id: string, val: string) => void, onBlur: (id: string) => void, onFocus: (id: string) => void, onRemove: (id: string) => void, type: 'ADV' | 'CRED', navState: any 
 }) => {
     const isAdv = type === 'ADV';
     const numVal = parseFloat(value);
@@ -102,7 +101,13 @@ const TransactionRow = React.memo(({ client, value, onChange, onBlur, onFocus, t
                     className={`w-full pl-6 pr-2 py-1.5 text-right font-mono font-bold rounded-lg border outline-none transition-all focus:ring-2 ${isAdv ? 'focus:ring-blue-500' : 'focus:ring-green-500'} ${hasValue ? (isAdv ? 'text-blue-700 border-blue-200 bg-blue-50/30' : 'text-green-700 border-green-200 bg-green-50/30') : 'text-gray-600 border-gray-200 bg-white'}`}
                 />
             </div>
-            <button onClick={() => onChange(client.id, '0')} className="ml-2 p-1.5 text-gray-300 hover:text-red-500 transition-colors"><Trash2 size={14}/></button>
+            <button 
+                onClick={() => onRemove(client.id)} 
+                className="ml-2 p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                title="Remove client from list"
+            >
+                <Trash2 size={14}/>
+            </button>
         </div>
     );
 });
@@ -186,6 +191,25 @@ const CashAdvanceCredit: React.FC = () => {
         if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
         blurTimeoutRef.current = setTimeout(() => setPreviewClientId(null), 200);
     }, [selectedDate, advances, credits]);
+
+    const handleRemoveClient = useCallback(async (cid: string, type: 'ADV' | 'CRED') => {
+        if (type === 'ADV') {
+            await saveCashAdvance(selectedDate, cid, 0);
+            setAdvances(prev => {
+                const newState = { ...prev };
+                delete newState[cid];
+                return newState;
+            });
+        } else {
+            await saveCashCredit(selectedDate, cid, 0);
+            setCredits(prev => {
+                const newState = { ...prev };
+                delete newState[cid];
+                return newState;
+            });
+        }
+        setPreviewClientId(null);
+    }, [selectedDate]);
 
     const handleAddClient = (client: Client) => {
         const type = isSelectingClient.type;
@@ -273,33 +297,47 @@ const CashAdvanceCredit: React.FC = () => {
                         })}
                     </div>
                 </div>
-                
-                <div className="mt-8 space-y-4">
-                    <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
-                        <div className="flex items-center text-blue-800 font-bold mb-1"><Banknote size={16} className="mr-2" /> Advance Summary</div>
-                        <div className="text-2xl font-mono font-bold text-blue-600">${totals.advances.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
-                    </div>
-                    <div className="p-4 bg-green-50 rounded-xl border border-green-100">
-                        <div className="flex items-center text-green-800 font-bold mb-1"><CreditCard size={16} className="mr-2" /> Credit Summary</div>
-                        <div className="text-2xl font-mono font-bold text-green-600">${totals.credits.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
-                    </div>
-                </div>
             </div>
 
             {/* Main Content Area */}
             <div className="flex-1 flex flex-col min-w-0">
                 
-                {/* Mobile Header / Date Picker */}
+                {/* Unified Header with Summary */}
                 <div className="bg-white border-b border-gray-200 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 z-40">
-                    <div className="lg:hidden">
-                        <h1 className="text-xl font-bold text-gray-800 flex items-center">
-                            <Repeat className="mr-2 text-blue-600" /> Advance & Credit
-                        </h1>
+                    <div className="flex items-center">
+                        <div className="lg:hidden mr-4">
+                            <h1 className="text-xl font-bold text-gray-800 flex items-center">
+                                <Repeat className="mr-1 text-blue-600" size={20} /> Trans
+                            </h1>
+                        </div>
+                        {/* Summary for Web (Hidden on Mobile row, shown in separate bar on mobile below if needed) */}
+                        <div className="flex items-center space-x-3 md:space-x-6 overflow-x-auto no-scrollbar">
+                            <div className="flex items-center px-3 py-1.5 bg-blue-50 rounded-xl border border-blue-100">
+                                <Banknote size={16} className="mr-2 text-blue-600" />
+                                <div className="flex flex-col md:flex-row md:items-baseline md:space-x-2">
+                                    <span className="text-[10px] md:text-xs font-bold text-blue-800 whitespace-nowrap">Advance</span>
+                                    <span className="text-sm md:text-lg font-mono font-bold text-blue-600">${totals.advances.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                                </div>
+                            </div>
+                            <div className="flex items-center px-3 py-1.5 bg-green-50 rounded-xl border border-green-100">
+                                <CreditCard size={16} className="mr-2 text-green-600" />
+                                <div className="flex flex-col md:flex-row md:items-baseline md:space-x-2">
+                                    <span className="text-[10px] md:text-xs font-bold text-green-800 whitespace-nowrap">Credit</span>
+                                    <span className="text-sm md:text-lg font-mono font-bold text-green-600">${totals.credits.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div className="flex items-center gap-3">
+                        {/* Mobile Month Navigation inside Mobile Header */}
+                        <div className="flex lg:hidden items-center bg-gray-100 rounded-xl p-1 border border-gray-200">
+                            <button onClick={prevMonth} disabled={currentYear === 2025 && currentMonth === 0} className="p-1 hover:bg-white rounded-lg disabled:opacity-30"><ChevronLeft size={16}/></button>
+                            <span className="text-[11px] font-bold text-gray-700 w-16 text-center">{MONTH_NAMES[currentMonth].slice(0,3)} {currentYear}</span>
+                            <button onClick={nextMonth} disabled={currentYear === 2026 && currentMonth === 11} className="p-1 hover:bg-white rounded-lg disabled:opacity-30"><ChevronRight size={16}/></button>
+                        </div>
                         <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="bg-white border border-gray-300 rounded-xl px-4 py-2 font-mono font-bold text-sm focus:ring-2 focus:ring-blue-500 outline-none w-full sm:w-auto" />
-                        <div className="hidden sm:flex items-center text-xs text-gray-500 bg-yellow-50 px-3 py-1 rounded-full border border-yellow-200 whitespace-nowrap">
+                        <div className="hidden lg:flex items-center text-xs text-gray-500 bg-yellow-50 px-3 py-1 rounded-full border border-yellow-200 whitespace-nowrap">
                             <Save size={14} className="mr-1" /> Auto-saves
                         </div>
                     </div>
@@ -343,15 +381,23 @@ const CashAdvanceCredit: React.FC = () => {
                                         <div className="divide-y divide-gray-100">
                                             {Object.entries(advances).map(([cid, val]) => {
                                                 const c = clients.find(cl => cl.id === cid);
-                                                return c ? <TransactionRow key={cid} client={c} value={val} type="ADV" navState={{ year: currentYear, month: currentMonth, week: activeWeekNum ? parseInt(activeWeekNum) : 1 }} onChange={(id, v) => setAdvances(p => ({...p, [id]: v}))} onBlur={(id) => handleInputBlur(id, 'ADV')} onFocus={handleInputFocus} /> : null;
+                                                return c ? (
+                                                    <TransactionRow 
+                                                        key={cid} 
+                                                        client={c} 
+                                                        value={val} 
+                                                        type="ADV" 
+                                                        navState={{ year: currentYear, month: currentMonth, week: activeWeekNum ? parseInt(activeWeekNum) : 1 }} 
+                                                        onChange={(id, v) => setAdvances(p => ({...p, [id]: v}))} 
+                                                        onBlur={(id) => handleInputBlur(id, 'ADV')} 
+                                                        onFocus={handleInputFocus}
+                                                        onRemove={(id) => handleRemoveClient(id, 'ADV')}
+                                                    />
+                                                ) : null;
                                             })}
                                         </div>
                                     )
                                 )}
-                            </div>
-                            <div className="p-4 bg-gray-900 text-white flex justify-between items-center sm:hidden">
-                                <span className="text-[10px] font-bold text-gray-400">TOTAL</span>
-                                <span className="font-mono text-lg font-bold text-blue-400">${totals.advances.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                             </div>
                         </div>
 
@@ -373,15 +419,23 @@ const CashAdvanceCredit: React.FC = () => {
                                         <div className="divide-y divide-gray-100">
                                             {Object.entries(credits).map(([cid, val]) => {
                                                 const c = clients.find(cl => cl.id === cid);
-                                                return c ? <TransactionRow key={cid} client={c} value={val} type="CRED" navState={{ year: currentYear, month: currentMonth, week: activeWeekNum ? parseInt(activeWeekNum) : 1 }} onChange={(id, v) => setCredits(p => ({...p, [id]: v}))} onBlur={(id) => handleInputBlur(id, 'CRED')} onFocus={handleInputFocus} /> : null;
+                                                return c ? (
+                                                    <TransactionRow 
+                                                        key={cid} 
+                                                        client={c} 
+                                                        value={val} 
+                                                        type="CRED" 
+                                                        navState={{ year: currentYear, month: currentMonth, week: activeWeekNum ? parseInt(activeWeekNum) : 1 }} 
+                                                        onChange={(id, v) => setCredits(p => ({...p, [id]: v}))} 
+                                                        onBlur={(id) => handleInputBlur(id, 'CRED')} 
+                                                        onFocus={handleInputFocus}
+                                                        onRemove={(id) => handleRemoveClient(id, 'CRED')}
+                                                    />
+                                                ) : null;
                                             })}
                                         </div>
                                     )
                                 )}
-                            </div>
-                            <div className="p-4 bg-gray-900 text-white flex justify-between items-center sm:hidden">
-                                <span className="text-[10px] font-bold text-gray-400">TOTAL</span>
-                                <span className="font-mono text-lg font-bold text-green-400">${totals.credits.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                             </div>
                         </div>
                     </div>
