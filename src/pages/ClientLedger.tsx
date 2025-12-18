@@ -470,8 +470,8 @@ const ClientLedger: React.FC = () => {
   const mainLedger = useMemo(() => {
       const data = calculateColumn('main');
       
-      // Global Logic: Hide '上欠' records from the Main Ledger view if amount is 0
-      data.processed = data.processed.filter(r => !(r.typeLabel === '上欠' && r.amount === 0));
+      // Global Logic: Hide ANY records from the Main Ledger view if amount is 0 (as requested by user)
+      data.processed = data.processed.filter(r => r.amount !== 0);
 
       // SPECIAL LOGIC: Hide '上欠' records for Z21 and C19 from Main Ledger view
       if (client && (client.code.toUpperCase() === 'Z21' || client.code.toUpperCase() === 'C19')) {
