@@ -393,7 +393,8 @@ const SalesIndex: React.FC = () => {
 
   // 2. Mobile Calculations
   const mobileCompTotal = mobileColumnTotals[5];
-  const mobileMemberBet = mobileColumnTotals[0];
+  // CHANGED: mobileMemberBet summary value now refers to '总代理总额' (Agent Total, Index 16) as requested
+  const mobileMemberBet = mobileColumnTotals[16]; 
   const totalMobileEarningsGlobal = Math.abs(mobileColumnTotals[11]); // Shareholder total is usually profit
 
   // 3. Grand Total
