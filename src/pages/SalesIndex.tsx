@@ -386,6 +386,9 @@ const SalesIndex: React.FC = () => {
   const totalMobileCompany = Math.abs(mobileColumnTotals[5] || 0);
   const totalMobileShareholder = Math.abs(mobileColumnTotals[11] || 0);
 
+  // Weekly Total Earning Calculation (Paper Earnings + Mobile Earnings)
+  const totalWeeklyProfit = Math.abs(totalPaperEarnings) + totalMobileShareholder;
+
   const sortedWeekKeys = Object.keys(weeksData).map(Number).sort((a,b) => a-b);
   useEffect(() => { if (sortedWeekKeys.length > 0 && !sortedWeekKeys.includes(selectedWeekNum)) setSelectedWeekNum(sortedWeekKeys[0]); }, [sortedWeekKeys, selectedWeekNum]);
 
@@ -416,16 +419,20 @@ const SalesIndex: React.FC = () => {
                             <p className="font-mono font-bold text-gray-800 text-lg">${totalPaperRaw.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
                         </div>
                         <div>
-                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Company (-17%)</p>
+                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Company (17%)</p>
                             <p className="font-mono font-bold text-blue-600 text-lg">${Math.abs(totalPaperCompany).toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
                         </div>
                         <div>
-                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Client (-14%)</p>
+                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Client (14%)</p>
                             <p className="font-mono font-bold text-red-600 text-lg">${Math.abs(totalPaperClient).toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
                         </div>
                         <div>
                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Earnings</p>
                             <p className="font-mono font-bold text-green-600 text-lg">${Math.abs(totalPaperEarnings).toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                        </div>
+                        <div className="border-l border-gray-100 pl-6">
+                            <p className="text-[10px] text-emerald-600 font-black uppercase tracking-widest">Weekly Total Earning</p>
+                            <p className="font-mono font-black text-emerald-500 text-xl">${totalWeeklyProfit.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
                         </div>
                     </div>
                     
@@ -440,7 +447,7 @@ const SalesIndex: React.FC = () => {
                         </div>
                         <div>
                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Earnings</p>
-                            <p className="font-mono font-bold text-green-600 text-lg">${totalMobileShareholder.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                            <p className="font-mono font-bold text-green-600 text-lg">${Math.abs(totalMobileShareholder).toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
                         </div>
                     </div>
                  </div>

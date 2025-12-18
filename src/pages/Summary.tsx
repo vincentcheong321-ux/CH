@@ -97,8 +97,9 @@ const Summary: React.FC = () => {
   const totalWeeklyEarnings = weeklyData.reduce((acc, curr) => acc + curr.total, 0);
 
   const formatDate = (dateStr: string) => {
-      const d = new Date(dateStr);
-      return `${d.getDate()} ${MONTH_NAMES[d.getMonth()].slice(0,3)} ${d.getFullYear()}`;
+      // Safe parsing to avoid timezone offset shifts that move Sunday to Saturday
+      const [y, m, d] = dateStr.split('-').map(Number);
+      return `${d} ${MONTH_NAMES[m - 1].slice(0, 3)} ${y}`;
   };
 
   return (
