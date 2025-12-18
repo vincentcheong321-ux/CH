@@ -470,13 +470,18 @@ const ClientLedger: React.FC = () => {
   const mainLedger = useMemo(() => {
       const data = calculateColumn('main');
       
+      // Global Logic: Hide '上欠' records from the Main Ledger view if amount is 0
+      data.processed = data.processed.filter(r => !(r.typeLabel === '上欠' && r.amount === 0));
+
       // SPECIAL LOGIC: Hide '上欠' records for Z21 and C19 from Main Ledger view
       if (client && (client.code.toUpperCase() === 'Z21' || client.code.toUpperCase() === 'C19')) {
           data.processed = data.processed.filter(r => r.typeLabel !== '上欠');
-          // Recalculate visual balance for the column (keeping data integrity, just hiding from column calc)
-          const visibleProcessed = data.processed.filter(r => r.isVisible);
-          data.finalBalance = visibleProcessed.reduce((acc, curr) => acc + curr.netChange, 0);
       }
+
+      // Recalculate visual balance for the column (keeping data integrity, just hiding from column calc)
+      const visibleProcessed = data.processed.filter(r => r.isVisible);
+      data.finalBalance = visibleProcessed.reduce((acc, curr) => acc + curr.netChange, 0);
+
       return data;
   }, [weekRecords, client]);
 
@@ -757,7 +762,7 @@ const ClientLedger: React.FC = () => {
 
       {editingRecord && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 no-print font-sans">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
+            <div className="bg-white rounded-xl shadow-xl w-full max-md p-6 max-h-[90vh] overflow-y-auto">
                 <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold">Edit Transaction</h2><button onClick={() => setEditingRecord(null)}><X size={24} /></button></div>
                 <form onSubmit={handleUpdateRecord} className="space-y-4">
                     {/* Advanced Winnings Editor */}
