@@ -6,8 +6,7 @@ import Dashboard from './pages/Dashboard';
 import ClientList from './pages/ClientList';
 import ClientLedger from './pages/ClientLedger';
 import DrawReport from './pages/DrawReport';
-import CashAdvanceReport from './pages/CashAdvanceReport';
-import CashCredit from './pages/CashCredit';
+import CashAdvanceCredit from './pages/CashAdvanceCredit';
 import Summary from './pages/Summary';
 import CashFlow from './pages/CashFlow';
 import SalesIndex from './pages/SalesIndex';
@@ -103,18 +102,10 @@ const App: React.FC = () => {
           ) : <Navigate to="/login" />
         } />
 
-        <Route path="/cash-advance" element={
+        <Route path="/cash-transaction" element={
           isAuthenticated ? (
             <Layout onLogout={handleLogout}>
-              <CashAdvanceReport />
-            </Layout>
-          ) : <Navigate to="/login" />
-        } />
-
-        <Route path="/cash-credit" element={
-          isAuthenticated ? (
-            <Layout onLogout={handleLogout}>
-              <CashCredit />
+              <CashAdvanceCredit />
             </Layout>
           ) : <Navigate to="/login" />
         } />

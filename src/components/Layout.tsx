@@ -11,8 +11,7 @@ import {
   PieChart,
   Calendar,
   FileText,
-  Banknote,
-  CreditCard,
+  Repeat,
   Calculator
 } from 'lucide-react';
 
@@ -30,8 +29,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/clients', label: 'Client Accounts', icon: Users },
     { path: '/sales', label: 'Sales Opening', icon: FileText, chineseChar: '收' },
-    { path: '/cash-advance', label: 'Cash Advance', icon: Banknote, chineseChar: '支' },
-    { path: '/cash-credit', label: 'Cash Credit', icon: CreditCard, chineseChar: '来' },
+    { path: '/cash-transaction', label: 'Advance & Credit', icon: Repeat, chineseChar: '支/来' },
     { path: '/draw-report', label: 'Draw Reports', icon: Calendar, chineseChar: '欠' },
     { path: '/calculator', label: 'Win Calculator', icon: Calculator, chineseChar: '中' },
     { path: '/cashflow', label: 'Company Cash Flow', icon: ArrowRightLeft },
