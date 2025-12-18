@@ -371,30 +371,6 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
     lookbackDate.setDate(lookbackDate.getDate() - 90);
     const lookbackStr = lookbackDate.toISOString().split('T')[0];
 
-    // Delete existing carry-forward records for this date/client to allow regeneration without duplicates
-    // We identify them by `data->isCarryForward: true`
-    // Supabase JS filter for JSON column requires specific syntax, or we can fetch & delete
-    // For simplicity, we fetch matches first.
-    const { data: existingCF } = await supabase.from('financial_journal')
-        .select('id')
-        .eq('client_id', clientId)
-        .eq('entry_date', targetDate)
-        .eq('entry_type', 'MANUAL');
-        
-    // Note: PostgREST JSON filtering can be tricky. We'll filter in memory if volume is low, or assume manual deletion via UI is rare.
-    // Actually, to be safe, let's delete them.
-    // If we can't filter by JSON property easily in this client version, we rely on the user or just append.
-    // But "Generate" usually implies overwrite.
-    // Let's try to fetch all manuals for today and delete if they look like CF.
-    if (existingCF && existingCF.length > 0) {
-        // This is risky without a flag. We'll add a flag to the new records.
-        // Assuming we can't delete reliably without potentially deleting user manual entries,
-        // we will proceed to insert. The user can delete if they made a mistake.
-        // BETTER: Use a delete loop with a client-side check if possible, but let's just insert for now 
-        // to match "bring forward" behavior (adding to the list).
-        // If the user clicks twice, they get double. We can add a simple check.
-    }
-
     // Fetch Previous Data
     const { data: recentRecords } = await supabase
         .from('financial_journal')
@@ -458,12 +434,6 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
     }
 
     const sum = rowsToCopy.reduce((acc, r) => acc + getNetAmount(r), 0);
-
-    // INSERT COPIES
-    // First, try to remove previously generated CF records for this day to avoid dupes on re-run
-    // We will use a specific marker in the description or data to identify them? 
-    // Or just let them pile up? Pile up is bad.
-    // Let's assume we can just check if *identical* records exist and skip?
     
     for (const r of rowsToCopy) {
         let signedAmount = 0;
@@ -476,7 +446,7 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
             .eq('client_id', clientId)
             .eq('entry_date', targetDate)
             .eq('amount', signedAmount)
-            .contains('data', { description: r.description, column: 'col1' }); // Check JSON subset
+            .contains('data', { description: r.description, column: 'col1' }); 
 
         if (dupes && dupes.length > 0) {
             continue; // Skip if already exists
@@ -492,7 +462,7 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
                 typeLabel: r.typeLabel,
                 operation: r.operation,
                 column: 'col1',
-                isCarryForward: true // Flag for potential future cleanup
+                isCarryForward: true 
             }
         });
     }
@@ -550,6 +520,12 @@ export const getWinningsByDateRange = async (startDate: string, endDate: string)
 export const fetchClientTotalBalance = async (clientId: string): Promise<number> => {
     const records = await getLedgerRecords(clientId);
     if (records.length === 0) return 0;
+    
+    // Need client code for specific logic
+    const clients = await getClients();
+    const client = clients.find(c => c.id === clientId);
+    const clientCode = client?.code?.toUpperCase() || '';
+
     records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     
     const latestSnapshot = records.find(r => r.id.startsWith('draw_') || r.typeLabel === '上欠');
@@ -564,8 +540,15 @@ export const fetchClientTotalBalance = async (clientId: string): Promise<number>
         });
     }
 
-    const col1Records = effectiveRecords.filter(r => r.column === 'col1' && r.isVisible);
-    if (col1Records.length > 0) return col1Records.reduce((acc, r) => acc + getNetAmount(r), 0);
+    // SPECIAL LOGIC: C06 prioritizes Panel 2 (col2)
+    if (clientCode === 'C06') {
+        const col2Records = effectiveRecords.filter(r => r.column === 'col2' && r.isVisible);
+        if (col2Records.length > 0) return col2Records.reduce((acc, r) => acc + getNetAmount(r), 0);
+    } else {
+        // Standard priority logic for others
+        const col1Records = effectiveRecords.filter(r => r.column === 'col1' && r.isVisible);
+        if (col1Records.length > 0) return col1Records.reduce((acc, r) => acc + getNetAmount(r), 0);
+    }
     
     const mainRecords = effectiveRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
     return mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
@@ -603,11 +586,18 @@ export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: 
                 });
             }
 
-            // Logic: C13 and Z21 check Panel 1 first. Everyone else uses Main Ledger total.
-            // Note: Z21/C19 are often overwritten by generateSpecialCarryForward later, 
-            // but if they fall through to here (e.g. not enough history for special logic), 
-            // we apply the "Panel 1 priority" rule as requested ("except for special client c13 and z21").
-            if (clientCode === 'C13' || clientCode === 'Z21') {
+            // Logic: Specific clients prioritize specific panels
+            if (clientCode === 'C06') {
+                // ADJUSTMENT: C06 prioritizes Panel 2 (col2)
+                const col2Records = effectiveRecords.filter(r => r.column === 'col2' && r.isVisible);
+                if (col2Records.length > 0) {
+                    balances[clientId] = col2Records.reduce((acc, r) => acc + getNetAmount(r), 0);
+                } else {
+                    const mainRecords = effectiveRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
+                    balances[clientId] = mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
+                }
+            } else if (clientCode === 'C13' || clientCode === 'Z21') {
+                // Standard Panel 1 priority for these codes
                 const col1Records = effectiveRecords.filter(r => r.column === 'col1' && r.isVisible);
                 if (col1Records.length > 0) {
                     balances[clientId] = col1Records.reduce((acc, r) => acc + getNetAmount(r), 0);

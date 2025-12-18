@@ -378,22 +378,27 @@ const SalesIndex: React.FC = () => {
       return totals;
   }, [filteredMobileClients, salesData]);
 
-  const totalPaperRaw = [...zClients, ...cClients].reduce((acc, client) => {
+  // Calculate TOTALS for BOTH systems regardless of active tab
+  const allPaperClients = useMemo(() => clients.filter(c => (c.category || 'paper') === 'paper'), [clients]);
+  const totalPaperRawGlobal = allPaperClients.reduce((acc, client) => {
       const clientRecs = salesData.filter(r => r.clientId === client.id);
       return acc + clientRecs.reduce((sum, r) => sum + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
   }, 0);
 
-  const totalPaperCompany = totalPaperRaw * 0.83; 
-  const totalPaperClient = totalPaperRaw * 0.86; 
-  const totalPaperEarnings = totalPaperCompany - totalPaperClient;
+  const totalPaperEarningsGlobal = (totalPaperRawGlobal * 0.83) - (totalPaperRawGlobal * 0.86);
 
-  // Mobile Totals (Absolute and Aligned)
-  const totalMobileAgent = Math.abs(mobileColumnTotals[16] || 0);
-  const totalMobileCompany = Math.abs(mobileColumnTotals[5] || 0);
-  const totalMobileShareholder = Math.abs(mobileColumnTotals[11] || 0);
+  // Mobile Earnings Global
+  const totalMobileShareholderGlobal = mobileClients.reduce((acc, client) => {
+      const clientRecords = salesData.filter(r => r.clientId === client.id);
+      const lastRec = clientRecords[clientRecords.length - 1];
+      if (lastRec?.mobileRawData) {
+          return acc + (parseFloat(String(lastRec.mobileRawData[11]).replace(/,/g, '')) || 0);
+      }
+      return acc;
+  }, 0);
 
   // Weekly Total Earning Calculation (Paper Earnings + Mobile Earnings)
-  const totalWeeklyProfit = Math.abs(totalPaperEarnings) + totalMobileShareholder;
+  const totalWeeklyProfit = Math.abs(totalPaperEarningsGlobal) + Math.abs(totalMobileShareholderGlobal);
 
   const sortedWeekKeys = Object.keys(weeksData).map(Number).sort((a,b) => a-b);
   useEffect(() => { if (sortedWeekKeys.length > 0 && !sortedWeekKeys.includes(selectedWeekNum)) setSelectedWeekNum(sortedWeekKeys[0]); }, [sortedWeekKeys, selectedWeekNum]);
@@ -446,26 +451,36 @@ const SalesIndex: React.FC = () => {
                 <button onClick={loadData} className="ml-auto p-2 text-gray-400 hover:text-blue-600 hover:bg-white rounded-full transition-colors border border-transparent hover:border-gray-200"><RefreshCw size={16} className={loading ? 'animate-spin' : ''} /></button>
           </div>
 
-          {/* Totals Bar - Simplified Scrollable Row for Paper/Mobile Compatibility */}
+          {/* Totals Bar - SIDE BY SIDE Earnings */}
           <div className="bg-white border-t border-gray-100 px-4 py-2 overflow-x-auto no-scrollbar">
                 <div className="flex items-center min-w-max space-x-6 md:space-x-10">
+                    {/* Active tab specific details */}
                     {activeTab === 'paper' ? (
                         <>
-                            <div className="flex flex-col"><span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Total</span><span className="font-mono font-bold text-gray-800 text-sm md:text-base">${totalPaperRaw.toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
-                            <div className="flex flex-col"><span className="text-[9px] text-blue-500 font-bold uppercase tracking-widest">Comp (17%)</span><span className="font-mono font-bold text-blue-600 text-sm md:text-base">${Math.abs(totalPaperCompany).toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
-                            <div className="flex flex-col"><span className="text-[9px] text-red-500 font-bold uppercase tracking-widest">Client (14%)</span><span className="font-mono font-bold text-red-600 text-sm md:text-base">${Math.abs(totalPaperClient).toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
-                            <div className="flex flex-col"><span className="text-[9px] text-orange-600 font-bold uppercase tracking-widest">Earnings</span><span className="font-mono font-bold text-orange-600 text-sm md:text-base">${Math.abs(totalPaperEarnings).toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
+                            <div className="flex flex-col"><span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Paper Raw</span><span className="font-mono font-bold text-gray-800 text-sm md:text-base">${totalPaperRawGlobal.toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
                         </>
                     ) : (
                         <>
-                            <div className="flex flex-col"><span className="text-[9px] text-purple-400 font-bold uppercase tracking-widest">公司总额</span><span className="font-mono font-bold text-purple-600 text-sm md:text-base">${totalMobileAgent.toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
-                            <div className="flex flex-col"><span className="text-[9px] text-blue-500 font-bold uppercase tracking-widest">会员总数</span><span className="font-mono font-bold text-blue-600 text-sm md:text-base">${totalMobileCompany.toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
-                            <div className="flex flex-col"><span className="text-[9px] text-orange-600 font-bold uppercase tracking-widest">Earnings</span><span className="font-mono font-bold text-orange-600 text-sm md:text-base">${Math.abs(totalMobileShareholder).toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
+                            <div className="flex flex-col"><span className="text-[9px] text-purple-400 font-bold uppercase tracking-widest">Mobile Total</span><span className="font-mono font-bold text-purple-600 text-sm md:text-base">${Math.abs(mobileColumnTotals[16]).toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
                         </>
                     )}
+
+                    <div className="h-8 w-px bg-gray-100"></div>
+
+                    {/* Paper & Mobile Weekly Earnings side by side */}
+                    <div className="flex flex-col">
+                        <span className="text-[9px] text-blue-500 font-bold uppercase tracking-widest">Paper Earnings</span>
+                        <span className="font-mono font-bold text-blue-600 text-sm md:text-base">${Math.abs(totalPaperEarningsGlobal).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                    </div>
                     
-                    {/* Weekly Total Earning relocated to follow the metrics */}
-                    <div className="h-8 w-px bg-gray-100 hidden md:block"></div>
+                    <div className="flex flex-col">
+                        <span className="text-[9px] text-orange-500 font-bold uppercase tracking-widest">Mobile Earnings</span>
+                        <span className="font-mono font-bold text-orange-500 text-sm md:text-base">${Math.abs(totalMobileShareholderGlobal).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                    </div>
+                    
+                    <div className="h-8 w-px bg-gray-100"></div>
+
+                    {/* Final Weekly Total Earning card */}
                     <div className="bg-emerald-50 px-4 py-1.5 rounded-xl border border-emerald-100 flex items-center shadow-sm">
                         <TrendingUp size={16} className="text-emerald-500 mr-3" />
                         <div className="flex flex-col">
@@ -580,7 +595,7 @@ const SalesIndex: React.FC = () => {
                 <p className="text-xs text-purple-300 font-bold uppercase tracking-wider">Mobile Week Total</p>
                 <p className="text-xs text-purple-400 opacity-75">{MONTH_NAMES[currentMonth]} W{Object.keys(weeksData).indexOf(String(selectedWeekNum)) + 1}</p>
             </div>
-            <p className="font-mono font-bold text-2xl">${Math.abs(totalMobileShareholder).toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+            <p className="font-mono font-bold text-2xl">${Math.abs(totalMobileShareholderGlobal).toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
         </div>
       )}
     </div>

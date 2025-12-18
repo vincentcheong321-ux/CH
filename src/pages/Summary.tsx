@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { getClients, fetchClientTotalBalance } from '../services/storageService';
+import { getClients, fetchClientTotalBalance, getSalesForDates } from '../services/storageService';
 import { Client } from '../types';
 import { TrendingUp, Calendar, Loader2, DollarSign, Wallet } from 'lucide-react';
 import { MONTH_NAMES, getWeeksForMonth } from '../utils/reportUtils';
@@ -11,7 +11,7 @@ const PAPER_Z_CODES = ['Z03', 'Z05', 'Z07', 'Z15', 'Z19', 'Z20'];
 const PAPER_C_CODES = ['C03', 'C04', 'C06', 'C09', 'C13', 'C15', 'C17'];
 
 const Summary: React.FC = () => {
-  const [clientData, setClientData] = useState<{client: Client, total: number}[]>([]);
+  const [clientData, setClientData] = useState<{client: Client, total: number, paperWeekly: number, mobileWeekly: number}[]>([]);
   const [weeklyData, setWeeklyData] = useState<{date: string, total: number}[]>([]);
   const [activeTab, setActiveTab] = useState<'weekly' | 'clients'>('weekly');
   const [loading, setLoading] = useState(true);
@@ -27,30 +27,54 @@ const Summary: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
         setLoading(true);
-        // 1. Fetch Client Balances (Overall)
+        // 1. Fetch Clients
         const clients = await getClients();
+
+        // 2. Fetch current week's sales for detailed client breakdown
+        const now = new Date();
+        const weeks = getWeeksForMonth(now.getFullYear(), now.getMonth());
+        const todayStr = formatLocalDate(now);
+        const currentWeekDays = Object.values(weeks).find(days => 
+            days.some(d => formatLocalDate(d) === todayStr)
+        ) || Object.values(weeks)[0];
+
+        const activeDateStrings = currentWeekDays.map(d => formatLocalDate(d));
+        const currentWeekSales = await getSalesForDates(activeDateStrings);
+
+        // 3. Process each client with their net balance and weekly earnings
         const summary = await Promise.all(clients.map(async (client) => {
             const total = await fetchClientTotalBalance(client.id);
-            return { client, total };
+            
+            // Calculate Paper Weekly for this client
+            const clientRecs = currentWeekSales.filter(r => r.clientId === client.id);
+            const rawTotal = clientRecs.reduce((sum, r) => sum + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
+            const paperWeekly = (client.category || 'paper') === 'paper' 
+                ? Math.abs((rawTotal * 0.83) - (rawTotal * 0.86)) 
+                : 0;
+
+            // Calculate Mobile Weekly for this client
+            const mobileWeekly = client.category === 'mobile' && clientRecs.length > 0
+                ? Math.abs(parseFloat(String(clientRecs[clientRecs.length - 1].mobileRawData?.[11] || '0').replace(/,/g, '')) || 0)
+                : 0;
+
+            return { client, total, paperWeekly, mobileWeekly };
         }));
+
         summary.sort((a, b) => b.total - a.total);
         setClientData(summary);
 
-        // 2. REDEFINED: Fetch Weekly Earnings from Sales Opening (Paper & Mobile Earnings)
-        // STRICT TALLYING LOGIC matching SalesIndex calculations
+        // 4. Weekly earnings logic for history tab
         if (supabase) {
             const { data: sales } = await supabase.from('financial_journal').select('*').eq('entry_type', 'SALE');
             
             if (sales) {
                 const weeklyEarningsMap = new Map<string, number>();
 
-                // Define all valid weeks in our system across 2025-2026
                 const allWeeks: { start: string, end: string, label: string }[] = [];
                 for (let y = 2025; y <= 2026; y++) {
                     for (let m = 0; m < 12; m++) {
                         const weeks = getWeeksForMonth(y, m);
                         Object.values(weeks).forEach(days => {
-                            // Use local formatting to avoid 00:00:00 UTC shifting to previous day
                             const startStr = formatLocalDate(days[0]);
                             const endStr = formatLocalDate(days[6]); // SUNDAY
                             allWeeks.push({ start: startStr, end: endStr, label: endStr });
@@ -62,7 +86,6 @@ const Summary: React.FC = () => {
                     const client = clients.find(c => c.id === row.client_id);
                     if (!client) return;
 
-                    // Apply the same visibility/code filters as SalesIndex
                     const isPaperProfile = (client.category || 'paper') === 'paper';
                     const codeUpper = (client.code || '').toUpperCase();
                     const isValidPaper = PAPER_Z_CODES.includes(codeUpper) || PAPER_C_CODES.includes(codeUpper);
@@ -71,19 +94,14 @@ const Summary: React.FC = () => {
                     if (!isValidPaper && !isMobileProfile) return;
 
                     const date = row.entry_date;
-                    // Find which Mon-Sun week this date belongs to
                     const week = allWeeks.find(w => date >= w.start && date <= w.end);
                     if (!week) return;
 
                     let earnings = 0;
                     if (isMobileProfile) {
-                        // Mobile Earnings = abs(idx 11: Shareholder Total)
-                        // This matches SalesIndex calculation for Mobile Earnings
                         const shareholderTotalStr = row.data?.mobileRawData?.[11] || '0';
                         earnings = Math.abs(parseFloat(String(shareholderTotalStr).replace(/,/g, '')) || 0);
                     } else if (isValidPaper) {
-                        // Paper Earnings = abs((Raw * 0.83) - (Raw * 0.86))
-                        // This matches SalesIndex calculation for Paper Earnings
                         const b = row.data?.b || 0;
                         const s = row.data?.s || 0;
                         const a = row.data?.a || 0;
@@ -103,7 +121,6 @@ const Summary: React.FC = () => {
                     total
                 }));
 
-                // Sort newest week (Sunday) first
                 weeklyList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
                 setWeeklyData(weeklyList);
             }
@@ -126,7 +143,7 @@ const Summary: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
             <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Financial Summary</h1>
-            <p className="text-gray-500 mt-1">Calculated from Sales Opening earnings.</p>
+            <p className="text-gray-500 mt-1">Cross-check profit net between systems.</p>
         </div>
         
         <div className="bg-gray-200 p-1 rounded-2xl flex self-start md:self-auto shadow-inner">
@@ -145,7 +162,7 @@ const Summary: React.FC = () => {
         </div>
       </div>
       
-      {/* High-Level Overview Cards */}
+      {/* Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-gradient-to-br from-emerald-600 to-teal-700 rounded-3xl p-8 text-white shadow-xl shadow-emerald-200 relative overflow-hidden">
             <div className="relative z-10 flex flex-col justify-between h-full">
@@ -245,32 +262,32 @@ const Summary: React.FC = () => {
                 <thead className="bg-gray-50/50 text-gray-400 text-[10px] uppercase font-black tracking-widest">
                     <tr>
                     <th className="pl-8 pr-6 py-4">Client Name</th>
-                    <th className="px-6 py-4">Code</th>
-                    <th className="px-6 py-4 text-right">Net Balance</th>
-                    <th className="pr-8 pl-6 py-4 text-right">System Status</th>
+                    <th className="px-6 py-4 text-right">Paper Weekly</th>
+                    <th className="px-6 py-4 text-right">Mobile Weekly</th>
+                    <th className="pr-8 pl-6 py-4 text-right">Net Balance</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50 font-mono">
-                    {clientData.map(({ client, total }) => (
+                    {clientData.map(({ client, total, paperWeekly, mobileWeekly }) => (
                     <tr key={client.id} className="hover:bg-gray-50 transition-colors">
                         <td className="pl-8 pr-6 py-5">
-                            <span className="font-black text-gray-900 text-lg uppercase tracking-tight">{client.name}</span>
-                        </td>
-                        <td className="px-6 py-5">
-                            <span className="text-gray-400 font-bold bg-gray-100 px-2 py-0.5 rounded text-sm">{client.code || '-'}</span>
-                        </td>
-                        <td className={`px-6 py-5 text-right font-black text-xl ${total >= 0 ? 'text-blue-600' : 'text-rose-600'}`}>
-                            ${Math.abs(total).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="pr-8 pl-6 py-5 text-right">
-                            <div className={`inline-flex items-center px-4 py-1 rounded-full text-[10px] font-black ${
-                                total > 0 ? 'bg-blue-100 text-blue-700' : 
-                                total < 0 ? 'bg-rose-100 text-rose-700' : 
-                                'bg-gray-100 text-gray-600'
-                            }`}>
-                                <div className={`w-1.5 h-1.5 rounded-full mr-2 ${total > 0 ? 'bg-blue-600' : total < 0 ? 'bg-rose-600' : 'bg-gray-600'}`} />
-                                {total > 0 ? 'CO RECEIVABLE' : total < 0 ? 'CO PAYABLE' : 'ACCOUNT SETTLED'}
+                            <div className="flex flex-col">
+                                <span className="font-black text-gray-900 text-lg uppercase tracking-tight">{client.name}</span>
+                                <span className="text-gray-400 text-[10px] font-bold">{client.code || '-'}</span>
                             </div>
+                        </td>
+                        <td className="px-6 py-5 text-right">
+                             <span className={`font-bold ${paperWeekly > 0 ? 'text-blue-600' : 'text-gray-300'}`}>
+                                {paperWeekly > 0 ? `$${paperWeekly.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}
+                             </span>
+                        </td>
+                        <td className="px-6 py-5 text-right">
+                             <span className={`font-bold ${mobileWeekly > 0 ? 'text-orange-600' : 'text-gray-300'}`}>
+                                {mobileWeekly > 0 ? `$${mobileWeekly.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}
+                             </span>
+                        </td>
+                        <td className={`pr-8 pl-6 py-5 text-right font-black text-xl ${total >= 0 ? 'text-blue-600' : 'text-rose-600'}`}>
+                            ${Math.abs(total).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </td>
                     </tr>
                     ))}
