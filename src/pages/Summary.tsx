@@ -1,8 +1,8 @@
 
 import React, { useEffect, useState } from 'react';
-import { getClients, fetchClientTotalBalance, getSalesForDates } from '../services/storageService';
+import { getClients, fetchClientTotalBalance, getSalesForDates, getAssetRecords } from '../services/storageService';
 import { Client } from '../types';
-import { TrendingUp, Calendar, Loader2, DollarSign, Wallet } from 'lucide-react';
+import { TrendingUp, Calendar, Loader2, DollarSign, Wallet, BarChart3 } from 'lucide-react';
 import { MONTH_NAMES, getWeeksForMonth } from '../utils/reportUtils';
 import { supabase } from '../supabaseClient';
 
@@ -15,6 +15,7 @@ const Summary: React.FC = () => {
   const [weeklyData, setWeeklyData] = useState<{date: string, total: number}[]>([]);
   const [activeTab, setActiveTab] = useState<'weekly' | 'clients'>('weekly');
   const [loading, setLoading] = useState(true);
+  const [cashBalance, setCashBalance] = useState(0);
 
   // Helper to get YYYY-MM-DD from a local Date object without timezone shift
   const formatLocalDate = (d: Date) => {
@@ -27,8 +28,12 @@ const Summary: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
         setLoading(true);
-        // 1. Fetch Clients
+        // 1. Fetch Clients & Assets
         const clients = await getClients();
+        const assets = getAssetRecords();
+        const assetsIn = assets.filter(a => a.type === 'IN').reduce((acc, curr) => acc + curr.amount, 0);
+        const assetsOut = assets.filter(a => a.type === 'OUT').reduce((acc, curr) => acc + curr.amount, 0);
+        setCashBalance(assetsIn - assetsOut);
 
         // 2. Fetch current week's sales for detailed client breakdown
         const now = new Date();
@@ -132,6 +137,7 @@ const Summary: React.FC = () => {
 
   const totalReceivables = clientData.reduce((acc, curr) => acc + curr.total, 0);
   const totalWeeklyEarnings = weeklyData.reduce((acc, curr) => acc + curr.total, 0);
+  const totalCompanyWorth = cashBalance + totalReceivables;
 
   const formatDate = (dateStr: string) => {
       const [y, m, d] = dateStr.split('-').map(Number);
@@ -139,11 +145,11 @@ const Summary: React.FC = () => {
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-8">
+    <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
             <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Financial Summary</h1>
-            <p className="text-gray-500 mt-1">Cross-check profit net between systems.</p>
+            <p className="text-gray-500 mt-1">Cross-check profit net and company liquidity.</p>
         </div>
         
         <div className="bg-gray-200 p-1 rounded-2xl flex self-start md:self-auto shadow-inner">
@@ -163,34 +169,51 @@ const Summary: React.FC = () => {
       </div>
       
       {/* Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-gradient-to-br from-emerald-600 to-teal-700 rounded-3xl p-8 text-white shadow-xl shadow-emerald-200 relative overflow-hidden">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* New Total Worth Card */}
+        <div className="bg-gradient-to-br from-indigo-700 to-blue-800 rounded-3xl p-8 text-white shadow-xl shadow-indigo-200 relative overflow-hidden">
             <div className="relative z-10 flex flex-col justify-between h-full">
                 <div>
-                    <h2 className="text-emerald-100 text-xs font-black uppercase tracking-widest mb-2">Company Profit Net (All Time)</h2>
-                    <div className="text-4xl md:text-5xl font-black font-mono">
-                        +${totalWeeklyEarnings.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    <h2 className="text-indigo-100 text-xs font-black uppercase tracking-widest mb-2">Total Balance of Company</h2>
+                    <div className="text-4xl font-black font-mono">
+                        ${totalCompanyWorth.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </div>
                 </div>
                 <div className="mt-8 flex items-center bg-white/10 w-fit px-4 py-1.5 rounded-full border border-white/20">
-                    <TrendingUp size={16} className="mr-2" />
-                    <span className="text-sm font-bold">Sum of Sales Opening Profits</span>
+                    <BarChart3 size={16} className="mr-2" />
+                    <span className="text-sm font-bold">Liquid + Receivables</span>
                 </div>
             </div>
-            <TrendingUp size={180} className="absolute -right-12 -bottom-12 opacity-10 rotate-12" />
+            <BarChart3 size={180} className="absolute -right-12 -bottom-12 opacity-10 rotate-12" />
+        </div>
+
+        <div className="bg-white rounded-3xl p-8 border border-gray-100 shadow-sm shadow-gray-200/50 relative overflow-hidden">
+            <div className="relative z-10 flex flex-col justify-between h-full">
+                <div>
+                    <h2 className="text-gray-400 text-xs font-black uppercase tracking-widest mb-2">Total Sales Earnings</h2>
+                    <div className="text-4xl font-black font-mono text-emerald-600">
+                        +${totalWeeklyEarnings.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </div>
+                </div>
+                <div className="mt-8 flex items-center text-gray-500 text-sm font-bold">
+                    <TrendingUp size={16} className="mr-2 text-emerald-500" />
+                    Sum of system profit net
+                </div>
+            </div>
+            <TrendingUp size={180} className="absolute -right-12 -bottom-12 opacity-5 text-emerald-500 rotate-12" />
         </div>
 
         <div className="bg-white rounded-3xl p-8 border border-gray-100 shadow-sm shadow-gray-200/50 relative overflow-hidden">
             <div className="relative z-10 flex flex-col justify-between h-full">
                 <div>
                     <h2 className="text-gray-400 text-xs font-black uppercase tracking-widest mb-2">Net Active Receivables</h2>
-                    <div className={`text-4xl md:text-5xl font-black font-mono ${totalReceivables >= 0 ? 'text-blue-600' : 'text-rose-600'}`}>
+                    <div className={`text-4xl font-black font-mono ${totalReceivables >= 0 ? 'text-blue-600' : 'text-rose-600'}`}>
                         ${Math.abs(totalReceivables).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </div>
                 </div>
                 <div className="mt-8 flex items-center text-gray-500 text-sm font-bold">
                     <Wallet size={16} className="mr-2 text-blue-500" />
-                    Current total outstanding debt
+                    Outstanding client debt
                 </div>
             </div>
             <DollarSign size={180} className="absolute -right-12 -bottom-12 opacity-5 text-blue-500 rotate-[-15deg]" />
@@ -213,7 +236,6 @@ const Summary: React.FC = () => {
                 <thead className="bg-gray-50/50 text-gray-400 text-[10px] uppercase font-black tracking-widest">
                     <tr>
                     <th className="pl-8 pr-6 py-4">Week Ending (Sun)</th>
-                    <th className="px-6 py-4">Status</th>
                     <th className="pr-8 pl-6 py-4 text-right">Weekly Profit</th>
                     </tr>
                 </thead>
@@ -228,9 +250,6 @@ const Summary: React.FC = () => {
                                 <span className="font-black text-gray-900 text-lg">{formatDate(week.date)}</span>
                             </div>
                         </td>
-                        <td className="px-6 py-5">
-                            <span className="px-3 py-1 rounded-lg text-[10px] font-black bg-emerald-100 text-emerald-700 uppercase ring-1 ring-emerald-200">Profit Captured</span>
-                        </td>
                         <td className="pr-8 pl-6 py-5 text-right">
                             <span className="font-black text-2xl text-emerald-600">
                                 +${Math.abs(week.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}
@@ -240,7 +259,7 @@ const Summary: React.FC = () => {
                     ))}
                     {weeklyData.length === 0 && (
                         <tr>
-                            <td colSpan={3} className="px-6 py-24 text-center">
+                            <td colSpan={2} className="px-6 py-24 text-center">
                                 <div className="max-w-xs mx-auto">
                                     <TrendingUp size={48} className="mx-auto text-gray-200 mb-4" />
                                     <p className="text-gray-400 font-bold">No sales profit data found for the current period.</p>
@@ -262,8 +281,8 @@ const Summary: React.FC = () => {
                 <thead className="bg-gray-50/50 text-gray-400 text-[10px] uppercase font-black tracking-widest">
                     <tr>
                     <th className="pl-8 pr-6 py-4">Client Name</th>
-                    <th className="px-6 py-4 text-right">Paper Weekly</th>
-                    <th className="px-6 py-4 text-right">Mobile Weekly</th>
+                    <th className="px-6 py-4 text-right">Paper Weekly Total</th>
+                    <th className="px-6 py-4 text-right">Mobile Weekly Total</th>
                     <th className="pr-8 pl-6 py-4 text-right">Net Balance</th>
                     </tr>
                 </thead>

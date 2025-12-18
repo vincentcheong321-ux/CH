@@ -412,7 +412,7 @@ const SalesIndex: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-gray-50">
-      {/* Top Header - Tabs and Navigation (REVERTED TO SIMPLER DESIGN) */}
+      {/* Top Header - Tabs and Navigation */}
       <div className="bg-white border-b border-gray-200 z-20 shadow-sm flex-shrink-0">
           <div className="px-4 py-3 flex flex-col sm:flex-row justify-between items-center gap-3">
              <div className="flex items-center w-full sm:w-auto">
@@ -469,12 +469,12 @@ const SalesIndex: React.FC = () => {
 
                     {/* Paper & Mobile Weekly Earnings side by side */}
                     <div className="flex flex-col">
-                        <span className="text-[9px] text-blue-500 font-bold uppercase tracking-widest">Paper Earnings</span>
+                        <span className="text-[9px] text-blue-500 font-bold uppercase tracking-widest">Paper Weekly Total</span>
                         <span className="font-mono font-bold text-blue-600 text-sm md:text-base">${Math.abs(totalPaperEarningsGlobal).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                     </div>
                     
                     <div className="flex flex-col">
-                        <span className="text-[9px] text-orange-500 font-bold uppercase tracking-widest">Mobile Earnings</span>
+                        <span className="text-[9px] text-orange-500 font-bold uppercase tracking-widest">Mobile Weekly Total</span>
                         <span className="font-mono font-bold text-orange-500 text-sm md:text-base">${Math.abs(totalMobileShareholderGlobal).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                     </div>
                     
