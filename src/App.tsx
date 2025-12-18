@@ -90,7 +90,7 @@ const App: React.FC = () => {
           isAuthenticated ? (
             <Layout onLogout={handleLogout}>
               <ClientSales />
-            </Route>
+            </Layout>
           ) : <Navigate to="/login" />
         } />
 
