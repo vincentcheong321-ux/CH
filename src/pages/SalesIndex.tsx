@@ -31,7 +31,6 @@ const CompositeInput = React.memo(({
     onChange: (v1: number, v2: number) => void,
     colorClass: string
 }) => {
-    // Format: "10" or "10/5"
     const formatValue = (v1: number, v2: number) => {
         if (!v1 && !v2) return '';
         if (v2 === 0) return `${v1}`;
@@ -86,7 +85,6 @@ const CompositeInput = React.memo(({
     );
 });
 
-// --- Detailed Mobile Table Row ---
 const DetailedMobileTableRow = React.memo(({ 
     client, 
     record
@@ -94,16 +92,12 @@ const DetailedMobileTableRow = React.memo(({
     client: Client, 
     record?: SaleRecord
 }) => {
-    // New Standard: Member(1), Comp(5), Share(6), Agent(5) = 17 columns
     const raw = record?.mobileRawData || [];
-    
     const getVal = (idx: number) => raw[idx] || '';
-
     const fmt = (val: string | number) => {
         if (!val || val === '-') return '-';
         return String(val);
     };
-
     const getColorClass = (val: string | number) => {
         const num = parseFloat(String(val).replace(/,/g,''));
         if (isNaN(num)) return 'text-gray-900';
@@ -112,15 +106,11 @@ const DetailedMobileTableRow = React.memo(({
 
     return (
         <tr className="hover:bg-purple-50/50 transition-colors border-b border-gray-100 last:border-0 font-mono text-[10px] md:text-xs">
-            {/* 1. Client */}
             <td className="px-2 py-3 text-left bg-white sticky left-0 z-10 border-r border-gray-200 shadow-sm">
                 <div className="font-bold text-gray-900">{client.name}</div>
                 <div className="text-[9px] text-gray-500">{client.code}</div>
             </td>
-            {/* 2. Member (1 col) */}
             <td className="px-2 py-3 text-right bg-gray-50/20 font-semibold border-r border-gray-100">{fmt(getVal(0))}</td>
-            
-            {/* 3. Company (5 cols) */}
             <td className="px-2 py-3 text-right">{fmt(getVal(1))}</td>
             <td className="px-2 py-3 text-right">{fmt(getVal(2))}</td>
             <td className="px-2 py-3 text-right">{fmt(getVal(3))}</td>
@@ -128,18 +118,14 @@ const DetailedMobileTableRow = React.memo(({
             <td className={`px-2 py-3 text-right font-extrabold bg-blue-50/50 border-x border-blue-100 ${getColorClass(getVal(5))}`}>
                 {fmt(getVal(5))}
             </td>
-            
-            {/* 4. Shareholder (6 cols) */}
             <td className="px-2 py-3 text-right">{fmt(getVal(6))}</td>
             <td className="px-2 py-3 text-right">{fmt(getVal(7))}</td>
             <td className="px-2 py-3 text-right">{fmt(getVal(8))}</td>
-            <td className="px-2 py-3 text-right text-orange-600 bg-orange-50/30">{fmt(getVal(9))}</td> {/* Win */}
-            <td className="px-2 py-3 text-right">{fmt(getVal(10))}</td> {/* Fee */}
+            <td className="px-2 py-3 text-right text-orange-600 bg-orange-50/30">{fmt(getVal(9))}</td>
+            <td className="px-2 py-3 text-right">{fmt(getVal(10))}</td>
             <td className={`px-2 py-3 text-right font-extrabold bg-indigo-50/50 border-x border-indigo-100 ${getColorClass(getVal(11))}`}>
                 {fmt(getVal(11))}
             </td>
-            
-            {/* 5. Agent (5 cols) */}
             <td className="px-2 py-3 text-right">{fmt(getVal(12))}</td>
             <td className="px-2 py-3 text-right">{fmt(getVal(13))}</td>
             <td className="px-2 py-3 text-right">{fmt(getVal(14))}</td>
@@ -151,7 +137,6 @@ const DetailedMobileTableRow = React.memo(({
     );
 });
 
-// --- Client Card Component (Paper View) ---
 const ClientWeeklyCard = React.memo(({ 
     client, 
     dateStrings, 
@@ -165,12 +150,8 @@ const ClientWeeklyCard = React.memo(({
     onUpdate: (clientId: string, dateStr: string, field1: 'b'|'a', val1: number, field2: 's'|'c', val2: number) => void,
     weekState: { year: number, month: number, week: number }
 }) => {
-    
-    // Calculate Client Totals for the Week
     const clientRecords = salesData.filter(r => r.clientId === client.id);
     const rawTotal = clientRecords.reduce((acc, r) => acc + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
-    
-    // Apply 14% Deduction (x 0.86) for display on CARD (Client View)
     const totalWeek = rawTotal * 0.86;
 
     const formatMonth = (mIndex: number) => {
@@ -178,20 +159,16 @@ const ClientWeeklyCard = React.memo(({
         return name.charAt(0) + name.slice(1, 3).toLowerCase();
     };
 
-    // Filter to only show relevant Paper Dates (Tue, Wed, Sat, Sun) in the Card
     const paperDisplayDates = dateStrings.filter(dStr => {
-        // dStr is YYYY-MM-DD
         const [y, m, d] = dStr.split('-').map(Number);
-        const dateObj = new Date(y, m-1, d); // Month is 0-indexed in Date
+        const dateObj = new Date(y, m-1, d);
         const day = dateObj.getDay();
         return [0, 2, 3, 6].includes(day);
     });
 
     return (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col h-full hover:shadow-md transition-shadow">
-            {/* Card Header */}
             <div className="bg-gray-50 px-4 py-3 border-b border-gray-100 flex justify-between items-center">
-                {/* Changed Link to point to ClientLedger with state */}
                 <Link 
                     to={`/clients/${client.id}`} 
                     state={weekState}
@@ -210,7 +187,6 @@ const ClientWeeklyCard = React.memo(({
                 </div>
             </div>
 
-            {/* Matrix Table */}
             <div className="flex-1 overflow-x-auto">
                 <table className="w-full text-center border-collapse">
                     <thead className="bg-gray-50/50 text-xs text-gray-500 font-semibold uppercase tracking-wider">
@@ -267,86 +243,48 @@ const SalesIndex: React.FC = () => {
   const [selectedWeekNum, setSelectedWeekNum] = useState<number>(1);
   const [salesData, setSalesData] = useState<SaleRecord[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  
-  // Tab state
   const [activeTab, setActiveTab] = useState<'paper' | 'mobile'>('paper');
-  
-  // Regeneration State
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [regenMessage, setRegenMessage] = useState<string | null>(null);
 
-  // Initial Load: Set to "Today"
   useEffect(() => {
       const now = new Date();
       let y = now.getFullYear();
       let m = now.getMonth();
-      const d = now.getDate();
-
       if (y < 2025) y = 2025;
       if (y > 2026) y = 2026;
-
       setCurrentYear(y);
       setCurrentMonth(m);
-
       const weeks = getWeeksForMonth(y, m);
-      const todayStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-      
-      const foundWeek = Object.keys(weeks).find(wKey => {
-          return weeks[parseInt(wKey)].some(dObj => {
-              const dStr = `${dObj.getFullYear()}-${String(dObj.getMonth()+1).padStart(2,'0')}-${String(dObj.getDate()).padStart(2,'0')}`;
-              return dStr === todayStr;
-          });
-      });
-
-      if (foundWeek) {
-          setSelectedWeekNum(parseInt(foundWeek));
-      } else {
-          setSelectedWeekNum(parseInt(Object.keys(weeks)[0] || '1'));
-      }
+      const todayStr = `${y}-${String(m+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+      const foundWeek = Object.keys(weeks).find(wKey => weeks[parseInt(wKey)].some(dObj => {
+          const dStr = `${dObj.getFullYear()}-${String(dObj.getMonth()+1).padStart(2,'0')}-${String(dObj.getDate()).padStart(2,'0')}`;
+          return dStr === todayStr;
+      }));
+      setSelectedWeekNum(foundWeek ? parseInt(foundWeek) : parseInt(Object.keys(weeks)[0] || '1'));
   }, []);
 
   const weeksData = useMemo<Record<number, Date[]>>(() => getWeeksForMonth(currentYear, currentMonth), [currentYear, currentMonth]);
   const activeDays = weeksData[selectedWeekNum] || [];
-  
-  const activeDateStrings = useMemo(() => 
-      activeDays.map(d => {
-            const y = d.getFullYear();
-            const m = String(d.getMonth() + 1).padStart(2, '0');
-            const day = String(d.getDate()).padStart(2, '0');
-            return `${y}-${m}-${day}`;
-        }),
-  [activeDays]);
+  const activeDateStrings = useMemo(() => activeDays.map(d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`), [activeDays]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
         const loadedClients = await getClients();
         setClients(loadedClients);
-        
         if (activeDateStrings.length > 0) {
             const records = await getSalesForDates(activeDateStrings);
             setSalesData(records);
         } else {
             setSalesData([]);
         }
-    } catch (e) {
-        console.error("Failed to load data", e);
-    } finally {
-        setLoading(false);
-    }
+    } catch (e) { console.error(e); } finally { setLoading(false); }
   }, [activeDateStrings]);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useEffect(() => { loadData(); }, [loadData]);
 
-  // Handle updates for Paper Clients
-  const handleUpdate = useCallback(async (
-      clientId: string, 
-      dateStr: string, 
-      f1: 'b'|'a', v1: number, 
-      f2: 's'|'c', v2: number
-    ) => {
+  const handleUpdate = useCallback(async (clientId: string, dateStr: string, f1: 'b'|'a', v1: number, f2: 's'|'c', v2: number) => {
       setSalesData(prev => {
           const idx = prev.findIndex(r => r.clientId === clientId && r.date === dateStr);
           if (idx >= 0) {
@@ -354,92 +292,37 @@ const SalesIndex: React.FC = () => {
               updated[idx] = { ...updated[idx], [f1]: v1, [f2]: v2 };
               return updated;
           } else {
-              return [...prev, { 
-                  id: 'temp', clientId, date: dateStr, 
-                  b: f1 === 'b' ? v1 : 0, 
-                  s: f2 === 's' ? v2 : 0, 
-                  a: f1 === 'a' ? v1 : 0, 
-                  c: f2 === 'c' ? v2 : 0 
-              }];
+              return [...prev, { id: 'temp', clientId, date: dateStr, b: f1 === 'b' ? v1 : 0, s: f2 === 's' ? v2 : 0, a: f1 === 'a' ? v1 : 0, c: f2 === 'c' ? v2 : 0 }];
           }
       });
-
       const existing = salesData.find(r => r.clientId === clientId && r.date === dateStr);
-      const payload = existing 
-        ? { ...existing, [f1]: v1, [f2]: v2 } 
-        : { 
-            clientId, date: dateStr, 
-            b:0, s:0, a:0, c:0, 
-            [f1]: v1, [f2]: v2 
-        };
-      
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const payload = existing ? { ...existing, [f1]: v1, [f2]: v2 } : { clientId, date: dateStr, b:0, s:0, a:0, c:0, [f1]: v1, [f2]: v2 };
       const { id, ...savePayload } = payload; 
       await saveSaleRecord(savePayload);
-
   }, [salesData]);
 
   const handleRegenerateDianFromList = async () => {
       if (salesData.length === 0) return;
-      setIsRegenerating(true);
-      setRegenMessage(null);
-
+      setIsRegenerating(true); setRegenMessage(null);
       let updateCount = 0;
-
       try {
           for (const record of salesData) {
-              // 1. Get Mobile Client code from the sales record
               const mobileClient = clients.find(c => c.id === record.clientId);
               if (!mobileClient || !mobileClient.code) continue;
-
-              // 2. Check if this client maps to a Paper client
               const mappedPaperCode = MOBILE_TO_PAPER_MAP[mobileClient.code.toLowerCase()];
               if (mappedPaperCode) {
                   const paperClient = clients.find(c => c.code.toLowerCase() === mappedPaperCode.toLowerCase());
                   if (paperClient) {
-                      // 3. Extract Company Total from stored raw data
-                      // Index 5 is Company Total based on Mobile Report Structure
                       const rawData = record.mobileRawData;
                       if (!rawData || rawData.length < 6) continue;
-
-                      const companyTotalRaw = rawData[5];
-                      const companyAmount = parseFloat(String(companyTotalRaw).replace(/,/g, ''));
-
+                      const companyAmount = parseFloat(String(rawData[5]).replace(/,/g, ''));
                       if (!isNaN(companyAmount) && companyAmount !== 0) {
-                          // 4. Find existing Ledger record to update
-                          // NOTE: getLedgerRecords fetches ALL records for client.
-                          // Optimization: In a real large app we would fetch specifically for date/type.
-                          // Here we fetch all and filter locally.
                           const records = await getLedgerRecords(paperClient.id);
-                          const existingDian = records.find(r => 
-                              r.date === record.date && 
-                              r.typeLabel === '电' && 
-                              r.column === 'main'
-                          );
-
-                          // Logic REVERSED: 
-                          // Positive Company Total -> Subtract from Ledger (Red)
-                          // Negative Company Total -> Add to Ledger (Green)
+                          const existingDian = records.find(r => r.date === record.date && r.typeLabel === '电' && r.column === 'main');
                           const operation = companyAmount >= 0 ? 'subtract' : 'add';
                           const amount = Math.abs(companyAmount);
-
-                          if (existingDian) {
-                              await updateLedgerRecord(existingDian.id, {
-                                  amount: amount,
-                                  operation: operation
-                              });
-                          } else {
-                              await saveLedgerRecord({
-                                  clientId: paperClient.id,
-                                  date: record.date,
-                                  description: '',
-                                  typeLabel: '电',
-                                  amount: amount,
-                                  operation: operation,
-                                  column: 'main',
-                                  isVisible: true
-                              });
-                          }
+                          if (existingDian) { await updateLedgerRecord(existingDian.id, { amount, operation }); } 
+                          else { await saveLedgerRecord({ clientId: paperClient.id, date: record.date, description: '', typeLabel: '电', amount, operation, column: 'main', isVisible: true }); }
                           updateCount++;
                       }
                   }
@@ -447,116 +330,70 @@ const SalesIndex: React.FC = () => {
           }
           setRegenMessage(`Successfully updated ${updateCount} '电' records.`);
           setTimeout(() => setRegenMessage(null), 3000);
-      } catch (error) {
-          console.error("Regeneration failed", error);
-          setRegenMessage("Failed to regenerate records.");
-      } finally {
-          setIsRegenerating(false);
-      }
+      } catch (error) { console.error(error); setRegenMessage("Failed to regenerate records."); } 
+      finally { setIsRegenerating(false); }
   };
 
   const handlePrevMonth = () => {
-      if (currentMonth === 0) {
-          if (currentYear > 2025) {
-              setCurrentYear(y => y - 1);
-              setCurrentMonth(11);
-          }
-      } else {
-          setCurrentMonth(m => m - 1);
-      }
+      if (currentMonth === 0) { if (currentYear > 2025) { setCurrentYear(y => y - 1); setCurrentMonth(11); } } 
+      else { setCurrentMonth(m => m - 1); }
   };
-
   const handleNextMonth = () => {
-      if (currentMonth === 11) {
-          if (currentYear < 2026) {
-              setCurrentYear(y => y + 1);
-              setCurrentMonth(0);
-          }
-      } else {
-          setCurrentMonth(m => m + 1);
-      }
+      if (currentMonth === 11) { if (currentYear < 2026) { setCurrentYear(y => y + 1); setCurrentMonth(0); } } 
+      else { setCurrentMonth(m => m + 1); }
   };
 
   const paperClients = useMemo(() => clients.filter(c => (c.category || 'paper') === 'paper'), [clients]);
   const mobileClients = useMemo(() => clients.filter(c => c.category === 'mobile'), [clients]);
 
-  // Updated Memo: Includes Search Filtering for Paper Clients
   const { zClients, cClients } = useMemo(() => {
-      // 1. Filter by search term first
       const term = searchTerm.toLowerCase();
-      const filtered = paperClients.filter(c => 
-          c.name.toLowerCase().includes(term) || 
-          c.code.toLowerCase().includes(term)
-      );
-
-      // 2. Separate into Z and C lists
+      const filtered = paperClients.filter(c => c.name.toLowerCase().includes(term) || c.code.toLowerCase().includes(term));
       const zList = filtered.filter(c => PAPER_Z_CODES.includes(c.code.toUpperCase()));
       const cList = filtered.filter(c => PAPER_C_CODES.includes(c.code.toUpperCase()));
-      
-      // 3. Sort
       zList.sort((a,b) => PAPER_Z_CODES.indexOf(a.code.toUpperCase()) - PAPER_Z_CODES.indexOf(b.code.toUpperCase()));
       cList.sort((a,b) => PAPER_C_CODES.indexOf(a.code.toUpperCase()) - PAPER_C_CODES.indexOf(b.code.toUpperCase()));
-      
       return { zClients: zList, cClients: cList };
   }, [paperClients, searchTerm]);
 
-  const filteredMobileClients = mobileClients.filter(c => 
-      c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      c.code.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredMobileClients = mobileClients.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()) || c.code.toLowerCase().includes(searchTerm.toLowerCase()));
 
-  // Calculate Column Totals for Mobile List
   const mobileColumnTotals = useMemo(() => {
       const totals = new Array(17).fill(0);
       filteredMobileClients.forEach(client => {
           const clientRecords = salesData.filter(r => r.clientId === client.id);
-          const record = clientRecords[clientRecords.length - 1]; // Latest record
-          
+          const record = clientRecords[clientRecords.length - 1]; 
           if (record?.mobileRawData) {
               record.mobileRawData.forEach((val, idx) => {
-                  // Only sum first 17 columns (0 to 16)
-                  if (idx < 17) {
-                      const num = parseFloat(String(val).replace(/,/g, '')) || 0;
-                      totals[idx] += num;
-                  }
+                  if (idx < 17) totals[idx] += parseFloat(String(val).replace(/,/g, '')) || 0;
               });
           }
       });
       return totals;
   }, [filteredMobileClients, salesData]);
 
-  // Updated Paper Totals Calculation: Raw, Company, Client
   const totalPaperRaw = [...zClients, ...cClients].reduce((acc, client) => {
       const clientRecs = salesData.filter(r => r.clientId === client.id);
-      const rawSum = clientRecs.reduce((sum, r) => sum + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
-      return acc + rawSum;
+      return acc + clientRecs.reduce((sum, r) => sum + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
   }, 0);
 
-  const totalPaperCompany = totalPaperRaw * 0.83; // Gross - 17%
-  const totalPaperClient = totalPaperRaw * 0.86; // Gross - 14%
-  // New Metric: Company Earnings (Company - Client)
+  const totalPaperCompany = totalPaperRaw * 0.83; 
+  const totalPaperClient = totalPaperRaw * 0.86; 
   const totalPaperEarnings = totalPaperCompany - totalPaperClient;
 
-  // New Mobile Totals (3 Parts)
+  // Mobile Totals
   const totalMobileAgent = mobileColumnTotals[16] || 0;
   const totalMobileCompany = mobileColumnTotals[5] || 0;
   const totalMobileShareholder = mobileColumnTotals[11] || 0;
 
   const sortedWeekKeys = Object.keys(weeksData).map(Number).sort((a,b) => a-b);
-  
-  useEffect(() => {
-     if (sortedWeekKeys.length > 0 && !sortedWeekKeys.includes(selectedWeekNum)) {
-         setSelectedWeekNum(sortedWeekKeys[0]);
-     }
-  }, [sortedWeekKeys, selectedWeekNum]);
+  useEffect(() => { if (sortedWeekKeys.length > 0 && !sortedWeekKeys.includes(selectedWeekNum)) setSelectedWeekNum(sortedWeekKeys[0]); }, [sortedWeekKeys, selectedWeekNum]);
 
   const getWeekRangeLabel = (weekNum: number) => {
-      const days = weeksData[weekNum]; // Date[]
+      const days = weeksData[weekNum];
       if (!days || days.length === 0) return '';
-      const firstDay = days[0];
-      const lastDay = days[days.length - 1];
       const formatDate = (d: Date) => `${String(d.getDate()).padStart(2, '0')} ${MONTH_NAMES[d.getMonth()].slice(0,3)}`;
-      return `${formatDate(firstDay)} - ${formatDate(lastDay)}`;
+      return `${formatDate(days[0])} - ${formatDate(days[days.length - 1])}`;
   };
 
   const formatTotal = (val: number) => val.toLocaleString(undefined, {minimumFractionDigits: 2});
@@ -564,61 +401,46 @@ const SalesIndex: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-gray-50">
-      {/* Top Bar */}
       <div className="bg-white border-b border-gray-200 z-20 shadow-sm flex-shrink-0">
           <div className="px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-3">
              <div className="flex items-center space-x-4">
                  <div className="flex bg-gray-100 p-1 rounded-lg">
-                    <button 
-                        onClick={() => setActiveTab('paper')}
-                        className={`flex items-center px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'paper' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
-                    >
-                        <FileText size={16} className="mr-2" />
-                        Paper List
-                    </button>
-                    <button 
-                        onClick={() => setActiveTab('mobile')}
-                        className={`flex items-center px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'mobile' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
-                    >
-                        <Smartphone size={16} className="mr-2" />
-                        Mobile List
-                    </button>
+                    <button onClick={() => setActiveTab('paper')} className={`flex items-center px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'paper' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}><FileText size={16} className="mr-2" />Paper List</button>
+                    <button onClick={() => setActiveTab('mobile')} className={`flex items-center px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'mobile' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}><Smartphone size={16} className="mr-2" />Mobile List</button>
                  </div>
                  
-                 {/* Updated Header Totals */}
                  <div className="hidden lg:flex items-center space-x-6 ml-6 pl-6 border-l border-gray-200">
                     <div className={`transition-opacity duration-300 flex space-x-6 ${activeTab === 'paper' ? 'opacity-100' : 'opacity-40'}`}>
                         <div>
                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Total</p>
-                            <p className="font-mono font-bold text-gray-600 text-lg">${totalPaperRaw.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                            <p className="font-mono font-bold text-gray-800 text-lg">${totalPaperRaw.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
                         </div>
                         <div>
                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Company (-17%)</p>
-                            <p className="font-mono font-bold text-blue-700 text-lg">${totalPaperCompany.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                            <p className="font-mono font-bold text-blue-600 text-lg">${totalPaperCompany.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
                         </div>
                         <div>
                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Client (-14%)</p>
-                            <p className="font-mono font-bold text-green-700 text-lg">${totalPaperClient.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                            <p className="font-mono font-bold text-red-600 text-lg">${totalPaperClient.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
                         </div>
                         <div>
                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Earnings</p>
-                            <p className={`font-mono font-bold text-lg ${totalPaperEarnings >= 0 ? 'text-indigo-600' : 'text-red-600'}`}>${totalPaperEarnings.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                            <p className="font-mono font-bold text-green-600 text-lg">${Math.abs(totalPaperEarnings).toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
                         </div>
                     </div>
                     
-                    {/* Mobile Totals - 3 Parts */}
                     <div className={`transition-opacity duration-300 border-l border-gray-200 pl-6 flex space-x-6 ${activeTab === 'mobile' ? 'opacity-100' : 'opacity-40'}`}>
                         <div>
-                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Agent总额</p>
+                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">公司总额</p>
                             <p className="font-mono font-bold text-purple-600 text-lg">${totalMobileAgent.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
                         </div>
                         <div>
-                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Company总额</p>
+                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">会员总数</p>
                             <p className="font-mono font-bold text-blue-600 text-lg">${totalMobileCompany.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
                         </div>
                         <div>
-                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Shareholder总额</p>
-                            <p className="font-mono font-bold text-indigo-600 text-lg">${totalMobileShareholder.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Earnings</p>
+                            <p className="font-mono font-bold text-green-600 text-lg">${Math.abs(totalMobileShareholder).toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
                         </div>
                     </div>
                  </div>
@@ -627,123 +449,59 @@ const SalesIndex: React.FC = () => {
              <div className="flex items-center space-x-4">
                 <div className="relative w-full md:w-64">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-                    <input 
-                    type="text" 
-                    placeholder={`Search ${activeTab} clients...`}
-                    className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    />
+                    <input type="text" placeholder={`Search ${activeTab} clients...`} className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                 </div>
                 {activeTab === 'mobile' && (
                     <>
-                        <button
-                            onClick={handleRegenerateDianFromList}
-                            disabled={isRegenerating || filteredMobileClients.length === 0}
-                            className="flex items-center px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 shadow-sm text-sm font-bold whitespace-nowrap disabled:opacity-50"
-                            title="Update Main Ledger for Paper Clients from this mobile data"
-                        >
-                            <Zap size={16} className={`mr-2 ${isRegenerating ? 'text-blue-500' : 'text-blue-700'}`} />
-                            {isRegenerating ? 'Updating...' : 'Regenerate 电'}
-                        </button>
-                        <button
-                            onClick={() => navigate('/sales/mobile-report')}
-                            className="flex items-center px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 shadow-sm text-sm font-bold whitespace-nowrap"
-                            title="Import/View External Report"
-                        >
-                            <FileSpreadsheet size={16} className="mr-2" />
-                            Report
-                        </button>
+                        <button onClick={handleRegenerateDianFromList} disabled={isRegenerating || filteredMobileClients.length === 0} className="flex items-center px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 shadow-sm text-sm font-bold whitespace-nowrap disabled:opacity-50"><Zap size={16} className={`mr-2 ${isRegenerating ? 'text-blue-500' : 'text-blue-700'}`} />{isRegenerating ? 'Updating...' : 'Regenerate 电'}</button>
+                        <button onClick={() => navigate('/sales/mobile-report')} className="flex items-center px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 shadow-sm text-sm font-bold whitespace-nowrap"><FileSpreadsheet size={16} className="mr-2" />Report</button>
                     </>
                 )}
             </div>
           </div>
 
-          {/* Row 2: Date Navigation */}
           <div className="border-t border-gray-100 px-4 py-2 flex items-center gap-3 overflow-x-auto">
                 <div className="flex items-center bg-gray-100 rounded-lg p-1 flex-shrink-0">
                     <button onClick={handlePrevMonth} disabled={currentYear === 2025 && currentMonth === 0} className="p-1 hover:bg-white rounded shadow-sm disabled:opacity-30"><ChevronLeft size={18}/></button>
                     <span className="w-28 text-center font-bold text-gray-800 text-xs md:text-sm">{MONTH_NAMES[currentMonth]} {currentYear}</span>
                     <button onClick={handleNextMonth} disabled={currentYear === 2026 && currentMonth === 11} className="p-1 hover:bg-white rounded shadow-sm disabled:opacity-30"><ChevronRight size={18}/></button>
                 </div>
-
                 <div className="flex space-x-2">
                     {sortedWeekKeys.map(wk => (
-                        <button
-                            key={wk}
-                            onClick={() => setSelectedWeekNum(wk)}
-                            className={`px-3 py-1 rounded-md transition-colors whitespace-nowrap flex flex-col items-center justify-center min-w-[100px] border
-                                ${selectedWeekNum === wk 
-                                    ? 'bg-blue-600 text-white shadow border-blue-600' 
-                                    : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}
-                            `}
-                        >
-                            <span className="text-xs font-bold uppercase tracking-wider">Week {Object.keys(weeksData).indexOf(String(wk)) + 1}</span>
-                            <span className={`text-[10px] mt-0.5 ${selectedWeekNum === wk ? 'text-blue-100' : 'text-gray-400'}`}>
-                                {getWeekRangeLabel(wk)}
-                            </span>
-                        </button>
+                        <button key={wk} onClick={() => setSelectedWeekNum(wk)} className={`px-3 py-1 rounded-md transition-colors whitespace-nowrap flex flex-col items-center justify-center min-w-[100px] border ${selectedWeekNum === wk ? 'bg-blue-600 text-white shadow border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}><span className="text-xs font-bold uppercase tracking-wider">Week {Object.keys(weeksData).indexOf(String(wk)) + 1}</span><span className={`text-[10px] mt-0.5 ${selectedWeekNum === wk ? 'text-blue-100' : 'text-gray-400'}`}>{getWeekRangeLabel(wk)}</span></button>
                     ))}
                 </div>
-                
-                <button onClick={loadData} className="ml-auto p-2 text-gray-400 hover:text-blue-600 hover:bg-gray-100 rounded-full" title="Refresh Data">
-                    <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-                </button>
+                <button onClick={loadData} className="ml-auto p-2 text-gray-400 hover:text-blue-600 hover:bg-gray-100 rounded-full"><RefreshCw size={16} className={loading ? 'animate-spin' : ''} /></button>
           </div>
       </div>
 
       {regenMessage && (
-        <div className="bg-green-50 border-b border-green-200 px-4 py-2 text-green-800 text-sm font-bold flex items-center justify-center animate-in fade-in slide-in-from-top-2">
-            <CheckCircle size={16} className="mr-2" />
-            {regenMessage}
-        </div>
+        <div className="bg-green-50 border-b border-green-200 px-4 py-2 text-green-800 text-sm font-bold flex items-center justify-center animate-in fade-in slide-in-from-top-2"><CheckCircle size={16} className="mr-2" />{regenMessage}</div>
       )}
 
-      {/* Main Content */}
       <div className="flex-1 overflow-auto bg-gray-100 p-4">
         {loading ? (
             <div className="flex justify-center items-center h-full"><Loader2 className="animate-spin text-gray-400" /></div>
         ) : (
             <div className="max-w-[1600px] mx-auto pb-20">
                 {activeTab === 'paper' ? (
-                    // Paper View
                     <div className="flex flex-col lg:flex-row gap-6">
                         <div className="flex-1 bg-white/50 p-4 rounded-xl border border-dashed border-gray-300">
                             <h2 className="text-lg font-bold text-gray-700 mb-4 px-2 border-b border-gray-200 pb-2">Z Series</h2>
                             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                                {zClients.map(client => (
-                                    <ClientWeeklyCard 
-                                        key={client.id}
-                                        client={client}
-                                        dateStrings={activeDateStrings}
-                                        salesData={salesData}
-                                        onUpdate={handleUpdate}
-                                        weekState={{ year: currentYear, month: currentMonth, week: selectedWeekNum }}
-                                    />
-                                ))}
-                                {zClients.length === 0 && <p className="text-gray-400 text-sm col-span-full text-center py-4">No Z-series clients found matching search.</p>}
+                                {zClients.map(client => (<ClientWeeklyCard key={client.id} client={client} dateStrings={activeDateStrings} salesData={salesData} onUpdate={handleUpdate} weekState={{ year: currentYear, month: currentMonth, week: selectedWeekNum }} />))}
+                                {zClients.length === 0 && <p className="text-gray-400 text-sm col-span-full text-center py-4">No Z-series clients found.</p>}
                             </div>
                         </div>
-
                         <div className="flex-1 bg-white/50 p-4 rounded-xl border border-dashed border-gray-300">
                             <h2 className="text-lg font-bold text-gray-700 mb-4 px-2 border-b border-gray-200 pb-2">C Series</h2>
                             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                                {cClients.map(client => (
-                                    <ClientWeeklyCard 
-                                        key={client.id}
-                                        client={client}
-                                        dateStrings={activeDateStrings}
-                                        salesData={salesData}
-                                        onUpdate={handleUpdate}
-                                        weekState={{ year: currentYear, month: currentMonth, week: selectedWeekNum }}
-                                    />
-                                ))}
-                                {cClients.length === 0 && <p className="text-gray-400 text-sm col-span-full text-center py-4">No C-series clients found matching search.</p>}
+                                {cClients.map(client => (<ClientWeeklyCard key={client.id} client={client} dateStrings={activeDateStrings} salesData={salesData} onUpdate={handleUpdate} weekState={{ year: currentYear, month: currentMonth, week: selectedWeekNum }} />))}
+                                {cClients.length === 0 && <p className="text-gray-400 text-sm col-span-full text-center py-4">No C-series clients found.</p>}
                             </div>
                         </div>
                     </div>
                 ) : (
-                    // Mobile View
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse text-xs whitespace-nowrap">
@@ -757,22 +515,18 @@ const SalesIndex: React.FC = () => {
                                     </tr>
                                     <tr className="bg-gray-100 border-b border-gray-200">
                                         <th className="px-2 py-3 sticky left-0 bg-gray-100 z-10 border-r border-gray-200 shadow-sm text-left">登陆帐号 / 名字</th>
-                                        {/* Member */}
                                         <th className="px-2 py-3 text-right text-gray-500 border-r border-gray-200">总投注</th>
-                                        {/* Company */}
                                         <th className="px-2 py-3 text-right text-gray-600">营业额</th>
                                         <th className="px-2 py-3 text-right text-gray-600">佣金</th>
                                         <th className="px-2 py-3 text-right text-gray-600">赔出</th>
                                         <th className="px-2 py-3 text-right text-gray-600">补费用</th>
                                         <th className="px-2 py-3 text-right font-extrabold bg-blue-50 text-blue-800 border-x border-blue-100">总额</th>
-                                        {/* Shareholder */}
                                         <th className="px-2 py-3 text-right text-gray-600">营业额</th>
                                         <th className="px-2 py-3 text-right text-gray-600">佣金</th>
                                         <th className="px-2 py-3 text-right text-gray-600">赔出</th>
                                         <th className="px-2 py-3 text-right text-orange-600 bg-orange-50/20">赢彩</th>
                                         <th className="px-2 py-3 text-right text-gray-600">补费用</th>
                                         <th className="px-2 py-3 text-right font-extrabold bg-indigo-50 text-indigo-800 border-x border-indigo-100">总额</th>
-                                        {/* Agent */}
                                         <th className="px-2 py-3 text-right text-gray-600">营业额</th>
                                         <th className="px-2 py-3 text-right text-gray-600">佣金</th>
                                         <th className="px-2 py-3 text-right text-gray-600">赔出</th>
@@ -784,20 +538,9 @@ const SalesIndex: React.FC = () => {
                                     {filteredMobileClients.map(client => {
                                         const clientRecords = salesData.filter(r => r.clientId === client.id);
                                         const record = clientRecords[clientRecords.length - 1]; 
-                                        
-                                        return (
-                                            <DetailedMobileTableRow
-                                                key={client.id}
-                                                client={client}
-                                                record={record}
-                                            />
-                                        );
+                                        return (<DetailedMobileTableRow key={client.id} client={client} record={record} />);
                                     })}
-                                    {filteredMobileClients.length === 0 && (
-                                        <tr>
-                                            <td colSpan={22} className="text-center py-8 text-gray-400">No mobile clients found.</td>
-                                        </tr>
-                                    )}
+                                    {filteredMobileClients.length === 0 && (<tr><td colSpan={22} className="text-center py-8 text-gray-400">No mobile clients found.</td></tr>)}
                                 </tbody>
                                 <tfoot className="bg-gray-100 border-t-2 border-gray-300 font-mono font-bold text-[10px] md:text-xs">
                                     <tr>
@@ -835,7 +578,7 @@ const SalesIndex: React.FC = () => {
                 <p className="text-xs text-purple-300 font-bold uppercase tracking-wider">Mobile Week Total</p>
                 <p className="text-xs text-purple-400 opacity-75">{MONTH_NAMES[currentMonth]} W{Object.keys(weeksData).indexOf(String(selectedWeekNum)) + 1}</p>
             </div>
-            <p className="font-mono font-bold text-2xl">${totalMobileShareholder.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+            <p className="font-mono font-bold text-2xl">${Math.abs(totalMobileShareholder).toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
         </div>
       )}
     </div>
