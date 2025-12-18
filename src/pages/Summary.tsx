@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { getClients, fetchClientTotalBalance, getSalesForDates, getAssetRecords } from '../services/storageService';
 import { Client } from '../types';
-import { TrendingUp, Calendar, Loader2, DollarSign, Wallet, BarChart3 } from 'lucide-react';
+import { TrendingUp, Calendar, Loader2, DollarSign, Wallet, BarChart3, Smartphone, FileText } from 'lucide-react';
 import { MONTH_NAMES, getWeeksForMonth } from '../utils/reportUtils';
 import { supabase } from '../supabaseClient';
 
@@ -10,9 +10,16 @@ import { supabase } from '../supabaseClient';
 const PAPER_Z_CODES = ['Z03', 'Z05', 'Z07', 'Z15', 'Z19', 'Z20'];
 const PAPER_C_CODES = ['C03', 'C04', 'C06', 'C09', 'C13', 'C15', 'C17'];
 
+interface WeeklyProfitRow {
+    date: string;
+    paperTotal: number;
+    mobileTotal: number;
+    total: number;
+}
+
 const Summary: React.FC = () => {
   const [clientData, setClientData] = useState<{client: Client, total: number, paperWeekly: number, mobileWeekly: number}[]>([]);
-  const [weeklyData, setWeeklyData] = useState<{date: string, total: number}[]>([]);
+  const [weeklyData, setWeeklyData] = useState<WeeklyProfitRow[]>([]);
   const [activeTab, setActiveTab] = useState<'weekly' | 'clients'>('weekly');
   const [loading, setLoading] = useState(true);
   const [cashBalance, setCashBalance] = useState(0);
@@ -73,7 +80,7 @@ const Summary: React.FC = () => {
             const { data: sales } = await supabase.from('financial_journal').select('*').eq('entry_type', 'SALE');
             
             if (sales) {
-                const weeklyEarningsMap = new Map<string, number>();
+                const weeklyProfitsMap = new Map<string, { paper: number, mobile: number }>();
 
                 const allWeeks: { start: string, end: string, label: string }[] = [];
                 for (let y = 2025; y <= 2026; y++) {
@@ -102,28 +109,30 @@ const Summary: React.FC = () => {
                     const week = allWeeks.find(w => date >= w.start && date <= w.end);
                     if (!week) return;
 
-                    let earnings = 0;
+                    const existing = weeklyProfitsMap.get(week.label) || { paper: 0, mobile: 0 };
+                    
                     if (isMobileProfile) {
                         const shareholderTotalStr = row.data?.mobileRawData?.[11] || '0';
-                        earnings = Math.abs(parseFloat(String(shareholderTotalStr).replace(/,/g, '')) || 0);
+                        const mobileEarnings = Math.abs(parseFloat(String(shareholderTotalStr).replace(/,/g, '')) || 0);
+                        existing.mobile += mobileEarnings;
                     } else if (isValidPaper) {
                         const b = row.data?.b || 0;
                         const s = row.data?.s || 0;
                         const a = row.data?.a || 0;
                         const c = row.data?.c || 0;
                         const rawTotal = b + s + a + c;
-                        const comp = rawTotal * 0.83;
-                        const clie = rawTotal * 0.86;
-                        earnings = Math.abs(comp - clie);
+                        const paperEarnings = Math.abs((rawTotal * 0.83) - (rawTotal * 0.86));
+                        existing.paper += paperEarnings;
                     }
 
-                    const existing = weeklyEarningsMap.get(week.label) || 0;
-                    weeklyEarningsMap.set(week.label, existing + earnings);
+                    weeklyProfitsMap.set(week.label, existing);
                 });
 
-                const weeklyList = Array.from(weeklyEarningsMap.entries()).map(([date, total]) => ({
+                const weeklyList: WeeklyProfitRow[] = Array.from(weeklyProfitsMap.entries()).map(([date, profits]) => ({
                     date,
-                    total
+                    paperTotal: profits.paper,
+                    mobileTotal: profits.mobile,
+                    total: profits.paper + profits.mobile
                 }));
 
                 weeklyList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -136,7 +145,7 @@ const Summary: React.FC = () => {
   }, []);
 
   const totalReceivables = clientData.reduce((acc, curr) => acc + curr.total, 0);
-  const totalWeeklyEarnings = weeklyData.reduce((acc, curr) => acc + curr.total, 0);
+  const totalAllTimeEarnings = weeklyData.reduce((acc, curr) => acc + curr.total, 0);
   const totalCompanyWorth = cashBalance + totalReceivables;
 
   const formatDate = (dateStr: string) => {
@@ -192,7 +201,7 @@ const Summary: React.FC = () => {
                 <div>
                     <h2 className="text-gray-400 text-xs font-black uppercase tracking-widest mb-2">Total Sales Earnings</h2>
                     <div className="text-4xl font-black font-mono text-emerald-600">
-                        +${totalWeeklyEarnings.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        +${totalAllTimeEarnings.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </div>
                 </div>
                 <div className="mt-8 flex items-center text-gray-500 text-sm font-bold">
@@ -235,8 +244,10 @@ const Summary: React.FC = () => {
                 <table className="w-full text-left">
                 <thead className="bg-gray-50/50 text-gray-400 text-[10px] uppercase font-black tracking-widest">
                     <tr>
-                    <th className="pl-8 pr-6 py-4">Week Ending (Sun)</th>
-                    <th className="pr-8 pl-6 py-4 text-right">Weekly Profit</th>
+                        <th className="pl-8 pr-6 py-4">Week Ending (Sun)</th>
+                        <th className="px-6 py-4 text-right">Paper Weekly Total</th>
+                        <th className="px-6 py-4 text-right">Mobile Weekly Total</th>
+                        <th className="pr-8 pl-6 py-4 text-right">Total Profit</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50 font-mono">
@@ -250,16 +261,32 @@ const Summary: React.FC = () => {
                                 <span className="font-black text-gray-900 text-lg">{formatDate(week.date)}</span>
                             </div>
                         </td>
+                        <td className="px-6 py-5 text-right">
+                             <div className="flex flex-col items-end">
+                                 <span className="font-bold text-blue-600">
+                                    +${week.paperTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                 </span>
+                                 <span className="text-[9px] text-gray-400 uppercase">Paper</span>
+                             </div>
+                        </td>
+                        <td className="px-6 py-5 text-right">
+                             <div className="flex flex-col items-end">
+                                 <span className="font-bold text-purple-600">
+                                    +${week.mobileTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                 </span>
+                                 <span className="text-[9px] text-gray-400 uppercase">Mobile</span>
+                             </div>
+                        </td>
                         <td className="pr-8 pl-6 py-5 text-right">
                             <span className="font-black text-2xl text-emerald-600">
-                                +${Math.abs(week.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                +${week.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </span>
                         </td>
                     </tr>
                     ))}
                     {weeklyData.length === 0 && (
                         <tr>
-                            <td colSpan={2} className="px-6 py-24 text-center">
+                            <td colSpan={4} className="px-6 py-24 text-center">
                                 <div className="max-w-xs mx-auto">
                                     <TrendingUp size={48} className="mx-auto text-gray-200 mb-4" />
                                     <p className="text-gray-400 font-bold">No sales profit data found for the current period.</p>

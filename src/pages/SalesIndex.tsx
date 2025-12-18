@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, ChevronLeft, ChevronRight, Loader2, Calendar, Smartphone, FileText, DollarSign, RefreshCw, FileSpreadsheet, Zap, CheckCircle, TrendingUp } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Loader2, Calendar, Smartphone, FileText, DollarSign, RefreshCw, FileSpreadsheet, Zap, CheckCircle, TrendingUp, Info } from 'lucide-react';
 import { getClients, getSalesForDates, saveSaleRecord, getLedgerRecords, updateLedgerRecord, saveLedgerRecord } from '../services/storageService';
 import { Client, SaleRecord } from '../types';
 import { MONTH_NAMES, getWeeksForMonth } from '../utils/reportUtils';
@@ -378,27 +378,26 @@ const SalesIndex: React.FC = () => {
       return totals;
   }, [filteredMobileClients, salesData]);
 
-  // Calculate TOTALS for BOTH systems regardless of active tab
+  // --- Header Calculations (Strict Arrangement Requested) ---
+
+  // 1. Paper Calculations
   const allPaperClients = useMemo(() => clients.filter(c => (c.category || 'paper') === 'paper'), [clients]);
   const totalPaperRawGlobal = allPaperClients.reduce((acc, client) => {
       const clientRecs = salesData.filter(r => r.clientId === client.id);
       return acc + clientRecs.reduce((sum, r) => sum + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
   }, 0);
 
-  const totalPaperEarningsGlobal = (totalPaperRawGlobal * 0.83) - (totalPaperRawGlobal * 0.86);
+  const paperCompany17 = totalPaperRawGlobal * 0.83;
+  const paperClient14 = totalPaperRawGlobal * 0.86;
+  const totalPaperEarningsGlobal = Math.abs(paperClient14 - paperCompany17);
 
-  // Mobile Earnings Global
-  const totalMobileShareholderGlobal = mobileClients.reduce((acc, client) => {
-      const clientRecords = salesData.filter(r => r.clientId === client.id);
-      const lastRec = clientRecords[clientRecords.length - 1];
-      if (lastRec?.mobileRawData) {
-          return acc + (parseFloat(String(lastRec.mobileRawData[11]).replace(/,/g, '')) || 0);
-      }
-      return acc;
-  }, 0);
+  // 2. Mobile Calculations
+  const mobileCompTotal = mobileColumnTotals[5];
+  const mobileMemberBet = mobileColumnTotals[0];
+  const totalMobileEarningsGlobal = Math.abs(mobileColumnTotals[11]); // Shareholder total is usually profit
 
-  // Weekly Total Earning Calculation (Paper Earnings + Mobile Earnings)
-  const totalWeeklyProfit = Math.abs(totalPaperEarningsGlobal) + Math.abs(totalMobileShareholderGlobal);
+  // 3. Grand Total
+  const totalWeeklyProfit = totalPaperEarningsGlobal + totalMobileEarningsGlobal;
 
   const sortedWeekKeys = Object.keys(weeksData).map(Number).sort((a,b) => a-b);
   useEffect(() => { if (sortedWeekKeys.length > 0 && !sortedWeekKeys.includes(selectedWeekNum)) setSelectedWeekNum(sortedWeekKeys[0]); }, [sortedWeekKeys, selectedWeekNum]);
@@ -451,41 +450,58 @@ const SalesIndex: React.FC = () => {
                 <button onClick={loadData} className="ml-auto p-2 text-gray-400 hover:text-blue-600 hover:bg-white rounded-full transition-colors border border-transparent hover:border-gray-200"><RefreshCw size={16} className={loading ? 'animate-spin' : ''} /></button>
           </div>
 
-          {/* Totals Bar - SIDE BY SIDE Earnings */}
-          <div className="bg-white border-t border-gray-100 px-4 py-2 overflow-x-auto no-scrollbar">
-                <div className="flex items-center min-w-max space-x-6 md:space-x-10">
-                    {/* Active tab specific details */}
-                    {activeTab === 'paper' ? (
-                        <>
-                            <div className="flex flex-col"><span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Paper Raw</span><span className="font-mono font-bold text-gray-800 text-sm md:text-base">${totalPaperRawGlobal.toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
-                        </>
-                    ) : (
-                        <>
-                            <div className="flex flex-col"><span className="text-[9px] text-purple-400 font-bold uppercase tracking-widest">Mobile Total</span><span className="font-mono font-bold text-purple-600 text-sm md:text-base">${Math.abs(mobileColumnTotals[16]).toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
-                        </>
-                    )}
-
-                    <div className="h-8 w-px bg-gray-100"></div>
-
-                    {/* Paper & Mobile Weekly Earnings side by side */}
-                    <div className="flex flex-col">
-                        <span className="text-[9px] text-blue-500 font-bold uppercase tracking-widest">Paper Weekly Total</span>
-                        <span className="font-mono font-bold text-blue-600 text-sm md:text-base">${Math.abs(totalPaperEarningsGlobal).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                    </div>
+          {/* Totals Bar - SIDE BY SIDE Arrangement */}
+          <div className="bg-white border-t border-gray-100 px-4 py-2.5 overflow-x-auto no-scrollbar">
+                <div className="flex items-center min-w-max space-x-8">
                     
-                    <div className="flex flex-col">
-                        <span className="text-[9px] text-orange-500 font-bold uppercase tracking-widest">Mobile Weekly Total</span>
-                        <span className="font-mono font-bold text-orange-500 text-sm md:text-base">${Math.abs(totalMobileShareholderGlobal).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                    </div>
-                    
-                    <div className="h-8 w-px bg-gray-100"></div>
-
-                    {/* Final Weekly Total Earning card */}
-                    <div className="bg-emerald-50 px-4 py-1.5 rounded-xl border border-emerald-100 flex items-center shadow-sm">
-                        <TrendingUp size={16} className="text-emerald-500 mr-3" />
+                    {/* Paper Group */}
+                    <div className="flex items-center space-x-6 bg-blue-50/50 px-4 py-1.5 rounded-xl border border-blue-100/50">
                         <div className="flex flex-col">
-                            <span className="text-[9px] text-emerald-600 font-black uppercase tracking-widest leading-none mb-1">Weekly Total Earning</span>
-                            <span className="font-mono font-black text-emerald-700 text-base md:text-xl leading-none">${totalWeeklyProfit.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                            <span className="text-[9px] text-blue-400 font-bold uppercase tracking-widest">Total of Raw</span>
+                            <span className="font-mono font-bold text-blue-900 text-xs md:text-sm">${totalPaperRawGlobal.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-[9px] text-blue-400 font-bold uppercase tracking-widest">Company (17%)</span>
+                            <span className="font-mono font-bold text-blue-900 text-xs md:text-sm">${paperCompany17.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-[9px] text-blue-400 font-bold uppercase tracking-widest">Client (14%)</span>
+                            <span className="font-mono font-bold text-blue-900 text-xs md:text-sm">${paperClient14.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                        </div>
+                        <div className="flex flex-col border-l border-blue-200 pl-4">
+                            <span className="text-[9px] text-blue-600 font-black uppercase tracking-widest">Paper Earning</span>
+                            <span className="font-mono font-black text-blue-700 text-sm md:text-base">${totalPaperEarningsGlobal.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                        </div>
+                    </div>
+
+                    <div className="h-10 w-px bg-gray-200"></div>
+
+                    {/* Mobile Group */}
+                    <div className="flex items-center space-x-6 bg-purple-50/50 px-4 py-1.5 rounded-xl border border-purple-100/50">
+                        <div className="flex flex-col">
+                            <span className="text-[9px] text-purple-400 font-bold uppercase tracking-widest">公司总额</span>
+                            <span className="font-mono font-bold text-purple-900 text-xs md:text-sm">${Math.abs(mobileCompTotal).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-[9px] text-purple-400 font-bold uppercase tracking-widest">会员总投注</span>
+                            <span className="font-mono font-bold text-purple-900 text-xs md:text-sm">${Math.abs(mobileMemberBet).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                        </div>
+                        <div className="flex flex-col border-l border-purple-200 pl-4">
+                            <span className="text-[9px] text-purple-600 font-black uppercase tracking-widest">Mobile Earning</span>
+                            <span className="font-mono font-black text-purple-700 text-sm md:text-base">${totalMobileEarningsGlobal.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                        </div>
+                    </div>
+
+                    <div className="h-10 w-px bg-gray-200"></div>
+
+                    {/* Final Earning Card */}
+                    <div className="bg-emerald-600 px-6 py-2 rounded-2xl flex items-center shadow-xl shadow-emerald-200/50 border border-emerald-500">
+                        <TrendingUp size={18} className="text-emerald-100 mr-4" />
+                        <div className="flex flex-col">
+                            <span className="text-[10px] text-emerald-100 font-black uppercase tracking-tighter leading-none mb-1">Weekly Total Earning</span>
+                            <span className="font-mono font-black text-white text-base md:text-2xl leading-none">
+                                ${totalWeeklyProfit.toLocaleString(undefined, {minimumFractionDigits: 2})}
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -595,7 +611,7 @@ const SalesIndex: React.FC = () => {
                 <p className="text-xs text-purple-300 font-bold uppercase tracking-wider">Mobile Week Total</p>
                 <p className="text-xs text-purple-400 opacity-75">{MONTH_NAMES[currentMonth]} W{Object.keys(weeksData).indexOf(String(selectedWeekNum)) + 1}</p>
             </div>
-            <p className="font-mono font-bold text-2xl">${Math.abs(totalMobileShareholderGlobal).toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+            <p className="font-mono font-bold text-2xl">${Math.abs(totalMobileEarningsGlobal).toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
         </div>
       )}
     </div>
