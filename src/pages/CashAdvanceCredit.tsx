@@ -1,8 +1,8 @@
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { getClients, getCashAdvances, saveCashAdvance, getCashCredits, saveCashCredit, getLedgerRecords, getNetAmount } from '../services/storageService';
 import { Client, LedgerRecord } from '../types';
-// Fixed: Added 'Repeat' to lucide-react imports
-import { Calendar, ChevronLeft, ChevronRight, Save, Banknote, CreditCard, Search, Plus, UserPlus, X, Trash2, Repeat } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Banknote, CreditCard, Search, Plus, UserPlus, X, Trash2, Repeat, Filter, Save } from 'lucide-react';
 import { MONTH_NAMES, getWeeksForMonth, getWeekRangeString } from '../utils/reportUtils';
 import { Link } from 'react-router-dom';
 
@@ -23,7 +23,7 @@ const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, se
 
             // Determine Week Range (Mon - Sun) based on selected date
             const dateObj = new Date(selectedDate);
-            const dayOfWeek = dateObj.getDay(); // 0=Sun, 1=Mon...
+            const dayOfWeek = dateObj.getDay(); 
             const diffToMon = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
             const startObj = new Date(dateObj);
             startObj.setDate(dateObj.getDate() - diffToMon);
@@ -73,13 +73,12 @@ const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, se
                         </span>
                     </div>
                 ))}
-                {dailyRecords.length === 0 && <p className="p-8 text-center text-gray-400 italic text-xs">No main ledger activity this week.</p>}
+                {dailyRecords.length === 0 && <p className="p-8 text-center text-gray-400 italic text-xs">No activity this week.</p>}
             </div>
         </div>
     );
 };
 
-// Reusable row for Advance/Credit input
 const TransactionRow = React.memo(({ client, value, onChange, onBlur, onFocus, type, navState }: { 
     client: Client, value: string, onChange: (id: string, val: string) => void, onBlur: (id: string) => void, onFocus: (id: string) => void, type: 'ADV' | 'CRED', navState: any 
 }) => {
@@ -114,11 +113,9 @@ const CashAdvanceCredit: React.FC = () => {
     const [selectedDate, setSelectedDate] = useState('');
     const [clients, setClients] = useState<Client[]>([]);
     
-    // Data states
     const [advances, setAdvances] = useState<Record<string, string>>({});
     const [credits, setCredits] = useState<Record<string, string>>({});
     
-    // UI states
     const [loading, setLoading] = useState(false);
     const [previewClientId, setPreviewClientId] = useState<string | null>(null);
     const [isSelectingClient, setIsSelectingClient] = useState<{ type: 'ADV' | 'CRED' | null }>({ type: null });
@@ -139,10 +136,14 @@ const CashAdvanceCredit: React.FC = () => {
             
             const weeks = getWeeksForMonth(y, now.getMonth());
             const todayStr = `${y}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-            const weekNum = Object.keys(weeks).find(w => weeks[parseInt(w)].some(d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` === todayStr));
+            const weekNum = Object.keys(weeks).find(w => weeks[parseInt(w)].some(d => {
+                const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                return ds === todayStr;
+            }));
             
-            if (weekNum) setSelectedDate(todayStr);
-            else if (Object.keys(weeks).length > 0) {
+            if (weekNum) {
+                setSelectedDate(todayStr);
+            } else if (Object.keys(weeks).length > 0) {
                 const first = weeks[parseInt(Object.keys(weeks)[0])][0];
                 setSelectedDate(`${first.getFullYear()}-${String(first.getMonth() + 1).padStart(2, '0')}-${String(first.getDate()).padStart(2, '0')}`);
             }
@@ -200,7 +201,6 @@ const CashAdvanceCredit: React.FC = () => {
     }, [clients, advances, credits, isSelectingClient, clientSearch]);
 
     const totals = useMemo(() => {
-        // Fixed: Explicitly typed 'sum' and 'v' to resolve 'unknown' type errors
         const a = Object.values(advances).reduce((sum: number, v: string) => sum + (parseFloat(v) || 0), 0);
         const c = Object.values(credits).reduce((sum: number, v: string) => sum + (parseFloat(v) || 0), 0);
         return { advances: a, credits: c };
@@ -210,115 +210,182 @@ const CashAdvanceCredit: React.FC = () => {
     const sortedWeeks = Object.keys(weekWeeks).map(Number).sort((a,b) => a-b);
     const activeWeekNum = Object.keys(weekWeeks).find(w => weekWeeks[parseInt(w)].some(d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` === selectedDate));
 
+    const prevMonth = () => {
+        if (currentMonth === 0) {
+            if (currentYear > 2025) { setCurrentYear(y => y - 1); setCurrentMonth(11); }
+        } else { setCurrentMonth(prev => prev - 1); }
+    };
+
+    const nextMonth = () => {
+        if (currentMonth === 11) {
+            if (currentYear < 2026) { setCurrentYear(y => y + 1); setCurrentMonth(0); }
+        } else { setCurrentMonth(prev => prev + 1); }
+    };
+
+    const handleDateClick = (dateObj: Date) => {
+        const yearStr = dateObj.getFullYear();
+        const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const d = String(dateObj.getDate()).padStart(2, '0');
+        setSelectedDate(`${yearStr}-${m}-${d}`);
+    };
+
     return (
-        <div className="flex flex-col h-screen overflow-hidden bg-gray-50 relative">
+        <div className="flex flex-col lg:flex-row h-screen overflow-hidden bg-gray-50 relative">
             {previewClientId && <LedgerPreviewOverlay clientId={previewClientId} selectedDate={selectedDate} />}
 
-            {/* Header / Date Control */}
-            <div className="bg-white border-b border-gray-200 p-4 md:px-8 flex flex-col md:flex-row md:items-center justify-between gap-4 z-40">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-800 flex items-center">
-                        <Repeat className="mr-2 text-blue-600" /> Advance & Credit
-                    </h1>
-                    <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">
-                        {MONTH_NAMES[currentMonth]} {currentYear} • {activeWeekNum ? `Week ${sortedWeeks.indexOf(Number(activeWeekNum)) + 1}` : 'Select Date'}
-                    </p>
-                </div>
-
-                <div className="flex items-center gap-3">
-                    <div className="flex items-center bg-gray-100 rounded-xl p-1 border border-gray-200">
-                        <button onClick={() => { if(currentMonth === 0) { setCurrentYear(y => y-1); setCurrentMonth(11); } else setCurrentMonth(m => m-1); }} disabled={currentYear === 2025 && currentMonth === 0} className="p-1.5 hover:bg-white rounded-lg shadow-sm disabled:opacity-30"><ChevronLeft size={20}/></button>
-                        <span className="w-28 text-center font-bold text-sm text-gray-700">{MONTH_NAMES[currentMonth].slice(0,3)} {currentYear}</span>
-                        <button onClick={() => { if(currentMonth === 11) { setCurrentYear(y => y+1); setCurrentMonth(0); } else setCurrentMonth(m => m+1); }} disabled={currentYear === 2026 && currentMonth === 11} className="p-1.5 hover:bg-white rounded-lg shadow-sm disabled:opacity-30"><ChevronRight size={20}/></button>
-                    </div>
-                    <div className="h-8 w-px bg-gray-200 mx-1"></div>
-                    <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="bg-white border border-gray-300 rounded-xl px-4 py-2 font-mono font-bold text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
-                </div>
-            </div>
-
-            {/* Week Pills Mobile */}
-            <div className="bg-gray-100 px-4 py-2 md:hidden overflow-x-auto flex space-x-2 no-scrollbar border-b border-gray-200">
-                {sortedWeeks.map(wn => {
-                    const days = weekWeeks[wn];
-                    const isActive = wn.toString() === activeWeekNum;
-                    return (
-                        <button key={wn} onClick={() => setSelectedDate(`${days[0].getFullYear()}-${String(days[0].getMonth()+1).padStart(2,'0')}-${String(days[0].getDate()).padStart(2,'0')}`)} className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all border ${isActive ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200'}`}>
-                            W{sortedWeeks.indexOf(wn) + 1}: {getWeekRangeString(null, null, days)}
-                        </button>
-                    );
-                })}
-            </div>
-
-            {/* Main Combined Layout */}
-            <div className="flex-1 flex overflow-hidden flex-col md:flex-row">
+            {/* RESTORED LEFT SIDEBAR */}
+            <div className="lg:w-80 flex-shrink-0 no-print hidden lg:flex flex-col border-r border-gray-200 bg-white p-6 overflow-y-auto">
+                <h1 className="text-2xl font-bold text-gray-800 mb-2 flex items-center">
+                    <Repeat className="mr-2 text-blue-600" /> Advance & Credit
+                </h1>
+                <p className="text-gray-500 mb-6 text-sm">Select a date to enter data.</p>
                 
-                {/* Left Side: Cash Advance (支) */}
-                <div className="flex-1 flex flex-col border-r border-gray-200 bg-white">
-                    <div className="p-4 bg-blue-50/50 border-b border-blue-100 flex items-center justify-between sticky top-0 z-20">
-                        <div className="flex items-center space-x-3">
-                            <div className="bg-blue-600 p-2 rounded-lg text-white shadow-md"><Banknote size={20} /></div>
-                            <div>
-                                <h3 className="font-bold text-blue-900 leading-tight">Cash Advance (支)</h3>
-                                <p className="text-[10px] text-blue-400 font-bold uppercase tracking-wider">Payments out to clients</p>
-                            </div>
+                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                    <div className="flex items-center justify-between mb-4 pb-4 border-b">
+                        <button onClick={prevMonth} disabled={currentYear === 2025 && currentMonth === 0} className="p-2 hover:bg-gray-200 rounded-full disabled:opacity-30"><ChevronLeft size={20}/></button>
+                        <h2 className="text-sm font-bold text-gray-800">{MONTH_NAMES[currentMonth]} {currentYear}</h2>
+                        <button onClick={nextMonth} disabled={currentYear === 2026 && currentMonth === 11} className="p-2 hover:bg-gray-200 rounded-full disabled:opacity-30"><ChevronRight size={20}/></button>
+                    </div>
+                    
+                    <div className="space-y-2">
+                        {sortedWeeks.map((weekNum, idx) => {
+                            const days = weekWeeks[weekNum];
+                            const isActiveWeek = weekNum.toString() === activeWeekNum;
+                            const rangeStr = getWeekRangeString(null, null, days);
+
+                            return (
+                                <button
+                                    key={weekNum}
+                                    onClick={() => handleDateClick(days[0])}
+                                    className={`
+                                        w-full p-3 rounded-lg font-bold transition-all flex flex-col items-center justify-center text-center
+                                        ${isActiveWeek
+                                            ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-300' 
+                                            : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'}
+                                    `}
+                                >
+                                    <span className={`text-[10px] uppercase tracking-wider opacity-70 ${isActiveWeek ? 'text-blue-100' : 'text-gray-400'}`}>
+                                        Week {idx + 1}
+                                    </span>
+                                    <span className="text-xs font-mono mt-1 whitespace-nowrap">{rangeStr}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+                
+                <div className="mt-8 space-y-4">
+                    <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
+                        <div className="flex items-center text-blue-800 font-bold mb-1"><Banknote size={16} className="mr-2" /> Advance Summary</div>
+                        <div className="text-2xl font-mono font-bold text-blue-600">${totals.advances.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+                    </div>
+                    <div className="p-4 bg-green-50 rounded-xl border border-green-100">
+                        <div className="flex items-center text-green-800 font-bold mb-1"><CreditCard size={16} className="mr-2" /> Credit Summary</div>
+                        <div className="text-2xl font-mono font-bold text-green-600">${totals.credits.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Main Content Area */}
+            <div className="flex-1 flex flex-col min-w-0">
+                
+                {/* Mobile Header / Date Picker */}
+                <div className="bg-white border-b border-gray-200 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 z-40">
+                    <div className="lg:hidden">
+                        <h1 className="text-xl font-bold text-gray-800 flex items-center">
+                            <Repeat className="mr-2 text-blue-600" /> Advance & Credit
+                        </h1>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="bg-white border border-gray-300 rounded-xl px-4 py-2 font-mono font-bold text-sm focus:ring-2 focus:ring-blue-500 outline-none w-full sm:w-auto" />
+                        <div className="hidden sm:flex items-center text-xs text-gray-500 bg-yellow-50 px-3 py-1 rounded-full border border-yellow-200 whitespace-nowrap">
+                            <Save size={14} className="mr-1" /> Auto-saves
                         </div>
-                        <button onClick={() => setIsSelectingClient({ type: 'ADV' })} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-all flex items-center"><UserPlus size={14} className="mr-1.5"/> Add Client</button>
-                    </div>
-                    
-                    <div className="flex-1 overflow-y-auto">
-                        {loading ? <div className="p-12 text-center text-gray-400 text-sm">Loading advances...</div> : (
-                            Object.keys(advances).length === 0 ? (
-                                <div className="p-12 text-center text-gray-300 italic text-sm">No advance records for this date. Click "Add Client" to start.</div>
-                            ) : (
-                                <div className="divide-y divide-gray-100">
-                                    {Object.entries(advances).map(([cid, val]) => {
-                                        const c = clients.find(cl => cl.id === cid);
-                                        return c ? <TransactionRow key={cid} client={c} value={val} type="ADV" navState={{ year: currentYear, month: currentMonth, week: activeWeekNum ? parseInt(activeWeekNum) : 1 }} onChange={(id, v) => setAdvances(p => ({...p, [id]: v}))} onBlur={(id) => handleInputBlur(id, 'ADV')} onFocus={handleInputFocus} /> : null;
-                                    })}
-                                </div>
-                            )
-                        )}
-                    </div>
-                    
-                    <div className="p-4 bg-gray-900 text-white flex justify-between items-center shadow-[0_-4px_12px_rgba(0,0,0,0.1)]">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Week Column Total</span>
-                        <span className="font-mono text-xl font-bold text-blue-400">${totals.advances.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                     </div>
                 </div>
 
-                {/* Right Side: Cash Credit (来) */}
-                <div className="flex-1 flex flex-col bg-white">
-                    <div className="p-4 bg-green-50/50 border-b border-green-100 flex items-center justify-between sticky top-0 z-20">
-                        <div className="flex items-center space-x-3">
-                            <div className="bg-green-600 p-2 rounded-lg text-white shadow-md"><CreditCard size={20} /></div>
-                            <div>
-                                <h3 className="font-bold text-green-900 leading-tight">Cash Credit (来)</h3>
-                                <p className="text-[10px] text-green-400 font-bold uppercase tracking-wider">Payments received from clients</p>
+                {/* Week Pills Mobile */}
+                <div className="bg-gray-100 px-4 py-2 lg:hidden overflow-x-auto flex space-x-2 no-scrollbar border-b border-gray-200">
+                    {sortedWeeks.map(wn => {
+                        const days = weekWeeks[wn];
+                        const isActive = wn.toString() === activeWeekNum;
+                        return (
+                            <button key={wn} onClick={() => handleDateClick(days[0])} className={`px-4 py-1.5 rounded-full text-[10px] font-bold whitespace-nowrap transition-all border ${isActive ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200'}`}>
+                                W{sortedWeeks.indexOf(wn) + 1}: {getWeekRangeString(null, null, days)}
+                            </button>
+                        );
+                    })}
+                </div>
+
+                {!selectedDate ? (
+                    <div className="flex-1 flex flex-col items-center justify-center text-gray-400 p-12">
+                        <Filter size={48} className="mb-4 opacity-20" />
+                        <p>Select a date to start entering data.</p>
+                    </div>
+                ) : (
+                    <div className="flex-1 flex overflow-hidden flex-col md:flex-row">
+                        {/* Left Column: Advance */}
+                        <div className="flex-1 flex flex-col border-r border-gray-200 bg-white">
+                            <div className="p-4 bg-blue-50/50 border-b border-blue-100 flex items-center justify-between sticky top-0 z-20">
+                                <div className="flex items-center space-x-3">
+                                    <div className="bg-blue-600 p-2 rounded-lg text-white shadow-md"><Banknote size={20} /></div>
+                                    <h3 className="font-bold text-blue-900 leading-tight">Cash Advance (支)</h3>
+                                </div>
+                                <button onClick={() => setIsSelectingClient({ type: 'ADV' })} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-all flex items-center"><UserPlus size={14} className="mr-1.5"/> Add Client</button>
+                            </div>
+                            
+                            <div className="flex-1 overflow-y-auto">
+                                {loading ? <div className="p-12 text-center text-gray-400 text-sm">Loading...</div> : (
+                                    Object.keys(advances).length === 0 ? (
+                                        <div className="p-12 text-center text-gray-300 italic text-sm">No advance records for this date.</div>
+                                    ) : (
+                                        <div className="divide-y divide-gray-100">
+                                            {Object.entries(advances).map(([cid, val]) => {
+                                                const c = clients.find(cl => cl.id === cid);
+                                                return c ? <TransactionRow key={cid} client={c} value={val} type="ADV" navState={{ year: currentYear, month: currentMonth, week: activeWeekNum ? parseInt(activeWeekNum) : 1 }} onChange={(id, v) => setAdvances(p => ({...p, [id]: v}))} onBlur={(id) => handleInputBlur(id, 'ADV')} onFocus={handleInputFocus} /> : null;
+                                            })}
+                                        </div>
+                                    )
+                                )}
+                            </div>
+                            <div className="p-4 bg-gray-900 text-white flex justify-between items-center sm:hidden">
+                                <span className="text-[10px] font-bold text-gray-400">TOTAL</span>
+                                <span className="font-mono text-lg font-bold text-blue-400">${totals.advances.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                             </div>
                         </div>
-                        <button onClick={() => setIsSelectingClient({ type: 'CRED' })} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-all flex items-center"><UserPlus size={14} className="mr-1.5"/> Add Client</button>
-                    </div>
 
-                    <div className="flex-1 overflow-y-auto">
-                        {loading ? <div className="p-12 text-center text-gray-400 text-sm">Loading credits...</div> : (
-                            Object.keys(credits).length === 0 ? (
-                                <div className="p-12 text-center text-gray-300 italic text-sm">No credit records for this date. Click "Add Client" to start.</div>
-                            ) : (
-                                <div className="divide-y divide-gray-100">
-                                    {Object.entries(credits).map(([cid, val]) => {
-                                        const c = clients.find(cl => cl.id === cid);
-                                        return c ? <TransactionRow key={cid} client={c} value={val} type="CRED" navState={{ year: currentYear, month: currentMonth, week: activeWeekNum ? parseInt(activeWeekNum) : 1 }} onChange={(id, v) => setCredits(p => ({...p, [id]: v}))} onBlur={(id) => handleInputBlur(id, 'CRED')} onFocus={handleInputFocus} /> : null;
-                                    })}
+                        {/* Right Column: Credit */}
+                        <div className="flex-1 flex flex-col bg-white">
+                            <div className="p-4 bg-green-50/50 border-b border-green-100 flex items-center justify-between sticky top-0 z-20">
+                                <div className="flex items-center space-x-3">
+                                    <div className="bg-green-600 p-2 rounded-lg text-white shadow-md"><CreditCard size={20} /></div>
+                                    <h3 className="font-bold text-green-900 leading-tight">Cash Credit (来)</h3>
                                 </div>
-                            )
-                        )}
-                    </div>
+                                <button onClick={() => setIsSelectingClient({ type: 'CRED' })} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-all flex items-center"><UserPlus size={14} className="mr-1.5"/> Add Client</button>
+                            </div>
 
-                    <div className="p-4 bg-gray-900 text-white flex justify-between items-center shadow-[0_-4px_12px_rgba(0,0,0,0.1)]">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Week Column Total</span>
-                        <span className="font-mono text-xl font-bold text-green-400">${totals.credits.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                            <div className="flex-1 overflow-y-auto">
+                                {loading ? <div className="p-12 text-center text-gray-400 text-sm">Loading...</div> : (
+                                    Object.keys(credits).length === 0 ? (
+                                        <div className="p-12 text-center text-gray-300 italic text-sm">No credit records for this date.</div>
+                                    ) : (
+                                        <div className="divide-y divide-gray-100">
+                                            {Object.entries(credits).map(([cid, val]) => {
+                                                const c = clients.find(cl => cl.id === cid);
+                                                return c ? <TransactionRow key={cid} client={c} value={val} type="CRED" navState={{ year: currentYear, month: currentMonth, week: activeWeekNum ? parseInt(activeWeekNum) : 1 }} onChange={(id, v) => setCredits(p => ({...p, [id]: v}))} onBlur={(id) => handleInputBlur(id, 'CRED')} onFocus={handleInputFocus} /> : null;
+                                            })}
+                                        </div>
+                                    )
+                                )}
+                            </div>
+                            <div className="p-4 bg-gray-900 text-white flex justify-between items-center sm:hidden">
+                                <span className="text-[10px] font-bold text-gray-400">TOTAL</span>
+                                <span className="font-mono text-lg font-bold text-green-400">${totals.credits.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                            </div>
+                        </div>
                     </div>
-                </div>
+                )}
             </div>
 
             {/* Client Selection Modal */}
@@ -328,14 +395,14 @@ const CashAdvanceCredit: React.FC = () => {
                         <div className={`p-4 flex items-center justify-between text-white ${isSelectingClient.type === 'ADV' ? 'bg-blue-600' : 'bg-green-600'}`}>
                             <h3 className="font-bold flex items-center">
                                 <Search size={18} className="mr-2" />
-                                {isSelectingClient.type === 'ADV' ? 'Add Client for Advance (支)' : 'Add Client for Credit (来)'}
+                                {isSelectingClient.type === 'ADV' ? 'Add for Advance (支)' : 'Add for Credit (来)'}
                             </h3>
                             <button onClick={() => { setIsSelectingClient({ type: null }); setClientSearch(''); }} className="hover:bg-black/10 rounded-full p-1"><X size={20}/></button>
                         </div>
                         <div className="p-4">
                             <div className="relative mb-4">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16}/>
-                                <input autoFocus type="text" placeholder="Search by name or code..." value={clientSearch} onChange={e => setClientSearch(e.target.value)} className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm transition-all" />
+                                <input autoFocus type="text" placeholder="Search client..." value={clientSearch} onChange={e => setClientSearch(e.target.value)} className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm transition-all" />
                             </div>
                             <div className="max-h-[300px] overflow-y-auto divide-y divide-gray-100 border border-gray-100 rounded-xl">
                                 {filteredClientList.map(c => (
