@@ -2,9 +2,13 @@
 import React, { useEffect, useState } from 'react';
 import { getClients, fetchClientTotalBalance, getAllLedgerRecords } from '../services/storageService';
 import { Client, LedgerRecord } from '../types';
-import { TrendingUp, Calendar, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { TrendingUp, Calendar, ArrowUpRight, ArrowDownRight, Loader2 } from 'lucide-react';
 import { MONTH_NAMES, getWeeksForMonth } from '../utils/reportUtils';
 import { supabase } from '../supabaseClient';
+
+// Constants to match SalesIndex for exact tallying
+const PAPER_Z_CODES = ['Z03', 'Z05', 'Z07', 'Z15', 'Z19', 'Z20'];
+const PAPER_C_CODES = ['C03', 'C04', 'C06', 'C09', 'C13', 'C15', 'C17'];
 
 const Summary: React.FC = () => {
   const [clientData, setClientData] = useState<{client: Client, total: number}[]>([]);
@@ -48,17 +52,27 @@ const Summary: React.FC = () => {
 
                 sales.forEach(row => {
                     const client = clients.find(c => c.id === row.client_id);
+                    if (!client) return;
+
+                    // FILTER Logic: Only sum clients that are displayed in SalesIndex to ensure tally
+                    const isPaperProfile = (client.category || 'paper') === 'paper';
+                    const codeUpper = (client.code || '').toUpperCase();
+                    const isValidPaper = PAPER_Z_CODES.includes(codeUpper) || PAPER_C_CODES.includes(codeUpper);
+                    const isMobileProfile = client.category === 'mobile';
+
+                    if (!isValidPaper && !isMobileProfile) return;
+
                     const date = row.entry_date;
                     // Find which Mon-Sun week this date belongs to
                     const week = allWeeks.find(w => date >= w.start && date <= w.end);
                     if (!week) return;
 
                     let earnings = 0;
-                    if (client?.category === 'mobile') {
+                    if (isMobileProfile) {
                         // Mobile Earnings = abs(idx 11: Shareholder Total)
                         const shareholderTotalStr = row.data?.mobileRawData?.[11] || '0';
                         earnings = Math.abs(parseFloat(String(shareholderTotalStr).replace(/,/g, '')) || 0);
-                    } else {
+                    } else if (isValidPaper) {
                         // Paper Earnings = abs((Raw * 0.83) - (Raw * 0.86))
                         const b = row.data?.b || 0;
                         const s = row.data?.s || 0;
@@ -173,7 +187,6 @@ const Summary: React.FC = () => {
                     <tr>
                     <th className="px-6 py-4">Week Ending (Sun)</th>
                     <th className="px-6 py-4">Category</th>
-                    <th className="px-6 py-4 text-right">Transactions</th>
                     <th className="px-6 py-4 text-right">Net Profit</th>
                     </tr>
                 </thead>
@@ -189,9 +202,6 @@ const Summary: React.FC = () => {
                         <td className="px-6 py-4">
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 uppercase">Sales Profit</span>
                         </td>
-                        <td className="px-6 py-4 text-right text-gray-500 text-sm">
-                            {week.count} records
-                        </td>
                         <td className="px-6 py-4 text-right">
                             <span className="font-bold text-lg text-emerald-600">
                                 +${Math.abs(week.total).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -201,7 +211,7 @@ const Summary: React.FC = () => {
                     ))}
                     {weeklyData.length === 0 && (
                         <tr>
-                            <td colSpan={4} className="px-6 py-12 text-center text-gray-400">
+                            <td colSpan={3} className="px-6 py-12 text-center text-gray-400">
                                 No sales profit data found for the selected years.
                             </td>
                         </tr>

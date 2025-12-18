@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, ChevronLeft, ChevronRight, Loader2, Calendar, Smartphone, FileText, DollarSign, RefreshCw, FileSpreadsheet, Zap, CheckCircle } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Loader2, Calendar, Smartphone, FileText, DollarSign, RefreshCw, FileSpreadsheet, Zap, CheckCircle, TrendingUp } from 'lucide-react';
 import { getClients, getSalesForDates, saveSaleRecord, getLedgerRecords, updateLedgerRecord, saveLedgerRecord } from '../services/storageService';
 import { Client, SaleRecord } from '../types';
 import { MONTH_NAMES, getWeeksForMonth } from '../utils/reportUtils';
@@ -17,6 +16,12 @@ const MOBILE_TO_PAPER_MAP: Record<string, string> = {
     'sk3619': 'c13',  // ZHONG -> 中
     'sk8959': 'c17',  // YEE -> 仪
     'vc9486': '9486'  // vincent -> 张
+};
+
+// FIX: Added missing formatTotal utility function for numeric formatting in tables
+const formatTotal = (val: number) => {
+    if (!val || val === 0) return '-';
+    return val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
 // --- Helper: Composite Input for B/S or A/C ---
@@ -399,86 +404,75 @@ const SalesIndex: React.FC = () => {
       return `${formatDate(days[0])} - ${formatDate(days[days.length - 1])}`;
   };
 
-  const formatTotal = (val: number) => val.toLocaleString(undefined, {minimumFractionDigits: 2});
-  const getTotalColor = (val: number) => val >= 0 ? 'text-green-800' : 'text-red-700';
-
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-gray-50">
+      {/* Top Header - Tabs and Navigation */}
       <div className="bg-white border-b border-gray-200 z-20 shadow-sm flex-shrink-0">
-          <div className="px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-3">
-             <div className="flex items-center space-x-4">
-                 <div className="flex bg-gray-100 p-1 rounded-lg">
-                    <button onClick={() => setActiveTab('paper')} className={`flex items-center px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'paper' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}><FileText size={16} className="mr-2" />Paper List</button>
-                    <button onClick={() => setActiveTab('mobile')} className={`flex items-center px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'mobile' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}><Smartphone size={16} className="mr-2" />Mobile List</button>
-                 </div>
-                 
-                 <div className="hidden lg:flex items-center space-x-6 ml-6 pl-6 border-l border-gray-200">
-                    <div className={`transition-opacity duration-300 flex space-x-6 ${activeTab === 'paper' ? 'opacity-100' : 'opacity-40'}`}>
-                        <div>
-                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Total</p>
-                            <p className="font-mono font-bold text-gray-800 text-lg">${totalPaperRaw.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
-                        </div>
-                        <div>
-                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Company (17%)</p>
-                            <p className="font-mono font-bold text-blue-600 text-lg">${Math.abs(totalPaperCompany).toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
-                        </div>
-                        <div>
-                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Client (14%)</p>
-                            <p className="font-mono font-bold text-red-600 text-lg">${Math.abs(totalPaperClient).toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
-                        </div>
-                        <div>
-                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Earnings</p>
-                            <p className="font-mono font-bold text-green-600 text-lg">${Math.abs(totalPaperEarnings).toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
-                        </div>
-                        <div className="border-l border-gray-100 pl-6">
-                            <p className="text-[10px] text-emerald-600 font-black uppercase tracking-widest">Weekly Total Earning</p>
-                            <p className="font-mono font-black text-emerald-500 text-xl">${totalWeeklyProfit.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
-                        </div>
-                    </div>
-                    
-                    <div className={`transition-opacity duration-300 border-l border-gray-200 pl-6 flex space-x-6 ${activeTab === 'mobile' ? 'opacity-100' : 'opacity-40'}`}>
-                        <div>
-                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">公司总额</p>
-                            <p className="font-mono font-bold text-blue-600 text-lg">${totalMobileAgent.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
-                        </div>
-                        <div>
-                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">会员总数</p>
-                            <p className="font-mono font-bold text-red-600 text-lg">${totalMobileCompany.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
-                        </div>
-                        <div>
-                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Earnings</p>
-                            <p className="font-mono font-bold text-green-600 text-lg">${Math.abs(totalMobileShareholder).toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
-                        </div>
-                    </div>
+          <div className="px-4 py-3 flex flex-col sm:flex-row justify-between items-center gap-3">
+             <div className="flex items-center w-full sm:w-auto">
+                 <div className="flex bg-gray-100 p-1 rounded-lg w-full sm:w-auto">
+                    <button onClick={() => setActiveTab('paper')} className={`flex-1 sm:flex-none flex items-center justify-center px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'paper' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}><FileText size={16} className="mr-2" />Paper</button>
+                    <button onClick={() => setActiveTab('mobile')} className={`flex-1 sm:flex-none flex items-center justify-center px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'mobile' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}><Smartphone size={16} className="mr-2" />Mobile</button>
                  </div>
              </div>
 
-             <div className="flex items-center space-x-4">
-                <div className="relative w-full md:w-64">
+             <div className="flex items-center space-x-3 w-full sm:w-auto">
+                <div className="relative flex-1 sm:w-64">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-                    <input type="text" placeholder={`Search ${activeTab} clients...`} className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                    <input type="text" placeholder={`Search ${activeTab}...`} className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                 </div>
                 {activeTab === 'mobile' && (
-                    <>
-                        <button onClick={handleRegenerateDianFromList} disabled={isRegenerating || filteredMobileClients.length === 0} className="flex items-center px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 shadow-sm text-sm font-bold whitespace-nowrap disabled:opacity-50"><Zap size={16} className={`mr-2 ${isRegenerating ? 'text-blue-500' : 'text-blue-700'}`} />{isRegenerating ? 'Updating...' : 'Regenerate 电'}</button>
-                        <button onClick={() => navigate('/sales/mobile-report')} className="flex items-center px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 shadow-sm text-sm font-bold whitespace-nowrap"><FileSpreadsheet size={16} className="mr-2" />Report</button>
-                    </>
+                    <div className="flex space-x-2">
+                        <button onClick={handleRegenerateDianFromList} disabled={isRegenerating || filteredMobileClients.length === 0} className="p-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 shadow-sm" title="Regenerate 电"><Zap size={18} className={isRegenerating ? 'animate-pulse' : ''} /></button>
+                        <button onClick={() => navigate('/sales/mobile-report')} className="p-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 shadow-sm" title="Import Mobile Report"><FileSpreadsheet size={18} /></button>
+                    </div>
                 )}
             </div>
           </div>
 
-          <div className="border-t border-gray-100 px-4 py-2 flex items-center gap-3 overflow-x-auto">
-                <div className="flex items-center bg-gray-100 rounded-lg p-1 flex-shrink-0">
-                    <button onClick={handlePrevMonth} disabled={currentYear === 2025 && currentMonth === 0} className="p-1 hover:bg-white rounded shadow-sm disabled:opacity-30"><ChevronLeft size={18}/></button>
-                    <span className="w-28 text-center font-bold text-gray-800 text-xs md:text-sm">{MONTH_NAMES[currentMonth]} {currentYear}</span>
-                    <button onClick={handleNextMonth} disabled={currentYear === 2026 && currentMonth === 11} className="p-1 hover:bg-white rounded shadow-sm disabled:opacity-30"><ChevronRight size={18}/></button>
+          {/* Sub Header - Month and Week Selector */}
+          <div className="border-t border-gray-100 px-4 py-2 flex items-center gap-3 overflow-x-auto no-scrollbar bg-gray-50/50">
+                <div className="flex items-center bg-white border border-gray-200 rounded-lg p-1 flex-shrink-0 shadow-sm">
+                    <button onClick={handlePrevMonth} disabled={currentYear === 2025 && currentMonth === 0} className="p-1 hover:bg-gray-100 rounded disabled:opacity-30"><ChevronLeft size={18}/></button>
+                    <span className="w-24 md:w-28 text-center font-bold text-gray-800 text-[11px] md:text-sm">{MONTH_NAMES[currentMonth].slice(0,3)} {currentYear}</span>
+                    <button onClick={handleNextMonth} disabled={currentYear === 2026 && currentMonth === 11} className="p-1 hover:bg-gray-100 rounded disabled:opacity-30"><ChevronRight size={18}/></button>
                 </div>
-                <div className="flex space-x-2">
+                <div className="flex space-x-1.5 md:space-x-2">
                     {sortedWeekKeys.map(wk => (
-                        <button key={wk} onClick={() => setSelectedWeekNum(wk)} className={`px-3 py-1 rounded-md transition-colors whitespace-nowrap flex flex-col items-center justify-center min-w-[100px] border ${selectedWeekNum === wk ? 'bg-blue-600 text-white shadow border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}><span className="text-xs font-bold uppercase tracking-wider">Week {Object.keys(weeksData).indexOf(String(wk)) + 1}</span><span className={`text-[10px] mt-0.5 ${selectedWeekNum === wk ? 'text-blue-100' : 'text-gray-400'}`}>{getWeekRangeLabel(wk)}</span></button>
+                        <button key={wk} onClick={() => setSelectedWeekNum(wk)} className={`px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap flex flex-col items-center justify-center min-w-[90px] md:min-w-[110px] border ${selectedWeekNum === wk ? 'bg-blue-600 text-white shadow border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'}`}><span className="text-[9px] md:text-[10px] font-bold uppercase tracking-wider opacity-80">Week {Object.keys(weeksData).indexOf(String(wk)) + 1}</span><span className={`text-[10px] md:text-[11px] font-mono mt-0.5 ${selectedWeekNum === wk ? 'text-blue-100' : 'text-gray-400'}`}>{getWeekRangeLabel(wk)}</span></button>
                     ))}
                 </div>
-                <button onClick={loadData} className="ml-auto p-2 text-gray-400 hover:text-blue-600 hover:bg-gray-100 rounded-full"><RefreshCw size={16} className={loading ? 'animate-spin' : ''} /></button>
+                <button onClick={loadData} className="ml-auto p-2 text-gray-400 hover:text-blue-600 hover:bg-white rounded-full transition-colors border border-transparent hover:border-gray-200"><RefreshCw size={16} className={loading ? 'animate-spin' : ''} /></button>
+          </div>
+
+          {/* Totals Bar - Better View and Mobile Responsive */}
+          <div className="bg-white border-t border-gray-100 px-4 py-2.5 overflow-x-auto no-scrollbar">
+                <div className="flex items-center min-w-max space-x-6 md:space-x-8">
+                    {activeTab === 'paper' ? (
+                        <>
+                            <div className="flex flex-col"><span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Raw Total</span><span className="font-mono font-bold text-gray-800 text-sm md:text-base">${totalPaperRaw.toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
+                            <div className="flex flex-col"><span className="text-[9px] text-blue-500 font-bold uppercase tracking-widest">Company (-17%)</span><span className="font-mono font-bold text-blue-600 text-sm md:text-base">${Math.abs(totalPaperCompany).toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
+                            <div className="flex flex-col"><span className="text-[9px] text-red-500 font-bold uppercase tracking-widest">Client (-14%)</span><span className="font-mono font-bold text-red-600 text-sm md:text-base">${Math.abs(totalPaperClient).toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
+                            <div className="flex flex-col"><span className="text-[9px] text-orange-500 font-bold uppercase tracking-widest">Earnings</span><span className="font-mono font-bold text-orange-500 text-sm md:text-base">${Math.abs(totalPaperEarnings).toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
+                        </>
+                    ) : (
+                        <>
+                            <div className="flex flex-col"><span className="text-[9px] text-purple-400 font-bold uppercase tracking-widest">公司总额</span><span className="font-mono font-bold text-purple-600 text-sm md:text-base">${totalMobileAgent.toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
+                            <div className="flex flex-col"><span className="text-[9px] text-blue-500 font-bold uppercase tracking-widest">会员总数</span><span className="font-mono font-bold text-blue-600 text-sm md:text-base">${totalMobileCompany.toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
+                            <div className="flex flex-col"><span className="text-[9px] text-orange-500 font-bold uppercase tracking-widest">Earnings</span><span className="font-mono font-bold text-orange-500 text-sm md:text-base">${Math.abs(totalMobileShareholder).toLocaleString(undefined, {minimumFractionDigits: 2})}</span></div>
+                        </>
+                    )}
+                    
+                    {/* Weekly Total Earning relocated to follow the list metrics */}
+                    <div className="h-8 w-px bg-gray-100 hidden sm:block"></div>
+                    <div className="bg-emerald-50 px-4 py-1.5 rounded-xl border border-emerald-100 flex items-center shadow-sm">
+                        <TrendingUp size={16} className="text-emerald-500 mr-3" />
+                        <div className="flex flex-col">
+                            <span className="text-[9px] text-emerald-600 font-black uppercase tracking-widest leading-none mb-1">Weekly Total Earning</span>
+                            <span className="font-mono font-black text-emerald-700 text-base md:text-xl leading-none">${totalWeeklyProfit.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                        </div>
+                    </div>
+                </div>
           </div>
       </div>
 
@@ -557,18 +551,18 @@ const SalesIndex: React.FC = () => {
                                         <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[2])}</td>
                                         <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[3])}</td>
                                         <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[4])}</td>
-                                        <td className={`px-2 py-3 text-right bg-blue-100 border-x border-blue-200 ${getTotalColor(mobileColumnTotals[5])}`}>{formatTotal(mobileColumnTotals[5])}</td>
+                                        <td className={`px-2 py-3 text-right bg-blue-100 border-x border-blue-200 text-blue-800`}>{formatTotal(mobileColumnTotals[5])}</td>
                                         <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[6])}</td>
                                         <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[7])}</td>
                                         <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[8])}</td>
                                         <td className="px-2 py-3 text-right text-orange-700">{formatTotal(mobileColumnTotals[9])}</td>
                                         <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[10])}</td>
-                                        <td className={`px-2 py-3 text-right bg-indigo-100 border-x border-indigo-200 ${getTotalColor(mobileColumnTotals[11])}`}>{formatTotal(mobileColumnTotals[11])}</td>
+                                        <td className={`px-2 py-3 text-right bg-indigo-100 border-x border-indigo-200 text-indigo-800`}>{formatTotal(mobileColumnTotals[11])}</td>
                                         <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[12])}</td>
                                         <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[13])}</td>
                                         <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[14])}</td>
                                         <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[15])}</td>
-                                        <td className={`px-2 py-3 text-right bg-green-200 border-l border-green-300 ${getTotalColor(mobileColumnTotals[16])}`}>{formatTotal(mobileColumnTotals[16])}</td>
+                                        <td className={`px-2 py-3 text-right bg-green-200 border-l border-green-300 ${parseFloat(String(mobileColumnTotals[16]).replace(/,/g,'')) >= 0 ? 'text-green-800' : 'text-red-700'}`}>{formatTotal(mobileColumnTotals[16])}</td>
                                     </tr>
                                 </tfoot>
                             </table>
