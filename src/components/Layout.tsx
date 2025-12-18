@@ -29,7 +29,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/clients', label: 'Client Accounts', icon: Users },
     { path: '/sales', label: 'Sales Opening', icon: FileText, chineseChar: '收' },
-    { path: '/cash-transaction', label: 'Advance & Credit', icon: Repeat, chineseChar: '支/来' },
+    { path: '/cash-transaction', label: 'Advance & Credit', icon: Repeat, chineseChar: '支来' },
     { path: '/draw-report', label: 'Draw Reports', icon: Calendar, chineseChar: '欠' },
     { path: '/calculator', label: 'Win Calculator', icon: Calculator, chineseChar: '中' },
     { path: '/cashflow', label: 'Company Cash Flow', icon: ArrowRightLeft },
