@@ -1,25 +1,25 @@
 
 import React, { useEffect, useState } from 'react';
-import { getClients, fetchClientTotalBalance, getAllLedgerRecords } from '../services/storageService';
-import { Client, LedgerRecord } from '../types';
-import { TrendingUp, Calendar, ArrowUpRight, ArrowDownRight, Loader2 } from 'lucide-react';
+import { getClients, fetchClientTotalBalance } from '../services/storageService';
+import { Client } from '../types';
+import { TrendingUp, Calendar, Loader2, ArrowUpRight, DollarSign, Wallet } from 'lucide-react';
 import { MONTH_NAMES, getWeeksForMonth } from '../utils/reportUtils';
 import { supabase } from '../supabaseClient';
 
-// Constants to match SalesIndex for exact tallying
+// Constants to match SalesIndex logic exactly for tallying
 const PAPER_Z_CODES = ['Z03', 'Z05', 'Z07', 'Z15', 'Z19', 'Z20'];
 const PAPER_C_CODES = ['C03', 'C04', 'C06', 'C09', 'C13', 'C15', 'C17'];
 
 const Summary: React.FC = () => {
   const [clientData, setClientData] = useState<{client: Client, total: number}[]>([]);
-  const [weeklyData, setWeeklyData] = useState<{date: string, total: number, count: number}[]>([]);
+  const [weeklyData, setWeeklyData] = useState<{date: string, total: number}[]>([]);
   const [activeTab, setActiveTab] = useState<'weekly' | 'clients'>('weekly');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
         setLoading(true);
-        // 1. Fetch Client Balances
+        // 1. Fetch Client Balances (Overall)
         const clients = await getClients();
         const summary = await Promise.all(clients.map(async (client) => {
             const total = await fetchClientTotalBalance(client.id);
@@ -29,13 +29,12 @@ const Summary: React.FC = () => {
         setClientData(summary);
 
         // 2. REDEFINED: Fetch Weekly Earnings from Sales Opening (Paper & Mobile Earnings)
-        // Grouping by SUNDAY cutoff.
+        // STRICT TALLYING LOGIC matching SalesIndex calculations
         if (supabase) {
             const { data: sales } = await supabase.from('financial_journal').select('*').eq('entry_type', 'SALE');
             
             if (sales) {
-                // Map of Sunday-Date -> total earnings
-                const weeklyEarningsMap = new Map<string, { total: number, count: number }>();
+                const weeklyEarningsMap = new Map<string, number>();
 
                 // Define all valid weeks in our system across 2025-2026
                 const allWeeks: { start: string, end: string, label: string }[] = [];
@@ -54,7 +53,7 @@ const Summary: React.FC = () => {
                     const client = clients.find(c => c.id === row.client_id);
                     if (!client) return;
 
-                    // FILTER Logic: Only sum clients that are displayed in SalesIndex to ensure tally
+                    // Apply the same visibility/code filters as SalesIndex
                     const isPaperProfile = (client.category || 'paper') === 'paper';
                     const codeUpper = (client.code || '').toUpperCase();
                     const isValidPaper = PAPER_Z_CODES.includes(codeUpper) || PAPER_C_CODES.includes(codeUpper);
@@ -84,17 +83,13 @@ const Summary: React.FC = () => {
                         earnings = Math.abs(comp - clie);
                     }
 
-                    const existing = weeklyEarningsMap.get(week.label) || { total: 0, count: 0 };
-                    weeklyEarningsMap.set(week.label, {
-                        total: existing.total + earnings,
-                        count: existing.count + 1
-                    });
+                    const existing = weeklyEarningsMap.get(week.label) || 0;
+                    weeklyEarningsMap.set(week.label, existing + earnings);
                 });
 
-                const weeklyList = Array.from(weeklyEarningsMap.entries()).map(([date, data]) => ({
+                const weeklyList = Array.from(weeklyEarningsMap.entries()).map(([date, total]) => ({
                     date,
-                    total: data.total,
-                    count: data.count
+                    total
                 }));
 
                 // Sort newest week (Sunday) first
@@ -111,108 +106,117 @@ const Summary: React.FC = () => {
   const totalWeeklyEarnings = weeklyData.reduce((acc, curr) => acc + curr.total, 0);
 
   const formatDate = (dateStr: string) => {
-      // Safe parsing to avoid timezone offset shifts that move Sunday to Saturday
       const [y, m, d] = dateStr.split('-').map(Number);
       return `${d} ${MONTH_NAMES[m - 1].slice(0, 3)} ${y}`;
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-4 md:p-8">
-      <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+    <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-8">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-            <h1 className="text-3xl font-bold text-gray-900">Financial Summary</h1>
-            <p className="text-gray-500">Calculated from Sales Opening earnings.</p>
+            <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Financial Summary</h1>
+            <p className="text-gray-500 mt-1">Cross-check profit net between systems.</p>
         </div>
         
-        <div className="bg-gray-200 p-1 rounded-xl flex self-start md:self-auto shadow-inner">
+        <div className="bg-gray-200 p-1 rounded-2xl flex self-start md:self-auto shadow-inner">
             <button 
                 onClick={() => setActiveTab('weekly')}
-                className={`px-5 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'weekly' ? 'bg-white text-blue-600 shadow-md' : 'text-gray-600 hover:text-gray-900'}`}
+                className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'weekly' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
             >
-                Weekly Earnings
+                Earnings History
             </button>
             <button 
                 onClick={() => setActiveTab('clients')}
-                className={`px-5 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'clients' ? 'bg-white text-blue-600 shadow-md' : 'text-gray-600 hover:text-gray-900'}`}
+                className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'clients' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
             >
-                Client Net Balances
+                Balance Ledger
             </button>
         </div>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 relative overflow-hidden">
-            <div className="relative z-10">
-                <h2 className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-1">Company Profit Net</h2>
-                <div className="flex items-baseline">
-                    <span className="text-4xl font-bold text-emerald-600">
-                        +${totalWeeklyEarnings.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
+      {/* High-Level Overview Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-gradient-to-br from-emerald-600 to-teal-700 rounded-3xl p-8 text-white shadow-xl shadow-emerald-200 relative overflow-hidden">
+            <div className="relative z-10 flex flex-col justify-between h-full">
+                <div>
+                    <h2 className="text-emerald-100 text-xs font-black uppercase tracking-widest mb-2">Company Profit Net (All Time)</h2>
+                    <div className="text-4xl md:text-5xl font-black font-mono">
+                        +${totalWeeklyEarnings.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </div>
                 </div>
-                <p className="text-sm text-gray-400 mt-2">Sum of Paper + Mobile Earnings</p>
+                <div className="mt-8 flex items-center bg-white/10 w-fit px-4 py-1.5 rounded-full border border-white/20">
+                    <TrendingUp size={16} className="mr-2" />
+                    <span className="text-sm font-bold">Sum of Sales Opening Profits</span>
+                </div>
             </div>
-            <div className="absolute right-0 bottom-0 p-6 opacity-5">
-                <TrendingUp size={100} className="text-emerald-600" />
-            </div>
+            <TrendingUp size={180} className="absolute -right-12 -bottom-12 opacity-10 rotate-12" />
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 relative overflow-hidden">
-            <div className="relative z-10">
-                <h2 className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-1">Active Receivables</h2>
-                <div className="flex items-baseline">
-                    <span className={`text-4xl font-bold ${totalReceivables >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>
-                        ${Math.abs(totalReceivables).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
-                    <span className="ml-2 text-xs font-bold text-gray-400">{totalReceivables >= 0 ? 'OWED TO CO' : 'CREDIT'}</span>
+        <div className="bg-white rounded-3xl p-8 border border-gray-100 shadow-sm shadow-gray-200/50 relative overflow-hidden">
+            <div className="relative z-10 flex flex-col justify-between h-full">
+                <div>
+                    <h2 className="text-gray-400 text-xs font-black uppercase tracking-widest mb-2">Net Active Receivables</h2>
+                    <div className={`text-4xl md:text-5xl font-black font-mono ${totalReceivables >= 0 ? 'text-blue-600' : 'text-rose-600'}`}>
+                        ${Math.abs(totalReceivables).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </div>
                 </div>
-                <p className="text-sm text-gray-400 mt-2">Total outstanding debt across all client ledgers</p>
+                <div className="mt-8 flex items-center text-gray-500 text-sm font-bold">
+                    <Wallet size={16} className="mr-2 text-blue-500" />
+                    Current total outstanding debt
+                </div>
             </div>
-            <div className="absolute right-0 bottom-0 p-6 opacity-5 text-blue-600">
-                <Calendar size={100} />
-            </div>
+            <DollarSign size={180} className="absolute -right-12 -bottom-12 opacity-5 text-blue-500 rotate-[-15deg]" />
         </div>
       </div>
 
       {loading ? (
-          <div className="flex justify-center items-center py-20"><Loader2 className="animate-spin text-blue-600" size={32} /></div>
+          <div className="flex justify-center items-center py-24"><Loader2 className="animate-spin text-blue-600" size={48} strokeWidth={3} /></div>
       ) : activeTab === 'weekly' ? (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden animate-in fade-in slide-in-from-bottom-4">
-            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                <h3 className="font-bold text-gray-800">Weekly Earnings (Opening Profit)</h3>
-                <span className="text-xs font-bold bg-white border px-3 py-1 rounded-full text-gray-500">{weeklyData.length} Weeks Recorded</span>
+          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="px-8 py-6 border-b border-gray-50 flex justify-between items-center bg-gray-50/30">
+                <h3 className="font-black text-gray-800 uppercase tracking-tight text-lg">Weekly Earning Breakdown</h3>
+                <div className="flex items-center space-x-2 text-gray-400 font-bold text-xs">
+                    <Calendar size={14} />
+                    <span>{weeklyData.length} WEEKS ANALYZED</span>
+                </div>
             </div>
             <div className="overflow-x-auto">
                 <table className="w-full text-left">
-                <thead className="bg-gray-50 text-gray-500 text-[10px] uppercase font-bold tracking-widest">
+                <thead className="bg-gray-50/50 text-gray-400 text-[10px] uppercase font-black tracking-widest">
                     <tr>
-                    <th className="px-6 py-4">Week Ending (Sun)</th>
-                    <th className="px-6 py-4">Category</th>
-                    <th className="px-6 py-4 text-right">Net Profit</th>
+                    <th className="pl-8 pr-6 py-4">Week Ending (Sun)</th>
+                    <th className="px-6 py-4">Status</th>
+                    <th className="pr-8 pl-6 py-4 text-right">Weekly Profit</th>
                     </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 font-mono">
+                <tbody className="divide-y divide-gray-50 font-mono">
                     {weeklyData.map((week) => (
-                    <tr key={week.date} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-6 py-4">
+                    <tr key={week.date} className="hover:bg-gray-50 transition-colors group">
+                        <td className="pl-8 pr-6 py-5">
                             <div className="flex items-center">
-                                <Calendar size={16} className="text-blue-500 mr-3" />
-                                <span className="font-bold text-gray-900">{formatDate(week.date)}</span>
+                                <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mr-4 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                                    <Calendar size={18} />
+                                </div>
+                                <span className="font-black text-gray-900 text-lg">{formatDate(week.date)}</span>
                             </div>
                         </td>
-                        <td className="px-6 py-4">
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 uppercase">Sales Profit</span>
+                        <td className="px-6 py-5">
+                            <span className="px-3 py-1 rounded-lg text-[10px] font-black bg-emerald-100 text-emerald-700 uppercase ring-1 ring-emerald-200">Profit Captured</span>
                         </td>
-                        <td className="px-6 py-4 text-right">
-                            <span className="font-bold text-lg text-emerald-600">
-                                +${Math.abs(week.total).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        <td className="pr-8 pl-6 py-5 text-right">
+                            <span className="font-black text-2xl text-emerald-600">
+                                +${Math.abs(week.total).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </span>
                         </td>
                     </tr>
                     ))}
                     {weeklyData.length === 0 && (
                         <tr>
-                            <td colSpan={3} className="px-6 py-12 text-center text-gray-400">
-                                No sales profit data found for the selected years.
+                            <td colSpan={3} className="px-6 py-24 text-center">
+                                <div className="max-w-xs mx-auto">
+                                    <TrendingUp size={48} className="mx-auto text-gray-200 mb-4" />
+                                    <p className="text-gray-400 font-bold">No sales profit data found for the current period.</p>
+                                </div>
                             </td>
                         </tr>
                     )}
@@ -221,55 +225,54 @@ const Summary: React.FC = () => {
             </div>
           </div>
       ) : (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden animate-in fade-in slide-in-from-bottom-4">
-            <div className="p-6 border-b border-gray-100 bg-gray-50/50">
-                <h3 className="font-bold text-gray-800">Client Net Balances (Overall)</h3>
+          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="px-8 py-6 border-b border-gray-50 bg-gray-50/30">
+                <h3 className="font-black text-gray-800 uppercase tracking-tight text-lg">Detailed Ledger Balances</h3>
             </div>
-            <table className="w-full text-left">
-            <thead className="bg-gray-50 text-gray-500 text-[10px] uppercase font-bold tracking-widest">
-                <tr>
-                <th className="px-6 py-4">Client Name</th>
-                <th className="px-6 py-4">Code</th>
-                <th className="px-6 py-4 text-right">Ledger Total</th>
-                <th className="px-6 py-4 text-right">Status</th>
-                </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 font-mono">
-                {clientData.map(({ client, total }) => (
-                <tr key={client.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                        <span className="font-bold text-gray-900">{client.name}</span>
-                    </td>
-                    <td className="px-6 py-4 text-gray-400 text-sm">{client.code}</td>
-                    <td className={`px-6 py-4 text-right font-bold text-lg ${total >= 0 ? 'text-blue-600' : 'text-green-600'}`}>
-                        ${Math.abs(total).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold ${
-                            total > 0 ? 'bg-blue-100 text-blue-700' : 
-                            total < 0 ? 'bg-green-100 text-green-700' : 
-                            'bg-gray-100 text-gray-600'
-                        }`}>
-                            {total > 0 ? 'OWES CO' : total < 0 ? 'CO OWES' : 'SETTLED'}
-                        </span>
-                    </td>
-                </tr>
-                ))}
-                {clientData.length === 0 && (
-                    <tr><td colSpan={4} className="px-6 py-8 text-center text-gray-500">No clients found.</td></tr>
-                )}
-            </tbody>
-            </table>
+            <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                <thead className="bg-gray-50/50 text-gray-400 text-[10px] uppercase font-black tracking-widest">
+                    <tr>
+                    <th className="pl-8 pr-6 py-4">Client Name</th>
+                    <th className="px-6 py-4">Code</th>
+                    <th className="px-6 py-4 text-right">Net Balance</th>
+                    <th className="pr-8 pl-6 py-4 text-right">System Status</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50 font-mono">
+                    {clientData.map(({ client, total }) => (
+                    <tr key={client.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="pl-8 pr-6 py-5">
+                            <span className="font-black text-gray-900 text-lg uppercase tracking-tight">{client.name}</span>
+                        </td>
+                        <td className="px-6 py-5">
+                            <span className="text-gray-400 font-bold bg-gray-100 px-2 py-0.5 rounded text-sm">{client.code || '-'}</span>
+                        </td>
+                        <td className={`px-6 py-5 text-right font-black text-xl ${total >= 0 ? 'text-blue-600' : 'text-rose-600'}`}>
+                            ${Math.abs(total).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="pr-8 pl-6 py-5 text-right">
+                            <div className={`inline-flex items-center px-4 py-1 rounded-full text-[10px] font-black ${
+                                total > 0 ? 'bg-blue-100 text-blue-700' : 
+                                total < 0 ? 'bg-rose-100 text-rose-700' : 
+                                'bg-gray-100 text-gray-600'
+                            }`}>
+                                <div className={`w-1.5 h-1.5 rounded-full mr-2 ${total > 0 ? 'bg-blue-600' : total < 0 ? 'bg-rose-600' : 'bg-gray-600'}`} />
+                                {total > 0 ? 'CO RECEIVABLE' : total < 0 ? 'CO PAYABLE' : 'ACCOUNT SETTLED'}
+                            </div>
+                        </td>
+                    </tr>
+                    ))}
+                    {clientData.length === 0 && (
+                        <tr><td colSpan={4} className="px-6 py-24 text-center text-gray-300 font-bold">No registered clients found in system.</td></tr>
+                    )}
+                </tbody>
+                </table>
+            </div>
           </div>
       )}
     </div>
   );
 };
-
-const Loader2 = ({ size, className }: { size: number, className: string }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-        <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-    </svg>
-);
 
 export default Summary;
