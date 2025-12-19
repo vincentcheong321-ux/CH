@@ -1,9 +1,9 @@
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Calculator, Trophy, RotateCcw, Plus, Trash2, Save, User, CheckCircle, Calendar, Hash, Medal, Layers, RefreshCw } from 'lucide-react';
-import { getClients, saveLedgerRecord, getWinningsByDateRange } from '../services/storageService';
-import { Client } from '../types';
+import { getClients, saveLedgerRecord, getWinningsByDateRange, getLedgerRecords, getNetAmount } from '../services/storageService';
+import { Client, LedgerRecord } from '../types';
 import { getWeeksForMonth, MONTH_NAMES, getWeekRangeString } from '../utils/reportUtils';
 
 type GameMode = '4D' | '3D';
@@ -58,17 +58,91 @@ const getPermutationCount = (str: string, mode: GameMode): number => {
     return 1;
 };
 
+// Preview Component for showing weekly main ledger status
+const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, selectedDate: string }) => {
+    const [balance, setBalance] = useState<number | null>(null);
+    const [dailyRecords, setDailyRecords] = useState<LedgerRecord[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [clientName, setClientName] = useState('');
+
+    useEffect(() => {
+        const load = async () => {
+            setLoading(true);
+            const records = await getLedgerRecords(clientId);
+            const clients = await getClients();
+            const c = clients.find(cl => cl.id === clientId);
+            if (c) setClientName(c.name);
+
+            const dateObj = new Date(selectedDate);
+            const dayOfWeek = dateObj.getDay(); 
+            const diffToMon = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+            const startObj = new Date(dateObj);
+            startObj.setDate(dateObj.getDate() - diffToMon);
+            const endObj = new Date(startObj);
+            endObj.setDate(startObj.getDate() + 6);
+            
+            const startStr = startObj.toISOString().split('T')[0];
+            const endStr = endObj.toISOString().split('T')[0];
+
+            const weekRecords = records.filter(r => 
+                r.date >= startStr && 
+                r.date <= endStr && 
+                (r.column === 'main' || !r.column)
+            );
+            
+            weekRecords.sort((a, b) => a.date.localeCompare(b.date));
+            const visibleWeekRecords = weekRecords.filter(r => r.isVisible);
+            const bal = visibleWeekRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
+            
+            setBalance(bal);
+            setDailyRecords(weekRecords);
+            setLoading(false);
+        };
+        load();
+    }, [clientId, selectedDate]);
+
+    if (loading) return null;
+
+    return (
+        <div className="fixed bottom-20 right-4 md:right-8 bg-white border border-gray-200 shadow-2xl rounded-xl z-[60] w-[320px] md:w-[400px] overflow-hidden animate-in slide-in-from-bottom-10 fade-in duration-300 flex flex-col max-h-[50vh]">
+            <div className="bg-gray-900 text-white p-3 flex justify-between items-center flex-shrink-0">
+                <div className="flex flex-col min-w-0">
+                    <span className="font-bold truncate text-sm md:text-base">{clientName}</span>
+                    <span className="text-[10px] text-gray-400">Week Balance</span>
+                </div>
+                <span className={`font-mono font-bold text-lg ${balance! >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    ${Math.abs(balance!).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                </span>
+            </div>
+            <div className="flex-1 overflow-y-auto bg-gray-50">
+                {dailyRecords.map(r => (
+                    <div key={r.id} className="flex justify-between items-center px-4 py-2 border-b border-gray-100 last:border-0 bg-white text-xs">
+                        <span className="text-gray-400 font-mono">{r.date.slice(5)}</span>
+                        <span className="flex-1 px-2 truncate text-gray-600 font-medium">{r.typeLabel} {r.description && `(${r.description})`}</span>
+                        <span className={`font-mono font-bold ${r.operation === 'add' ? 'text-green-600' : r.operation === 'subtract' ? 'text-red-600' : 'text-gray-400'}`}>
+                            {r.operation === 'add' ? '+' : r.operation === 'subtract' ? '-' : ''}{r.amount.toLocaleString(undefined, {minimumFractionDigits: 2})}
+                        </span>
+                    </div>
+                ))}
+                {dailyRecords.length === 0 && <p className="p-8 text-center text-gray-400 italic text-xs">No activity this week.</p>}
+            </div>
+        </div>
+    );
+};
+
 const ClientWinInputRow = React.memo(({ 
     client, 
     value, 
     onChange, 
     onBlur,
+    onFocus,
     navState
 }: { 
     client: Client, 
     value: string, 
     onChange: (id: string, val: string) => void, 
     onBlur: (id: string) => void,
+    onFocus: (id: string) => void,
     navState: any
 }) => {
     return (
@@ -91,7 +165,7 @@ const ClientWinInputRow = React.memo(({
                     value={value}
                     onChange={(e) => onChange(client.id, e.target.value)}
                     onBlur={() => onBlur(client.id)}
-                    onFocus={(e) => e.target.select()}
+                    onFocus={(e) => { e.target.select(); onFocus(client.id); }}
                     className={`
                         w-full pl-5 pr-2 py-1.5 text-right font-mono font-bold rounded-lg border transition-all
                         focus:outline-none focus:ring-2 focus:ring-red-500
@@ -122,6 +196,10 @@ const WinCalculator: React.FC = () => {
     const [showSuccess, setShowSuccess] = useState(false);
     const [clientWinnings, setClientWinnings] = useState<Record<string, string>>({});
     const [loadingList, setLoadingList] = useState(false);
+    
+    // Preview Management
+    const [previewClientId, setPreviewClientId] = useState<string | null>(null);
+    const blurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         const fetchClients = async () => {
@@ -162,7 +240,6 @@ const WinCalculator: React.FC = () => {
             const data = await getWinningsByDateRange(sStr, eStr);
             const mapped: Record<string, string> = {};
             clients.forEach(c => {
-                // FIXED: Ensure 2 decimal places string format
                 mapped[c.id] = data[c.id] ? data[c.id].toFixed(2) : '';
             });
             setClientWinnings(mapped);
@@ -296,7 +373,6 @@ const WinCalculator: React.FC = () => {
             const record = prev as Record<string, string>;
             const raw = record[selectedClientId];
             const currentVal = parseFloat(raw || '0') || 0;
-            // FIXED: Ensure 2 decimal update in local state
             return { ...record, [selectedClientId]: (currentVal + totalWinnings).toFixed(2) };
         });
 
@@ -316,12 +392,25 @@ const WinCalculator: React.FC = () => {
         }
     }, []);
 
+    const handleListInputFocus = useCallback((clientId: string) => {
+        if (blurTimeoutRef.current) {
+            clearTimeout(blurTimeoutRef.current);
+            blurTimeoutRef.current = null;
+        }
+        setPreviewClientId(clientId);
+    }, []);
+
     const handleListInputBlur = useCallback(async (clientId: string) => {
+        if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+        blurTimeoutRef.current = setTimeout(() => {
+            setPreviewClientId(null);
+            blurTimeoutRef.current = null;
+        }, 150);
+
         setClientWinnings((current) => {
             const typedCurrent = current as Record<string, string>;
             const newVal = parseFloat(typedCurrent[clientId]) || 0;
             
-            // Format on blur
             if (typedCurrent[clientId] !== '') {
                 typedCurrent[clientId] = newVal.toFixed(2);
             }
@@ -345,25 +434,23 @@ const WinCalculator: React.FC = () => {
                     
                     if (newVal !== oldVal) {
                         const diff = newVal - oldVal;
-                        // To INCREASE winning (red number), we need 'subtract' op.
-                        // To DECREASE winning, we need 'add' op.
                         const op = diff > 0 ? 'subtract' : 'add'; 
                         
                         await saveLedgerRecord({
                             clientId,
                             date: selectedDate,
-                            description: '中', // Updated description
+                            description: '中',
                             typeLabel: '中',
                             amount: Math.abs(diff),
                             operation: op, 
-                            column: 'main', // Save to MAIN ledger
+                            column: 'main',
                             isVisible: true
                         });
                     }
                 }
             })();
 
-            return { ...typedCurrent }; // Force re-render with new reference
+            return { ...typedCurrent };
         });
     }, [selectedDate]);
 
@@ -399,7 +486,9 @@ const WinCalculator: React.FC = () => {
     const totalDailyWinnings: number = (Object.values(clientWinnings) as string[]).reduce((acc: number, val: string) => acc + (parseFloat(val) || 0), 0);
 
     return (
-        <div className="max-w-[1600px] mx-auto p-4 md:p-8 space-y-8">
+        <div className="max-w-[1600px] mx-auto p-4 md:p-8 space-y-8 relative">
+            {previewClientId && <LedgerPreviewOverlay clientId={previewClientId} selectedDate={selectedDate} />}
+
             <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                     <div className="bg-red-100 p-2 rounded-lg text-red-600"><Calendar size={24} /></div>
@@ -532,12 +621,12 @@ const WinCalculator: React.FC = () => {
                     <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-0">
                         <div className="flex flex-col">
                             {leftClients.map(c => (
-                                <ClientWinInputRow key={c.id} client={c} value={clientWinnings[c.id] || ''} onChange={handleListInputChange} onBlur={handleListInputBlur} navState={navState} />
+                                <ClientWinInputRow key={c.id} client={c} value={clientWinnings[c.id] || ''} onChange={handleListInputChange} onBlur={handleListInputBlur} onFocus={handleListInputFocus} navState={navState} />
                             ))}
                         </div>
                         <div className="flex flex-col border-t md:border-t-0 md:border-l border-gray-100 pt-4 md:pt-0 md:pl-12">
                             {rightClients.map(c => (
-                                <ClientWinInputRow key={c.id} client={c} value={clientWinnings[c.id] || ''} onChange={handleListInputChange} onBlur={handleListInputBlur} navState={navState} />
+                                <ClientWinInputRow key={c.id} client={c} value={clientWinnings[c.id] || ''} onChange={handleListInputChange} onBlur={handleListInputBlur} onFocus={handleListInputFocus} navState={navState} />
                             ))}
                         </div>
                     </div>
