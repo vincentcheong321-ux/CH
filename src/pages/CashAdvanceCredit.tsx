@@ -171,11 +171,21 @@ const CashAdvanceCredit: React.FC = () => {
     useEffect(() => { fetchDailyData(); }, [selectedDate]);
 
     const handleInputFocus = useCallback((cid: string) => {
-        if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+        if (blurTimeoutRef.current) {
+            clearTimeout(blurTimeoutRef.current);
+            blurTimeoutRef.current = null;
+        }
         setPreviewClientId(cid);
     }, []);
 
     const handleInputBlur = useCallback(async (cid: string, type: 'ADV' | 'CRED') => {
+        // Immediate cleanup management to avoid racing with async save calls
+        if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+        blurTimeoutRef.current = setTimeout(() => {
+            setPreviewClientId(null);
+            blurTimeoutRef.current = null;
+        }, 150);
+
         if (type === 'ADV') {
             const val = parseFloat(advances[cid]) || 0;
             await saveCashAdvance(selectedDate, cid, val);
@@ -187,9 +197,6 @@ const CashAdvanceCredit: React.FC = () => {
             if (val === 0) setCredits(prev => { const n = {...prev}; delete n[cid]; return n; });
             else setCredits(prev => ({...prev, [cid]: val.toFixed(2)}));
         }
-        
-        if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
-        blurTimeoutRef.current = setTimeout(() => setPreviewClientId(null), 200);
     }, [selectedDate, advances, credits]);
 
     const handleRemoveClient = useCallback(async (cid: string, type: 'ADV' | 'CRED') => {
@@ -242,8 +249,13 @@ const CashAdvanceCredit: React.FC = () => {
 
     const nextMonth = () => {
         if (currentMonth === 11) {
-            if (currentYear < 2026) { setCurrentYear(y => y + 1); setCurrentMonth(0); }
-        } else { setCurrentMonth(prev => prev + 1); }
+            if (currentYear < 2026) {
+                setCurrentYear(y => y + 1);
+                setCurrentMonth(0);
+            }
+        } else {
+            setCurrentMonth(prev => prev + 1);
+        }
     };
 
     const handleDateClick = (dateObj: Date) => {
@@ -266,9 +278,9 @@ const CashAdvanceCredit: React.FC = () => {
                 
                 <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
                     <div className="flex items-center justify-between mb-4 pb-4 border-b">
-                        <button onClick={prevMonth} disabled={currentYear === 2025 && currentMonth === 0} className="p-2 hover:bg-gray-200 rounded-full disabled:opacity-30"><ChevronLeft size={20}/></button>
+                        <button onClick={prevMonth} disabled={currentYear === 2025 && currentMonth === 0} className="p-2 hover:bg-gray-100 rounded-full disabled:opacity-30"><ChevronLeft size={20}/></button>
                         <h2 className="text-sm font-bold text-gray-800">{MONTH_NAMES[currentMonth]} {currentYear}</h2>
-                        <button onClick={nextMonth} disabled={currentYear === 2026 && currentMonth === 11} className="p-2 hover:bg-gray-200 rounded-full disabled:opacity-30"><ChevronRight size={20}/></button>
+                        <button onClick={nextMonth} disabled={currentYear === 2026 && currentMonth === 11} className="p-2 hover:bg-gray-100 rounded-full disabled:opacity-30"><ChevronRight size={20}/></button>
                     </div>
                     
                     <div className="space-y-2">
@@ -310,7 +322,6 @@ const CashAdvanceCredit: React.FC = () => {
                                 <Repeat className="mr-1 text-blue-600" size={20} /> Trans
                             </h1>
                         </div>
-                        {/* Summary for Web (Hidden on Mobile row, shown in separate bar on mobile below if needed) */}
                         <div className="flex items-center space-x-3 md:space-x-6 overflow-x-auto no-scrollbar">
                             <div className="flex items-center px-3 py-1.5 bg-blue-50 rounded-xl border border-blue-100">
                                 <Banknote size={16} className="mr-2 text-blue-600" />
@@ -337,7 +348,6 @@ const CashAdvanceCredit: React.FC = () => {
                             <button onClick={nextMonth} disabled={currentYear === 2026 && currentMonth === 11} className="p-1 hover:bg-white rounded-lg disabled:opacity-30"><ChevronRight size={16}/></button>
                         </div>
                         
-                        {/* Auto-save indicator */}
                         <div className="flex items-center text-xs text-gray-500 bg-yellow-50 px-3 py-2 rounded-full border border-yellow-200 whitespace-nowrap">
                             <Save size={14} className="mr-1.5" /> Auto-saves
                         </div>
