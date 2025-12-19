@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Lock } from 'lucide-react';
 
@@ -12,8 +13,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Hardcoded mock credentials
-    if (username === 'admin' && password === '1234') {
+    // Updated credentials as requested
+    if (username === 'tgmts' && password === '830331') {
       onLogin();
     } else {
       setError('Invalid credentials');
@@ -67,10 +68,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             Sign In
           </button>
         </form>
-        
-        <div className="mt-6 text-center text-xs text-gray-400">
-          <p>Demo Credentials: admin / 1234</p>
-        </div>
       </div>
     </div>
   );
