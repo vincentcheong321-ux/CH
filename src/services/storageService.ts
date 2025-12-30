@@ -360,7 +360,7 @@ export const saveDrawBalance = async (date: string, clientId: string, balance: n
     }
 };
 
-// --- SPECIAL CARRY FORWARD LOGIC (Z21 & C19) ---
+// --- SPECIAL CARRY FORWARD LOGIC (Z21) ---
 // Generates duplicates of specific rows from the previous week into Panel 1 of the new week
 export const generateSpecialCarryForward = async (clientId: string, clientCode: string, targetDate: string): Promise<number> => {
     if (!supabase) return 0;
@@ -399,7 +399,7 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
 
     const mappedCluster = latestClusterRaw.map(mapJournalToLedgerRecord);
 
-    // SORT ASCENDING (Visual Order) - Critical for Z21/C19 logic
+    // SORT ASCENDING (Visual Order) - Critical for Z21 logic
     // We strictly use Date Label and Date to ensure index 0 is the oldest row (top of ledger)
     mappedCluster.sort((a, b) => {
         const parseDateLabel = (lbl: string) => {
@@ -425,15 +425,14 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
 
     // Selection Logic:
     // Skip the absolute first row (the oldest one at the top of the ledger).
-    // Then take the last few rows of the remaining set to match the ledger capacity (4 for Z21, 5 for C19).
+    // Then take exactly the last 4 rows of the remaining set for Z21.
     let rowsToCopy: LedgerRecord[] = [];
     const skippedSet = mappedCluster.slice(1);
     
     if (clientCode.toUpperCase() === 'Z21') {
         rowsToCopy = skippedSet.slice(-4); 
-    } else if (clientCode.toUpperCase() === 'C19') {
-        rowsToCopy = skippedSet.slice(-5);
     } else {
+        // C19 reverted to standard behavior (no special carry forward)
         return 0; 
     }
 

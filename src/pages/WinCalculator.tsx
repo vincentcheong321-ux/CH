@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Calculator, Trophy, RotateCcw, Plus, Trash2, Save, User, CheckCircle, Calendar, Hash, Medal, Layers, RefreshCw } from 'lucide-react';
@@ -486,7 +485,7 @@ const WinCalculator: React.FC = () => {
     const totalDailyWinnings: number = (Object.values(clientWinnings) as string[]).reduce((acc: number, val: string) => acc + (parseFloat(val) || 0), 0);
 
     return (
-        <div className="max-w-[1600px] mx-auto p-4 md:p-8 space-y-8 relative">
+        <div className="max-w-[1800px] mx-auto p-4 md:p-8 space-y-8 relative">
             {previewClientId && <LedgerPreviewOverlay clientId={previewClientId} selectedDate={selectedDate} />}
 
             <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex items-center justify-between">
@@ -498,7 +497,8 @@ const WinCalculator: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                <div className="lg:col-span-4 xl:col-span-3">
+                {/* Form Column - Made narrower for results space */}
+                <div className="lg:col-span-3 xl:col-span-2">
                      <div className="flex items-center space-x-3 mb-6">
                         <div className="bg-gradient-to-r from-red-500 to-orange-600 p-3 rounded-xl shadow-lg text-white"><Calculator size={24} /></div>
                         <div><h1 className="text-2xl font-bold text-gray-800">Win Calculator</h1><p className="text-gray-500 text-xs">Calculate prize payouts.</p></div>
@@ -512,7 +512,7 @@ const WinCalculator: React.FC = () => {
                             <div className="flex bg-gray-100 p-1 rounded-lg">
                                 {['Straight', 'Box', 'Pau'].map((type) => (
                                     <button key={type} type="button" onClick={() => setPlayType(type as BetType)} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${playType === type ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>
-                                        {type === 'Box' ? 'iBox' : type === 'Pau' ? '包 (Pau)' : 'Straight'}
+                                        {type === 'Box' ? 'iBox' : type === 'Pau' ? '包' : 'Str'}
                                     </button>
                                 ))}
                             </div>
@@ -553,31 +553,36 @@ const WinCalculator: React.FC = () => {
                     </form>
                 </div>
 
-                <div className="lg:col-span-8 xl:col-span-9 flex flex-col h-full">
+                {/* Results Column - Made wider for better readability */}
+                <div className="lg:col-span-9 xl:col-span-10 flex flex-col h-full">
                     <div className="bg-white p-6 rounded-2xl shadow-xl border border-gray-100 flex-1 flex flex-col">
                         <div className="flex justify-between items-center mb-4">
                             <h2 className="text-xl font-bold text-gray-800">Current Calculation</h2>
                             <div className="text-right">
                                 <span className="text-sm text-gray-400 font-bold uppercase tracking-wider">Total Payout</span>
-                                <div className="text-3xl font-mono font-bold text-red-600">${totalWinnings.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+                                <div className="text-4xl font-mono font-bold text-red-600">${totalWinnings.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
                             </div>
                         </div>
-                        <div className="flex-1 overflow-y-auto bg-gray-50 rounded-xl p-4 mb-6 border border-gray-100 min-h-[200px]">
+                        <div className="flex-1 overflow-y-auto bg-gray-50 rounded-xl p-4 mb-6 border border-gray-100 min-h-[300px]">
                             {entries.length === 0 ? (
-                                <div className="h-full flex flex-col items-center justify-center text-gray-400"><Trophy size={48} className="mb-2 opacity-20" /><p>No entries added.</p></div>
+                                <div className="h-full flex flex-col items-center justify-center text-gray-400"><Trophy size={64} className="mb-2 opacity-20" /><p className="text-lg">No entries added.</p></div>
                             ) : (
-                                <div className="space-y-2">
+                                <div className="space-y-3">
                                     {entries.map(entry => (
-                                        <div key={entry.id} className="bg-white p-3 rounded-lg border border-gray-200 flex items-center justify-between shadow-sm">
-                                            <div className="flex items-center space-x-4">
-                                                <div className="bg-yellow-100 text-yellow-800 font-bold px-2 py-1 rounded text-xs">{entry.positionLabel}</div>
-                                                <div className="font-mono text-lg font-bold text-gray-800">{entry.number}</div>
-                                                <div className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">{entry.sides.join('')}</div>
-                                                <div className="text-xs text-gray-400">Bet: ${entry.betAmount} {entry.playType !== 'Straight' ? `(${entry.playType === 'Box' ? 'iBox' : 'Pau'})` : ''}</div>
+                                        <div key={entry.id} className="bg-white p-4 rounded-xl border border-gray-200 flex items-center justify-between shadow-sm hover:shadow-md transition-shadow">
+                                            <div className="flex items-center space-x-6">
+                                                <div className="bg-yellow-100 text-yellow-800 font-black px-4 py-2 rounded-lg text-lg min-w-[60px] text-center">{entry.positionLabel}</div>
+                                                <div>
+                                                    <div className="font-mono text-3xl font-black text-gray-900 tracking-wider">{entry.number}</div>
+                                                    <div className="flex items-center gap-3 mt-1">
+                                                        <span className="text-sm font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded uppercase">{entry.sides.join('')}</span>
+                                                        <span className="text-sm text-gray-400 font-medium">Bet: ${entry.betAmount} {entry.playType !== 'Straight' ? `(${entry.playType === 'Box' ? 'iBox' : 'Pau'})` : ''}</span>
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <div className="flex items-center space-x-4">
-                                                <span className="font-mono font-bold text-red-600">+ ${entry.winAmount.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                                                <button onClick={() => handleDeleteEntry(entry.id)} className="text-gray-300 hover:text-red-500"><Trash2 size={16} /></button>
+                                            <div className="flex items-center space-x-6">
+                                                <span className="font-mono font-black text-3xl text-red-600">+ ${entry.winAmount.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                                                <button onClick={() => handleDeleteEntry(entry.id)} className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"><Trash2 size={24} /></button>
                                             </div>
                                         </div>
                                     ))}
@@ -585,20 +590,20 @@ const WinCalculator: React.FC = () => {
                             )}
                         </div>
                         {entries.length > 0 && (
-                            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 animate-in slide-in-from-bottom-2">
-                                <div className="flex flex-col md:flex-row gap-4 items-end">
+                            <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200 animate-in slide-in-from-bottom-4 shadow-inner">
+                                <div className="flex flex-col md:flex-row gap-6 items-end">
                                     <div className="flex-1 w-full">
-                                        <label className="block text-xs font-bold text-gray-500 mb-1">Client Account</label>
+                                        <label className="block text-xs font-black text-gray-400 uppercase mb-2 tracking-widest">Select Client Account</label>
                                         <div className="relative">
-                                            <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                                            <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} className="w-full pl-9 pr-3 py-2 border rounded-lg text-sm font-medium appearance-none">
+                                            <User className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                                            <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)} className="w-full pl-12 pr-4 py-3 bg-white border-2 border-gray-200 rounded-xl text-lg font-bold text-gray-700 appearance-none focus:border-blue-500 outline-none transition-all shadow-sm cursor-pointer">
                                                 <option value="">-- Select Client --</option>
                                                 {clients.map(c => <option key={c.id} value={c.id}>{c.name} ({c.code})</option>)}
                                             </select>
                                         </div>
                                     </div>
-                                    <button onClick={handleSaveToLedger} disabled={!selectedClientId || isSaving} className="w-full md:w-auto px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold shadow-md flex items-center justify-center disabled:opacity-50">
-                                        {isSaving ? 'Saving...' : <><Save size={18} className="mr-2" /> Save & Redirect</>}
+                                    <button onClick={handleSaveToLedger} disabled={!selectedClientId || isSaving} className="w-full md:w-auto px-10 py-4 bg-green-600 hover:bg-green-700 text-white rounded-2xl font-black text-lg shadow-xl shadow-green-100 flex items-center justify-center disabled:opacity-50 transform active:scale-95 transition-all">
+                                        {isSaving ? <RefreshCw className="animate-spin mr-2" /> : <><Save size={24} className="mr-2" /> Save to Ledger</>}
                                     </button>
                                 </div>
                             </div>
@@ -607,24 +612,27 @@ const WinCalculator: React.FC = () => {
                 </div>
             </div>
 
-            <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-                <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-center gap-4 bg-gray-50">
+            <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
+                <div className="p-8 border-b border-gray-50 flex flex-col md:flex-row justify-between items-center gap-6 bg-gray-50/50">
                     <div>
-                        <h2 className="text-xl font-bold text-gray-800 flex items-center"><Layers size={20} className="mr-2 text-blue-500" />Weekly Winnings Summary</h2>
-                        <div className="flex items-center mt-2"><p className="text-sm text-gray-500">Showing total winnings for week: <strong>{weekLabel}</strong></p></div>
+                        <h2 className="text-2xl font-black text-gray-800 flex items-center uppercase tracking-tight"><Layers size={24} className="mr-3 text-blue-500" />Weekly Winnings Tracker</h2>
+                        <div className="flex items-center mt-2"><p className="text-sm text-gray-500 font-medium">Tracking all payouts for period: <span className="font-bold text-gray-900 bg-white px-2 py-0.5 rounded border border-gray-200 ml-1">{weekLabel}</span></p></div>
                     </div>
-                    <div className="text-right"><div className="text-xs text-gray-400 font-bold uppercase tracking-wider">Weekly Total Payout</div><div className="text-2xl font-mono font-bold text-red-600">${totalDailyWinnings.toLocaleString('en-US', {minimumFractionDigits: 2})}</div></div>
+                    <div className="text-right bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                        <div className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Weekly Total Payout</div>
+                        <div className="text-4xl font-mono font-black text-red-600 tracking-tighter">${totalDailyWinnings.toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
+                    </div>
                 </div>
                 {loadingList ? (
-                    <div className="p-12 text-center text-gray-400">Loading weekly data...</div>
+                    <div className="p-24 text-center"><Loader2 className="animate-spin text-gray-200 mx-auto w-12 h-12" /></div>
                 ) : (
-                    <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-0">
+                    <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-0">
                         <div className="flex flex-col">
                             {leftClients.map(c => (
                                 <ClientWinInputRow key={c.id} client={c} value={clientWinnings[c.id] || ''} onChange={handleListInputChange} onBlur={handleListInputBlur} onFocus={handleListInputFocus} navState={navState} />
                             ))}
                         </div>
-                        <div className="flex flex-col border-t md:border-t-0 md:border-l border-gray-100 pt-4 md:pt-0 md:pl-12">
+                        <div className="flex flex-col border-t md:border-t-0 md:border-l border-gray-50 pt-4 md:pt-0 md:pl-16">
                             {rightClients.map(c => (
                                 <ClientWinInputRow key={c.id} client={c} value={clientWinnings[c.id] || ''} onChange={handleListInputChange} onBlur={handleListInputBlur} onFocus={handleListInputFocus} navState={navState} />
                             ))}
@@ -634,16 +642,19 @@ const WinCalculator: React.FC = () => {
             </div>
 
             {showSuccess && (
-                <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 animate-in fade-in duration-200">
-                    <div className="bg-white px-8 py-6 rounded-2xl shadow-2xl flex flex-col items-center">
-                        <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-3"><CheckCircle size={28} className="text-green-600" /></div>
-                        <h3 className="text-lg font-bold text-gray-800">Saved!</h3>
-                        <p className="text-sm text-gray-500 mt-1">Redirecting to ledger...</p>
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] animate-in fade-in duration-300">
+                    <div className="bg-white px-12 py-10 rounded-3xl shadow-2xl flex flex-col items-center transform animate-in zoom-in duration-200">
+                        <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-6"><CheckCircle size={48} className="text-green-600" /></div>
+                        <h3 className="text-3xl font-black text-gray-900">Success!</h3>
+                        <p className="text-gray-500 mt-2 font-medium">Ledger records updated. Redirecting...</p>
                     </div>
                 </div>
             )}
         </div>
     );
 };
+
+// Helper for Loader2 missing import in context but used in string template above
+const Loader2 = ({ className, size, ...props }: any) => <RefreshCw className={`${className} animate-spin`} size={size} {...props} />;
 
 export default WinCalculator;
