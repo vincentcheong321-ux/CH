@@ -400,6 +400,7 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
     const mappedCluster = latestClusterRaw.map(mapJournalToLedgerRecord);
 
     // SORT ASCENDING (Visual Order) - Critical for Z21/C19 logic
+    // We strictly use Date Label and Date to ensure index 0 is the oldest row (top of ledger)
     mappedCluster.sort((a, b) => {
         const parseDateLabel = (lbl: string) => {
             if (!lbl) return 0;
@@ -410,26 +411,28 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
         const scoreA = parseDateLabel(a.typeLabel);
         const scoreB = parseDateLabel(b.typeLabel);
         
-        // C19: STRICTLY sort by date label if present
-        if (clientCode.toUpperCase() === 'C19') {
-             if (scoreA !== 0 && scoreB !== 0) return scoreA - scoreB;
-             if (scoreA !== 0) return -1;
-             if (scoreB !== 0) return 1;
-        }
+        // Priority 1: Date labels (e.g. 15/11 < 22/11)
         if (scoreA !== 0 && scoreB !== 0) return scoreA - scoreB;
+        if (scoreA !== 0) return -1;
+        if (scoreB !== 0) return 1;
+
+        // Priority 2: Standard Date
         if (a.date !== b.date) return new Date(a.date).getTime() - new Date(b.date).getTime();
+        
+        // Priority 3: Internal logic ordering
         return getRecordSortPriority(a) - getRecordSortPriority(b);
     });
 
-    // Selection Logic
+    // Selection Logic:
+    // Skip the absolute first row (the oldest one at the top of the ledger).
+    // Then take the last few rows of the remaining set to match the ledger capacity (4 for Z21, 5 for C19).
     let rowsToCopy: LedgerRecord[] = [];
+    const skippedSet = mappedCluster.slice(1);
     
     if (clientCode.toUpperCase() === 'Z21') {
-        // Updated logic: Skip the first row (oldest), then take the last 4 rows from the remaining cluster
-        rowsToCopy = mappedCluster.slice(1).slice(-4); 
+        rowsToCopy = skippedSet.slice(-4); 
     } else if (clientCode.toUpperCase() === 'C19') {
-        // Updated logic: Skip the first row (oldest), then take the last 5 rows from the remaining cluster
-        rowsToCopy = mappedCluster.slice(1).slice(-5);
+        rowsToCopy = skippedSet.slice(-5);
     } else {
         return 0; 
     }
