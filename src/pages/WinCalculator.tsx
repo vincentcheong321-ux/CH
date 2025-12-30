@@ -497,8 +497,8 @@ const WinCalculator: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                {/* Form Column - Made narrower for results space */}
-                <div className="lg:col-span-3 xl:col-span-2">
+                {/* Form Column - Made wider for inputs */}
+                <div className="lg:col-span-4 xl:col-span-3">
                      <div className="flex items-center space-x-3 mb-6">
                         <div className="bg-gradient-to-r from-red-500 to-orange-600 p-3 rounded-xl shadow-lg text-white"><Calculator size={24} /></div>
                         <div><h1 className="text-2xl font-bold text-gray-800">Win Calculator</h1><p className="text-gray-500 text-xs">Calculate prize payouts.</p></div>
@@ -554,7 +554,7 @@ const WinCalculator: React.FC = () => {
                 </div>
 
                 {/* Results Column - Made wider for better readability */}
-                <div className="lg:col-span-9 xl:col-span-10 flex flex-col h-full">
+                <div className="lg:col-span-8 xl:col-span-9 flex flex-col h-full">
                     <div className="bg-white p-6 rounded-2xl shadow-xl border border-gray-100 flex-1 flex flex-col">
                         <div className="flex justify-between items-center mb-4">
                             <h2 className="text-xl font-bold text-gray-800">Current Calculation</h2>

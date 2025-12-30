@@ -360,7 +360,7 @@ export const saveDrawBalance = async (date: string, clientId: string, balance: n
     }
 };
 
-// --- SPECIAL CARRY FORWARD LOGIC (Z21) ---
+// --- SPECIAL CARRY FORWARD LOGIC (Z21 & C19) ---
 // Generates duplicates of specific rows from the previous week into Panel 1 of the new week
 export const generateSpecialCarryForward = async (clientId: string, clientCode: string, targetDate: string): Promise<number> => {
     if (!supabase) return 0;
@@ -425,14 +425,15 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
 
     // Selection Logic:
     // Skip the absolute first row (the oldest one at the top of the ledger).
-    // Then take exactly the last 4 rows of the remaining set for Z21.
+    // Then take exactly the last N rows of the remaining set.
     let rowsToCopy: LedgerRecord[] = [];
     const skippedSet = mappedCluster.slice(1);
     
     if (clientCode.toUpperCase() === 'Z21') {
         rowsToCopy = skippedSet.slice(-4); 
+    } else if (clientCode.toUpperCase() === 'C19') {
+        rowsToCopy = skippedSet.slice(-5);
     } else {
-        // C19 reverted to standard behavior (no special carry forward)
         return 0; 
     }
 
