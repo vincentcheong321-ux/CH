@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { getClients, getDrawBalances, saveDrawBalance, getClientBalancesPriorToDate, generateSpecialCarryForward, getLedgerRecords, getNetAmount } from '../services/storageService';
 import { Client, LedgerRecord } from '../types';
-import { Calendar, ChevronLeft, ChevronRight, Filter, Save, Layers, RefreshCw, Loader2 } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Filter, Save, Layers, RefreshCw, Loader2, AlertCircle, Check } from 'lucide-react';
 import { MONTH_NAMES, getWeeksForMonth, getWeekRangeString } from '../utils/reportUtils';
 import { Link } from 'react-router-dom';
 
@@ -140,6 +139,9 @@ const DrawReport: React.FC = () => {
   const [clientBalances, setClientBalances] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [errorLog, setErrorLog] = useState<string[]>([]);
+  const [generationComplete, setGenerationComplete] = useState(false);
   const [previewClientId, setPreviewClientId] = useState<string | null>(null);
   
   // Timeout reference to manage blur/focus race conditions
@@ -258,38 +260,61 @@ const DrawReport: React.FC = () => {
       if (!window.confirm("This will fetch the total net balance of all clients from previous weeks and overwrite the current week's draw report. Continue?")) return;
 
       setGenerating(true);
+      setProgress(0);
+      setErrorLog([]);
+      setGenerationComplete(false);
+      
+      const errors: string[] = [];
+
       try {
           // PASS CLIENTS LIST to apply C13/Z21 Logic
           const prevBalances = await getClientBalancesPriorToDate(selectedDate, clients);
           
           const newBalances: Record<string, string> = {};
+          let processed = 0;
+          const total = clients.length;
           
           for (const client of clients) {
-              const codeUpper = client.code?.toUpperCase();
-              
-              // Special Logic for Z21 and C19 (Row Copying)
-              // This overrides prevBalances logic if applicable
-              if (codeUpper === 'Z21' || codeUpper === 'C19') {
-                  const specialBalance = await generateSpecialCarryForward(client.id, codeUpper, selectedDate);
+              try {
+                  const codeUpper = client.code?.toUpperCase();
                   
-                  newBalances[client.id] = specialBalance.toString();
-                  // Save for Report Total
-                  await saveDrawBalance(selectedDate, client.id, specialBalance);
-              } else {
-                  // Standard Case (Uses Main Ledger Total by default, or Panel 1 for C13 if in list)
-                  const bal = prevBalances[client.id] || 0;
-                  newBalances[client.id] = bal.toFixed(2);
-                  await saveDrawBalance(selectedDate, client.id, bal);
+                  // Special Logic for Z21 and C19 (Row Copying)
+                  // This overrides prevBalances logic if applicable
+                  if (codeUpper === 'Z21' || codeUpper === 'C19') {
+                      const specialBalance = await generateSpecialCarryForward(client.id, codeUpper, selectedDate);
+                      newBalances[client.id] = specialBalance.toString();
+                      await saveDrawBalance(selectedDate, client.id, specialBalance);
+                  } else {
+                      // Standard Case
+                      const bal = prevBalances[client.id] || 0;
+                      newBalances[client.id] = bal.toFixed(2);
+                      await saveDrawBalance(selectedDate, client.id, bal);
+                  }
+              } catch (err: any) {
+                  const msg = `${client.name}: ${err.message || 'Error processing'}`;
+                  console.error(msg);
+                  errors.push(msg);
+                  setErrorLog(prev => [...prev, msg]);
               }
+              processed++;
+              setProgress(Math.round((processed / total) * 100));
           }
           
           setClientBalances(newBalances);
-          await new Promise(r => setTimeout(r, 800));
-      } catch (e) {
+          
+      } catch (e: any) {
           console.error("Failed to generate balances", e);
-          alert("Error generating balances. Please try again.");
+          const msg = `Critical System Error: ${e.message}`;
+          errors.push(msg);
+          setErrorLog(prev => [...prev, msg]);
       } finally {
-          setGenerating(false);
+          setGenerationComplete(true);
+          if (errors.length === 0) {
+              setTimeout(() => {
+                  setGenerating(false);
+                  setGenerationComplete(false);
+              }, 800);
+          }
       }
   };
 
@@ -481,7 +506,7 @@ const DrawReport: React.FC = () => {
                                 disabled={generating}
                                 className="flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-sm text-sm font-bold disabled:opacity-50 transition-colors whitespace-nowrap"
                             >
-                                <RefreshCw size={16} className={`mr-2 ${generating ? 'animate-spin' : ''}`} />
+                                <RefreshCw size={16} className={`mr-2 ${generating && !generationComplete ? 'animate-spin' : ''}`} />
                                 Generate Last Week Balance
                             </button>
                             <div className="hidden md:flex items-center text-xs text-gray-500 bg-yellow-50 px-3 py-1 rounded-full border border-yellow-200">
@@ -542,18 +567,63 @@ const DrawReport: React.FC = () => {
            <div className="fixed inset-0 bg-black/60 z-[9999] flex flex-col items-center justify-center backdrop-blur-sm animate-in fade-in duration-200">
                <div className="bg-white p-8 rounded-2xl shadow-2xl flex flex-col items-center max-w-sm w-full mx-4">
                    <div className="relative mb-6">
-                        <Loader2 className="animate-spin text-indigo-600 w-16 h-16" strokeWidth={1.5} />
-                        <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="w-8 h-8 bg-indigo-50 rounded-full animate-pulse"></div>
-                        </div>
+                        {generationComplete ? (
+                            errorLog.length > 0 ? (
+                                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center text-red-600 animate-in zoom-in">
+                                    <AlertCircle size={32} />
+                                </div>
+                            ) : (
+                                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center text-green-600 animate-in zoom-in">
+                                    <Check size={32} />
+                                </div>
+                            )
+                        ) : (
+                            <>
+                                <Loader2 className="animate-spin text-indigo-600 w-16 h-16" strokeWidth={1.5} />
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <span className="text-xs font-bold text-indigo-800">{progress}%</span>
+                                </div>
+                            </>
+                        )}
                    </div>
-                   <h3 className="text-xl font-bold text-gray-900 mb-2">Generating Balances</h3>
-                   <p className="text-gray-500 text-center text-sm mb-6">
-                       Retrieving last week's final amounts for all clients...
-                   </p>
-                   <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
-                       <div className="bg-indigo-600 h-1.5 rounded-full w-full animate-progress-indeterminate"></div>
-                   </div>
+                   
+                   <h3 className="text-xl font-bold text-gray-900 mb-2">
+                       {generationComplete 
+                            ? (errorLog.length > 0 ? 'Completed with Errors' : 'Complete!') 
+                            : 'Generating Balances'}
+                   </h3>
+                   
+                   {!generationComplete && (
+                       <>
+                           <p className="text-gray-500 text-center text-sm mb-6">
+                               Retrieving and processing last week's final amounts...
+                           </p>
+                           <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                               <div className="bg-indigo-600 h-1.5 rounded-full transition-all duration-300" style={{ width: `${progress}%` }}></div>
+                           </div>
+                       </>
+                   )}
+
+                   {errorLog.length > 0 && (
+                       <div className="mt-4 w-full bg-red-50 p-3 rounded-lg border border-red-100 max-h-40 overflow-y-auto">
+                           <p className="text-red-800 font-bold text-xs mb-1 uppercase tracking-wider">Failed Records:</p>
+                           {errorLog.map((err, idx) => (
+                               <div key={idx} className="flex items-start text-red-600 text-xs mb-1 last:mb-0">
+                                   <span className="mr-1">•</span>
+                                   <span>{err}</span>
+                               </div>
+                           ))}
+                       </div>
+                   )}
+
+                   {generationComplete && errorLog.length > 0 && (
+                       <button 
+                           onClick={() => setGenerating(false)}
+                           className="mt-6 px-6 py-2 bg-gray-800 text-white rounded-lg font-bold shadow-md hover:bg-gray-900 transition-colors w-full"
+                       >
+                           Close
+                       </button>
+                   )}
                </div>
            </div>
        )}
