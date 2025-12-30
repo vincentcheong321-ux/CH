@@ -402,17 +402,24 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
     // SORT ASCENDING (Visual Order) - Critical for Z21/C19 logic
     // We strictly use Date Label and Date to ensure index 0 is the oldest row (top of ledger)
     mappedCluster.sort((a, b) => {
-        const parseDateLabel = (lbl: string) => {
-            if (!lbl) return 0;
-            const parts = lbl.match(/^(\d{1,2})\/(\d{1,2})$/);
-            if (parts) return parseInt(parts[2]) * 100 + parseInt(parts[1]); 
+        const getDateScore = (r: LedgerRecord) => {
+            // Combine fields to search for date pattern in Label OR Description
+            const text = `${r.typeLabel || ''} ${r.description || ''}`;
+            // Match DD/MM format (e.g., 24/11)
+            const match = text.match(/(\d{1,2})\/(\d{1,2})/);
+            if (match) {
+                // Score = Month * 100 + Day (e.g. 11 * 100 + 24 = 1124)
+                return parseInt(match[2]) * 100 + parseInt(match[1]); 
+            }
             return 0;
         };
-        const scoreA = parseDateLabel(a.typeLabel);
-        const scoreB = parseDateLabel(b.typeLabel);
+
+        const scoreA = getDateScore(a);
+        const scoreB = getDateScore(b);
         
-        // Priority 1: Date labels (e.g. 15/11 < 22/11)
+        // Priority 1: Extracted Date Score (e.g. 15/11 < 22/11)
         if (scoreA !== 0 && scoreB !== 0) return scoreA - scoreB;
+        // If one has date and other doesn't, put dated ones first (heuristic)
         if (scoreA !== 0) return -1;
         if (scoreB !== 0) return 1;
 
