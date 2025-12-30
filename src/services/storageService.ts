@@ -1,4 +1,3 @@
-
 import { Client, LedgerRecord, AssetRecord, TransactionCategory, DrawBalance, SaleRecord, CashAdvanceRecord } from '../types';
 import { supabase } from '../supabaseClient';
 
@@ -426,9 +425,11 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
     let rowsToCopy: LedgerRecord[] = [];
     
     if (clientCode.toUpperCase() === 'Z21') {
-        rowsToCopy = mappedCluster.slice(1, 5); // Skip 0, take 1,2,3,4
+        // Updated logic: Skip the first row (oldest), then take the last 4 rows from the remaining cluster
+        rowsToCopy = mappedCluster.slice(1).slice(-4); 
     } else if (clientCode.toUpperCase() === 'C19') {
-        rowsToCopy = mappedCluster.slice(1, 6); // Skip 0, take 1,2,3,4,5
+        // Updated logic: Skip the first row (oldest), then take the last 5 rows from the remaining cluster
+        rowsToCopy = mappedCluster.slice(1).slice(-5);
     } else {
         return 0; 
     }
