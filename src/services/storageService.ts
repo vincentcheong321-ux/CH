@@ -424,17 +424,16 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
     });
 
     // Selection Logic:
-    // Skip the absolute first row (the oldest one at the top of the ledger).
-    const skippedSet = mappedCluster.slice(1);
-    
     let rowsToCopy: LedgerRecord[] = [];
 
     if (clientCode.toUpperCase() === 'Z21') {
-        // Z21: Take the last 4 of the remaining set (Dropping even more old records if count > 4)
+        // Z21: Always skip the very first (oldest) record, then keep max 4 latest from the rest.
+        const skippedSet = mappedCluster.slice(1);
         rowsToCopy = skippedSet.slice(-4); 
     } else if (clientCode.toUpperCase() === 'C19') {
-        // C19: Take ALL of the remaining set (Matches "remove one oldest date record" exactly)
-        rowsToCopy = skippedSet; 
+        // C19: Ensure we bring exactly 5 records (the 5 latest).
+        // This removes the oldest record if total is 6.
+        rowsToCopy = mappedCluster.slice(-5);
     } else {
         return 0; 
     }

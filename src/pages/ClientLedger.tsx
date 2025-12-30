@@ -645,7 +645,7 @@ const ClientLedger: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="flex flex-col lg:flex-row gap-8">
             {/* --- LEFT COLUMN: CONTROLS (Updated Width) --- */}
-            <div className="lg:w-64 xl:w-72 flex-shrink-0 space-y-6 no-print">
+            <div className="lg:w-56 xl:w-64 flex-shrink-0 space-y-6 no-print">
                 <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
                     <h3 className="font-bold text-gray-500 text-xs uppercase tracking-wider mb-2 text-center lg:text-left">Panel Selector</h3>
                     <div className="bg-gray-100 rounded-lg p-1 flex w-full">
