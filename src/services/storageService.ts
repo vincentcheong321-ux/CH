@@ -399,7 +399,7 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
 
     const mappedCluster = latestClusterRaw.map(mapJournalToLedgerRecord);
 
-    // SORT ASCENDING (Visual Order) - Critical for Z21 logic
+    // SORT ASCENDING (Visual Order) - Critical for Z21/C19 logic
     // We strictly use Date Label and Date to ensure index 0 is the oldest row (top of ledger)
     mappedCluster.sort((a, b) => {
         const parseDateLabel = (lbl: string) => {
@@ -425,14 +425,16 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
 
     // Selection Logic:
     // Skip the absolute first row (the oldest one at the top of the ledger).
-    // Then take exactly the last N rows of the remaining set.
-    let rowsToCopy: LedgerRecord[] = [];
     const skippedSet = mappedCluster.slice(1);
     
+    let rowsToCopy: LedgerRecord[] = [];
+
     if (clientCode.toUpperCase() === 'Z21') {
+        // Z21: Take the last 4 of the remaining set (Dropping even more old records if count > 4)
         rowsToCopy = skippedSet.slice(-4); 
     } else if (clientCode.toUpperCase() === 'C19') {
-        rowsToCopy = skippedSet; // Bring ALL remaining records (excluding the 1 oldest we just skipped)
+        // C19: Take ALL of the remaining set (Matches "remove one oldest date record" exactly)
+        rowsToCopy = skippedSet; 
     } else {
         return 0; 
     }
