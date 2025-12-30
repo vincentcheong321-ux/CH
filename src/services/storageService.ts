@@ -7,6 +7,18 @@ const CATEGORIES_KEY = 'ledger_categories';
 // Helper to generate local IDs if offline (fallback)
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
+// --- Helper: Date Score Extraction ---
+// Extracts DD/MM or DD.MM from text and returns a comparable number (MMDD)
+// Returns 0 if no date found.
+const getDateScore = (text: string) => {
+    const match = text.match(/(\d{1,2})[\/\.](\d{1,2})/); 
+    if (match) {
+        // Month * 100 + Day. e.g. 24/11 -> 11 * 100 + 24 = 1124
+        return parseInt(match[2]) * 100 + parseInt(match[1]);
+    }
+    return 0;
+};
+
 // --- 1. Categories (Local Only) ---
 export const getCategories = (): TransactionCategory[] => {
   const data = localStorage.getItem(CATEGORIES_KEY);
@@ -160,17 +172,36 @@ const mapJournalToLedgerRecord = (row: any): LedgerRecord => {
     return baseRecord;
 };
 
+// Unified Sorter for Records
+const sortLedgerRecords = (records: LedgerRecord[]) => {
+    records.sort((a, b) => {
+        // 1. Database/Entry Date
+        if (a.date < b.date) return -1;
+        if (a.date > b.date) return 1;
+        
+        // 2. Priority Grouping (Sale, Draw, etc)
+        const pA = getRecordSortPriority(a);
+        const pB = getRecordSortPriority(b);
+        if (pA !== pB) return pA - pB;
+
+        // 3. Note Date Score (DD/MM in description/label) - Ascending
+        const scoreA = getDateScore(`${a.typeLabel} ${a.description}`);
+        const scoreB = getDateScore(`${b.typeLabel} ${b.description}`);
+        if (scoreA !== 0 && scoreB !== 0) return scoreA - scoreB;
+        if (scoreA !== 0) return -1;
+        if (scoreB !== 0) return 1;
+
+        return 0;
+    });
+    return records;
+};
+
 export const getLedgerRecords = async (clientId: string): Promise<LedgerRecord[]> => {
     if (supabase) {
         const { data } = await supabase.from('financial_journal').select('*').eq('client_id', clientId);
         if (data) {
             const records = data.map(mapJournalToLedgerRecord);
-            records.sort((a, b) => {
-                if (a.date < b.date) return -1;
-                if (a.date > b.date) return 1;
-                return getRecordSortPriority(a) - getRecordSortPriority(b);
-            });
-            return records;
+            return sortLedgerRecords(records);
         }
     }
     return [];
@@ -181,12 +212,7 @@ export const getAllLedgerRecords = async (): Promise<LedgerRecord[]> => {
         const { data } = await supabase.from('financial_journal').select('*');
         if (data) {
             const records = data.map(mapJournalToLedgerRecord);
-            records.sort((a, b) => {
-                if (a.date < b.date) return -1;
-                if (a.date > b.date) return 1;
-                return getRecordSortPriority(a) - getRecordSortPriority(b);
-            });
-            return records;
+            return sortLedgerRecords(records);
         }
     }
     return [];
@@ -383,7 +409,7 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
     const col1Records = recentRecords.filter(r => r.data?.column === 'col1');
     if (col1Records.length === 0) return 0;
 
-    // Sort Descending to find latest cluster date
+    // Sort Descending to find latest cluster date (using main DB date)
     col1Records.sort((a, b) => new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime());
     const latestDate = new Date(col1Records[0].entry_date);
     
@@ -401,46 +427,20 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
 
     // SORT ASCENDING (Visual Order) - Critical for Z21/C19 logic
     // We strictly use Date Label and Date to ensure index 0 is the oldest row (top of ledger)
-    mappedCluster.sort((a, b) => {
-        const getDateScore = (r: LedgerRecord) => {
-            // Combine fields to search for date pattern in Label OR Description
-            const text = `${r.typeLabel || ''} ${r.description || ''}`;
-            // Match DD/MM format (e.g., 24/11)
-            const match = text.match(/(\d{1,2})\/(\d{1,2})/);
-            if (match) {
-                // Score = Month * 100 + Day (e.g. 11 * 100 + 24 = 1124)
-                return parseInt(match[2]) * 100 + parseInt(match[1]); 
-            }
-            return 0;
-        };
-
-        const scoreA = getDateScore(a);
-        const scoreB = getDateScore(b);
-        
-        // Priority 1: Extracted Date Score (e.g. 15/11 < 22/11)
-        if (scoreA !== 0 && scoreB !== 0) return scoreA - scoreB;
-        // If one has date and other doesn't, put dated ones first (heuristic)
-        if (scoreA !== 0) return -1;
-        if (scoreB !== 0) return 1;
-
-        // Priority 2: Standard Date
-        if (a.date !== b.date) return new Date(a.date).getTime() - new Date(b.date).getTime();
-        
-        // Priority 3: Internal logic ordering
-        return getRecordSortPriority(a) - getRecordSortPriority(b);
-    });
+    // NOTE: This uses the shared sortLedgerRecords logic which now respects Note Dates
+    const sortedCluster = sortLedgerRecords(mappedCluster);
 
     // Selection Logic:
     let rowsToCopy: LedgerRecord[] = [];
 
     if (clientCode.toUpperCase() === 'Z21') {
         // Z21: Always skip the very first (oldest) record, then keep max 4 latest from the rest.
-        const skippedSet = mappedCluster.slice(1);
+        const skippedSet = sortedCluster.slice(1);
         rowsToCopy = skippedSet.slice(-4); 
     } else if (clientCode.toUpperCase() === 'C19') {
         // C19: Ensure we bring exactly 5 records (the 5 latest).
         // This removes the oldest record if total is 6.
-        rowsToCopy = mappedCluster.slice(-5);
+        rowsToCopy = sortedCluster.slice(-5);
     } else {
         return 0; 
     }
@@ -538,12 +538,15 @@ export const fetchClientTotalBalance = async (clientId: string): Promise<number>
     const client = clients.find(c => c.id === clientId);
     const clientCode = client?.code?.toUpperCase() || '';
 
-    records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    // Already sorted by getLedgerRecords
     
     const latestSnapshot = records.find(r => r.id.startsWith('draw_') || r.typeLabel === '上欠');
     let effectiveRecords = records;
 
     if (latestSnapshot) {
+        // Since sorted ascending, we can't easily find "after" snapshot by index if we don't reverse.
+        // But logic is "records AFTER snapshot date or SAME date but NOT snapshot".
+        // Filter: Keep if date > snapshot.date OR (date == snapshot.date AND id != snapshot.id) OR id == snapshot.id
         effectiveRecords = records.filter(r => {
             if (r.id === latestSnapshot.id) return true; 
             if (r.date > latestSnapshot.date) return true; 
@@ -580,11 +583,9 @@ export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: 
 
         const balances: Record<string, number> = {};
         Object.keys(clientRecords).forEach(clientId => {
-            const records = clientRecords[clientId];
+            const records = sortLedgerRecords(clientRecords[clientId]); // Ensure sorted
             const client = clients?.find(c => c.id === clientId);
             const clientCode = client?.code?.toUpperCase() || '';
-
-            records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
             
             const latestSnapshot = records.find(r => r.id.startsWith('draw_') || r.typeLabel === '上欠');
             let effectiveRecords = records;
