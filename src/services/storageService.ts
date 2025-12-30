@@ -432,7 +432,7 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
     if (clientCode.toUpperCase() === 'Z21') {
         rowsToCopy = skippedSet.slice(-4); 
     } else if (clientCode.toUpperCase() === 'C19') {
-        rowsToCopy = skippedSet.slice(-5);
+        rowsToCopy = skippedSet; // Bring ALL remaining records (excluding the 1 oldest we just skipped)
     } else {
         return 0; 
     }
