@@ -399,8 +399,8 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
 
     let rowsToCopy: LedgerRecord[] = [];
     if (clientCode.toUpperCase() === 'Z21') {
-        // Z21 Special Logic: Bring 5 records, first (oldest) is gray (operation: none)
-        rowsToCopy = sortedCluster.slice(-5).map((rec, idx) => 
+        // Z21 Special Logic: Bring ALL records from last week's cluster, first (oldest) is gray (operation: none)
+        rowsToCopy = sortedCluster.map((rec, idx) => 
             idx === 0 ? { ...rec, operation: 'none' as const } : rec
         );
     } else if (clientCode.toUpperCase() === 'C19') {
@@ -410,7 +410,11 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
 
     const sum = rowsToCopy.reduce((acc, r) => acc + getNetAmount(r), 0);
     for (const r of rowsToCopy) {
-        let signedAmount = r.operation === 'add' ? r.amount : (r.operation === 'subtract' ? -r.amount : 0);
+        // Fix: Even if operation is 'none' (marked down), store the magnitude so it shows up in the UI (not as 0).
+        // Since operation: 'none' means getNetAmount returns 0, the sum logic is safe.
+        // We use a positive magnitude for 'none' to ensure visibility.
+        let signedAmount = r.operation === 'add' ? r.amount : (r.operation === 'subtract' ? -r.amount : r.amount);
+        
         const { data: dupes } = await supabase.from('financial_journal').select('id').eq('client_id', clientId).eq('entry_date', targetDate).eq('amount', signedAmount).contains('data', { description: r.description, column: 'col1' }); 
         if (!dupes || dupes.length === 0) {
             await supabase.from('financial_journal').insert({
