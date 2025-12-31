@@ -7,14 +7,34 @@ const CATEGORIES_KEY = 'ledger_categories';
 // Helper to generate local IDs if offline (fallback)
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
-// --- Helper: Date Score Extraction ---
-// Extracts DD/MM or DD.MM from text and returns a comparable number (MMDD)
-// Returns 0 if no date found.
-const getDateScore = (text: string) => {
+// --- Helper: Date Score Extraction (Year-Aware) ---
+// Extracts DD/MM or DD.MM from text and returns a comparable number (YYYYMMDD)
+// Infers the year based on the provided entryDate string.
+const getNoteDateScore = (text: string, entryDateStr: string) => {
     const match = text.match(/(\d{1,2})[\/\.](\d{1,2})/); 
     if (match) {
-        // Month * 100 + Day. e.g. 24/11 -> 11 * 100 + 24 = 1124
-        return parseInt(match[2]) * 100 + parseInt(match[1]);
+        const day = parseInt(match[1]);
+        const month = parseInt(match[2]);
+        
+        // Use the entry date to contextualize the note's year
+        const entryDate = new Date(entryDateStr);
+        let year = entryDate.getFullYear();
+        const entryMonth = entryDate.getMonth() + 1; // 1-12
+
+        // Cross-year logic:
+        // If note month is high (e.g., 12) but entry month is low (e.g., 1),
+        // the note likely refers to the previous year.
+        if (month > 6 && entryMonth < 6 && month > entryMonth) {
+            year -= 1;
+        } 
+        // If note month is low (e.g., 1) but entry month is high (e.g., 12),
+        // the note likely refers to the following year.
+        else if (month < 6 && entryMonth > 6 && month < entryMonth) {
+            year += 1;
+        }
+
+        // Return a comparable number: YYYYMMDD
+        return year * 10000 + month * 100 + day;
     }
     return 0;
 };
@@ -175,7 +195,7 @@ const mapJournalToLedgerRecord = (row: any): LedgerRecord => {
 // Unified Sorter for Records
 const sortLedgerRecords = (records: LedgerRecord[]) => {
     records.sort((a, b) => {
-        // 1. Database/Entry Date
+        // 1. Database/Entry Date (Primary)
         if (a.date < b.date) return -1;
         if (a.date > b.date) return 1;
         
@@ -185,8 +205,10 @@ const sortLedgerRecords = (records: LedgerRecord[]) => {
         if (pA !== pB) return pA - pB;
 
         // 3. Note Date Score (DD/MM in description/label) - Ascending
-        const scoreA = getDateScore(`${a.typeLabel} ${a.description}`);
-        const scoreB = getDateScore(`${b.typeLabel} ${b.description}`);
+        // Now includes Year Inference logic.
+        const scoreA = getNoteDateScore(`${a.typeLabel} ${a.description}`, a.date);
+        const scoreB = getNoteDateScore(`${b.typeLabel} ${b.description}`, b.date);
+        
         if (scoreA !== 0 && scoreB !== 0) return scoreA - scoreB;
         if (scoreA !== 0) return -1;
         if (scoreB !== 0) return 1;
@@ -427,7 +449,7 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
 
     // SORT ASCENDING (Visual Order) - Critical for Z21/C19 logic
     // We strictly use Date Label and Date to ensure index 0 is the oldest row (top of ledger)
-    // NOTE: This uses the shared sortLedgerRecords logic which now respects Note Dates
+    // NOTE: This uses the shared sortLedgerRecords logic which now respects Year Transitions
     const sortedCluster = sortLedgerRecords(mappedCluster);
 
     // Selection Logic:
