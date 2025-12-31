@@ -9,27 +9,26 @@ const generateId = () => Math.random().toString(36).substr(2, 9);
 
 // --- Helper: Date Score Extraction (Year-Aware) ---
 // Extracts DD/MM or DD.MM from text and returns a comparable number (YYYYMMDD)
-// Infers the year based on the provided entryDate string.
 const getNoteDateScore = (text: string, entryDateStr: string) => {
+    // Regex for DD/MM or DD.MM
     const match = text.match(/(\d{1,2})[\/\.](\d{1,2})/); 
     if (match) {
         const day = parseInt(match[1]);
         const month = parseInt(match[2]);
         
-        // Use the entry date to contextualize the note's year
         const entryDate = new Date(entryDateStr);
         let year = entryDate.getFullYear();
         const entryMonth = entryDate.getMonth() + 1; // 1-12
 
         // Cross-year logic:
-        // If note month is high (e.g., 12) but entry month is low (e.g., 1),
-        // the note likely refers to the previous year.
-        if (month > 6 && entryMonth < 6 && month > entryMonth) {
+        // If note month is high (e.g. 10, 11, 12) but entry month is low (e.g. 1, 2),
+        // the note refers to the previous year.
+        if (month >= 10 && entryMonth <= 3) {
             year -= 1;
         } 
-        // If note month is low (e.g., 1) but entry month is high (e.g., 12),
-        // the note likely refers to the following year.
-        else if (month < 6 && entryMonth > 6 && month < entryMonth) {
+        // If note month is low (e.g. 1, 2) but entry month is high (e.g. 11, 12),
+        // the note refers to the following year.
+        else if (month <= 3 && entryMonth >= 10) {
             year += 1;
         }
 
@@ -37,6 +36,43 @@ const getNoteDateScore = (text: string, entryDateStr: string) => {
         return year * 10000 + month * 100 + day;
     }
     return 0;
+};
+
+// Unified Sorter for Records
+const sortLedgerRecords = (records: LedgerRecord[]) => {
+    records.sort((a, b) => {
+        // 1. Note Date Score (DD/MM in description/label) - Primary sorting for visual sequence
+        const scoreA = getNoteDateScore(`${a.typeLabel} ${a.description}`, a.date);
+        const scoreB = getNoteDateScore(`${b.typeLabel} ${b.description}`, b.date);
+        
+        if (scoreA !== 0 && scoreB !== 0) {
+            return scoreA - scoreB;
+        }
+        
+        // If one has a note date and other doesn't, put dated ones first
+        if (scoreA !== 0) return -1;
+        if (scoreB !== 0) return 1;
+
+        // 2. Database/Entry Date (Secondary)
+        if (a.date < b.date) return -1;
+        if (a.date > b.date) return 1;
+        
+        // 3. Priority Grouping (Tie breaker)
+        const pA = getRecordSortPriority(a);
+        const pB = getRecordSortPriority(b);
+        return pA - pB;
+    });
+    return records;
+};
+
+const getRecordSortPriority = (record: LedgerRecord): number => {
+    if (record.id.startsWith('draw_') || record.typeLabel === '上欠') return 1;
+    if (record.id.startsWith('sale_') || record.id === 'agg_sale_week' || record.typeLabel === '收') return 2;
+    if (record.typeLabel === '电') return 3;
+    if (record.typeLabel === '中') return 4;
+    if (record.id.startsWith('cred_') || record.typeLabel === '来') return 5;
+    if (record.id.startsWith('adv_') || record.typeLabel === '支' || record.typeLabel === '支钱') return 6;
+    return 7;
 };
 
 // --- 1. Categories (Local Only) ---
@@ -59,22 +95,17 @@ export const getCategories = (): TransactionCategory[] => {
     categories = defaults;
     localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories));
   } else {
-    // Migration Logic
     let updated = false;
     if (!categories.find(c => c.label === '上欠')) { categories.push({ id: generateId(), label: '上欠', operation: 'add', color: 'bg-green-100 text-green-800' }); updated = true; }
     if (!categories.find(c => c.label === '%')) { categories.push({ id: generateId(), label: '%', operation: 'subtract', color: 'bg-red-100 text-red-800' }); updated = true; }
     if (!categories.find(c => c.label === '来')) { categories.push({ id: generateId(), label: '来', operation: 'subtract', color: 'bg-red-100 text-red-800' }); updated = true; }
-    
     const dianIndex = categories.findIndex(c => c.label === '电');
     if (dianIndex === -1) { categories.push({ id: generateId(), label: '电', operation: 'add', color: 'bg-green-100 text-green-800' }); updated = true; } 
-    else if (categories[dianIndex].operation !== 'add') { categories[dianIndex] = { ...categories[dianIndex], operation: 'add', color: 'bg-green-100 text-green-800' }; updated = true; }
-
     categories = categories.map(c => {
         if (c.operation === 'add' && c.color.includes('bg-blue-100')) { updated = true; return { ...c, color: 'bg-green-100 text-green-800' }; }
         if (c.label === '出' && c.color.includes('bg-orange-100')) { updated = true; return { ...c, color: 'bg-red-100 text-red-800' }; }
         return c;
     });
-
     if (updated) localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories));
   }
   return categories;
@@ -125,16 +156,6 @@ export const deleteClient = async (id: string) => {
 
 // --- 3. Unified Financial Journal ---
 
-const getRecordSortPriority = (record: LedgerRecord): number => {
-    if (record.id.startsWith('draw_') || record.typeLabel === '上欠') return 1;
-    if (record.id.startsWith('sale_') || record.id === 'agg_sale_week' || record.typeLabel === '收') return 2;
-    if (record.typeLabel === '电') return 3;
-    if (record.typeLabel === '中') return 4;
-    if (record.id.startsWith('cred_') || record.typeLabel === '来') return 5;
-    if (record.id.startsWith('adv_') || record.typeLabel === '支' || record.typeLabel === '支钱') return 6;
-    return 7;
-};
-
 const mapJournalToLedgerRecord = (row: any): LedgerRecord => {
     const isAdd = row.amount >= 0; 
     let baseRecord: LedgerRecord = {
@@ -159,14 +180,9 @@ const mapJournalToLedgerRecord = (row: any): LedgerRecord => {
                 const a = Number(row.data.a) || 0;
                 const c = Number(row.data.c) || 0;
                 const rawTotal = b + s + a + c; 
-                let finalTotal = rawTotal;
-                if (!row.data.mobileRaw && !row.data.mobileRawData) {
-                    finalTotal = rawTotal * 0.86;
-                }
+                const finalTotal = (!row.data.mobileRaw && !row.data.mobileRawData) ? rawTotal * 0.86 : rawTotal;
                 baseRecord.amount = Math.abs(finalTotal);
                 baseRecord.operation = finalTotal >= 0 ? 'add' : 'subtract';
-            } else {
-                baseRecord.operation = row.amount >= 0 ? 'add' : 'subtract';
             }
             baseRecord.column = 'main';
             break;
@@ -190,32 +206,6 @@ const mapJournalToLedgerRecord = (row: any): LedgerRecord => {
             break;
     }
     return baseRecord;
-};
-
-// Unified Sorter for Records
-const sortLedgerRecords = (records: LedgerRecord[]) => {
-    records.sort((a, b) => {
-        // 1. Database/Entry Date (Primary)
-        if (a.date < b.date) return -1;
-        if (a.date > b.date) return 1;
-        
-        // 2. Priority Grouping (Sale, Draw, etc)
-        const pA = getRecordSortPriority(a);
-        const pB = getRecordSortPriority(b);
-        if (pA !== pB) return pA - pB;
-
-        // 3. Note Date Score (DD/MM in description/label) - Ascending
-        // Now includes Year Inference logic.
-        const scoreA = getNoteDateScore(`${a.typeLabel} ${a.description}`, a.date);
-        const scoreB = getNoteDateScore(`${b.typeLabel} ${b.description}`, b.date);
-        
-        if (scoreA !== 0 && scoreB !== 0) return scoreA - scoreB;
-        if (scoreA !== 0) return -1;
-        if (scoreB !== 0) return 1;
-
-        return 0;
-    });
-    return records;
 };
 
 export const getLedgerRecords = async (clientId: string): Promise<LedgerRecord[]> => {
@@ -242,21 +232,13 @@ export const getAllLedgerRecords = async (): Promise<LedgerRecord[]> => {
 
 export const saveLedgerRecord = async (record: Omit<LedgerRecord, 'id'>): Promise<LedgerRecord> => {
     if (supabase) {
-        let signedAmount = 0;
-        if (record.operation === 'add') signedAmount = record.amount;
-        else if (record.operation === 'subtract') signedAmount = -record.amount;
-        
+        let signedAmount = record.operation === 'add' ? record.amount : (record.operation === 'subtract' ? -record.amount : 0);
         const { data } = await supabase.from('financial_journal').insert([{
             client_id: record.clientId,
             entry_date: record.date,
             entry_type: 'MANUAL',
             amount: signedAmount,
-            data: {
-                description: record.description,
-                typeLabel: record.typeLabel,
-                operation: record.operation,
-                column: record.column
-            }
+            data: { description: record.description, typeLabel: record.typeLabel, operation: record.operation, column: record.column }
         }]).select();
         if (data && data[0]) return mapJournalToLedgerRecord(data[0]);
     }
@@ -266,27 +248,10 @@ export const saveLedgerRecord = async (record: Omit<LedgerRecord, 'id'>): Promis
 export const updateLedgerRecord = async (id: string, updates: Partial<LedgerRecord>) => {
     if (supabase) {
         if (id.startsWith('sale_') || id.startsWith('adv_') || id.startsWith('draw_') || id.startsWith('cred_')) return;
-
-        const payload: any = { data: {} };
-        if (updates.amount !== undefined || updates.operation !== undefined) {
-             let signedAmount = 0;
-             if (updates.operation === 'add') signedAmount = updates.amount!;
-             else if (updates.operation === 'subtract') signedAmount = -updates.amount!;
-             payload.amount = signedAmount;
-        }
-        
-        const { data: existing } = await supabase.from('financial_journal').select('data').eq('id', id).single();
-        const mergedData = { ...existing?.data, ...updates };
-        delete mergedData.id; delete mergedData.clientId; delete mergedData.date; delete mergedData.amount;
-        
+        let signedAmount = updates.operation === 'add' ? updates.amount! : (updates.operation === 'subtract' ? -updates.amount! : 0);
         await supabase.from('financial_journal').update({
-            amount: payload.amount,
-            data: {
-                description: updates.description,
-                typeLabel: updates.typeLabel,
-                operation: updates.operation,
-                column: updates.column
-            }
+            amount: signedAmount,
+            data: { description: updates.description, typeLabel: updates.typeLabel, operation: updates.operation, column: updates.column }
         }).eq('id', id);
     }
 };
@@ -326,9 +291,7 @@ export const getSalesForDates = async (dates: string[]): Promise<SaleRecord[]> =
 export const saveSaleRecord = async (record: Omit<SaleRecord, 'id'>) => {
     if (supabase) {
         const netAmount = record.b + record.s + record.a + record.c;
-        const { data: existing } = await supabase.from('financial_journal')
-            .select('id, data').eq('client_id', record.clientId).eq('entry_date', record.date).eq('entry_type', 'SALE').maybeSingle();
-
+        const { data: existing } = await supabase.from('financial_journal').select('id, data').eq('client_id', record.clientId).eq('entry_date', record.date).eq('entry_type', 'SALE').maybeSingle();
         if (existing) {
              const newData = { ...existing.data, b: record.b, s: record.s, a: record.a, c: record.c };
              if (record.mobileRaw !== undefined) newData.mobileRaw = record.mobileRaw;
@@ -409,98 +372,50 @@ export const saveDrawBalance = async (date: string, clientId: string, balance: n
 };
 
 // --- SPECIAL CARRY FORWARD LOGIC (Z21 & C19) ---
-// Generates duplicates of specific rows from the previous week into Panel 1 of the new week
 export const generateSpecialCarryForward = async (clientId: string, clientCode: string, targetDate: string): Promise<number> => {
     if (!supabase) return 0;
-
-    // 1. Fetch & Sort (Reuse sort logic for consistency)
     const lookbackDate = new Date(targetDate);
     lookbackDate.setDate(lookbackDate.getDate() - 90);
     const lookbackStr = lookbackDate.toISOString().split('T')[0];
 
-    // Fetch Previous Data
-    const { data: recentRecords } = await supabase
-        .from('financial_journal')
-        .select('*')
-        .eq('client_id', clientId)
-        .lt('entry_date', targetDate)
-        .gte('entry_date', lookbackStr);
-
+    const { data: recentRecords } = await supabase.from('financial_journal').select('*').eq('client_id', clientId).lt('entry_date', targetDate).gte('entry_date', lookbackStr);
     if (!recentRecords || recentRecords.length === 0) return 0;
 
     const col1Records = recentRecords.filter(r => r.data?.column === 'col1');
     if (col1Records.length === 0) return 0;
 
-    // Sort Descending to find latest cluster date (using main DB date)
     col1Records.sort((a, b) => new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime());
     const latestDate = new Date(col1Records[0].entry_date);
-    
     const clusterStart = new Date(latestDate);
-    clusterStart.setDate(clusterStart.getDate() - 7); // 7 day window
+    clusterStart.setDate(clusterStart.getDate() - 7);
     
-    const latestClusterRaw = col1Records.filter(r => {
+    const mappedCluster = col1Records.filter(r => {
         const d = new Date(r.entry_date);
         return d >= clusterStart && d <= latestDate;
-    });
+    }).map(mapJournalToLedgerRecord);
 
-    if (latestClusterRaw.length === 0) return 0;
-
-    const mappedCluster = latestClusterRaw.map(mapJournalToLedgerRecord);
-
-    // SORT ASCENDING (Visual Order) - Critical for Z21/C19 logic
-    // We strictly use Date Label and Date to ensure index 0 is the oldest row (top of ledger)
-    // NOTE: This uses the shared sortLedgerRecords logic which now respects Year Transitions
+    // ASCENDING Chronological note-sort
     const sortedCluster = sortLedgerRecords(mappedCluster);
 
-    // Selection Logic:
     let rowsToCopy: LedgerRecord[] = [];
-
     if (clientCode.toUpperCase() === 'Z21') {
-        // Z21: Always skip the very first (oldest) record, then keep max 4 latest from the rest.
         const skippedSet = sortedCluster.slice(1);
         rowsToCopy = skippedSet.slice(-4); 
     } else if (clientCode.toUpperCase() === 'C19') {
-        // C19: Ensure we bring exactly 5 records (the 5 latest).
-        // This removes the oldest record if total is 6.
         rowsToCopy = sortedCluster.slice(-5);
-    } else {
-        return 0; 
-    }
+    } else { return 0; }
 
     const sum = rowsToCopy.reduce((acc, r) => acc + getNetAmount(r), 0);
-    
     for (const r of rowsToCopy) {
-        let signedAmount = 0;
-        if (r.operation === 'add') signedAmount = r.amount;
-        else if (r.operation === 'subtract') signedAmount = -r.amount;
-
-        // Check for duplicate before inserting
-        const { data: dupes } = await supabase.from('financial_journal')
-            .select('id')
-            .eq('client_id', clientId)
-            .eq('entry_date', targetDate)
-            .eq('amount', signedAmount)
-            .contains('data', { description: r.description, column: 'col1' }); 
-
-        if (dupes && dupes.length > 0) {
-            continue; // Skip if already exists
+        let signedAmount = r.operation === 'add' ? r.amount : (r.operation === 'subtract' ? -r.amount : 0);
+        const { data: dupes } = await supabase.from('financial_journal').select('id').eq('client_id', clientId).eq('entry_date', targetDate).eq('amount', signedAmount).contains('data', { description: r.description, column: 'col1' }); 
+        if (!dupes || dupes.length === 0) {
+            await supabase.from('financial_journal').insert({
+                client_id: clientId, entry_date: targetDate, entry_type: 'MANUAL', amount: signedAmount,
+                data: { description: r.description, typeLabel: r.typeLabel, operation: r.operation, column: 'col1', isCarryForward: true }
+            });
         }
-
-        await supabase.from('financial_journal').insert({
-            client_id: clientId,
-            entry_date: targetDate,
-            entry_type: 'MANUAL',
-            amount: signedAmount,
-            data: {
-                description: r.description,
-                typeLabel: r.typeLabel,
-                operation: r.operation,
-                column: 'col1',
-                isCarryForward: true 
-            }
-        });
     }
-
     return sum;
 };
 
@@ -523,10 +438,8 @@ export const getWinningsByDate = async (date: string): Promise<Record<string, nu
         const { data } = await supabase.from('financial_journal').select('client_id, amount, data').eq('entry_date', date).eq('entry_type', 'MANUAL');
         const map: Record<string, number> = {};
         data?.forEach((row: any) => {
-            if (row.data?.typeLabel === '中') {
-                if (row.data?.column !== 'main') return; // ONLY Main Ledger
-                const current = map[row.client_id] || 0;
-                map[row.client_id] = current + Math.abs(row.amount);
+            if (row.data?.typeLabel === '中' && row.data?.column === 'main') {
+                map[row.client_id] = (map[row.client_id] || 0) + Math.abs(row.amount);
             }
         });
         return map;
@@ -539,10 +452,8 @@ export const getWinningsByDateRange = async (startDate: string, endDate: string)
         const { data } = await supabase.from('financial_journal').select('client_id, amount, data').gte('entry_date', startDate).lte('entry_date', endDate).eq('entry_type', 'MANUAL');
         const map: Record<string, number> = {};
         data?.forEach((row: any) => {
-            if (row.data?.typeLabel === '中') {
-                if (row.data?.column !== 'main') return; // ONLY Main Ledger
-                const current = map[row.client_id] || 0;
-                map[row.client_id] = current + Math.abs(row.amount);
+            if (row.data?.typeLabel === '中' && row.data?.column === 'main') {
+                map[row.client_id] = (map[row.client_id] || 0) + Math.abs(row.amount);
             }
         });
         return map;
@@ -554,35 +465,29 @@ export const getWinningsByDateRange = async (startDate: string, endDate: string)
 export const fetchClientTotalBalance = async (clientId: string): Promise<number> => {
     const records = await getLedgerRecords(clientId);
     if (records.length === 0) return 0;
-    
-    // Need client code for specific logic
     const clients = await getClients();
     const client = clients.find(c => c.id === clientId);
     const clientCode = client?.code?.toUpperCase() || '';
 
-    // Already sorted by getLedgerRecords
+    // Snapshot search (Descending)
+    const sortedForSnapshot = [...records].sort((a,b) => b.date.localeCompare(a.date));
+    const latestSnapshot = sortedForSnapshot.find(r => r.id.startsWith('draw_') || r.typeLabel === '上欠');
     
-    const latestSnapshot = records.find(r => r.id.startsWith('draw_') || r.typeLabel === '上欠');
     let effectiveRecords = records;
-
     if (latestSnapshot) {
-        // Since sorted ascending, we can't easily find "after" snapshot by index if we don't reverse.
-        // But logic is "records AFTER snapshot date or SAME date but NOT snapshot".
-        // Filter: Keep if date > snapshot.date OR (date == snapshot.date AND id != snapshot.id) OR id == snapshot.id
         effectiveRecords = records.filter(r => {
             if (r.id === latestSnapshot.id) return true; 
             if (r.date > latestSnapshot.date) return true; 
-            if (r.date === latestSnapshot.date) return r.id !== latestSnapshot.id && !(r.id.startsWith('draw_') || r.typeLabel === '上欠');
+            // PREVENT DOUBLING: If same date as snapshot, ONLY keep if it's the snapshot itself.
+            // This assumes snapshot represents the final balance for its specific date.
             return false;
         });
     }
 
-    // SPECIAL LOGIC: C06 prioritizes Panel 2 (col2)
     if (clientCode === 'C06') {
         const col2Records = effectiveRecords.filter(r => r.column === 'col2' && r.isVisible);
         if (col2Records.length > 0) return col2Records.reduce((acc, r) => acc + getNetAmount(r), 0);
     } else {
-        // Standard priority logic for others
         const col1Records = effectiveRecords.filter(r => r.column === 'col1' && r.isVisible);
         if (col1Records.length > 0) return col1Records.reduce((acc, r) => acc + getNetAmount(r), 0);
     }
@@ -605,45 +510,29 @@ export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: 
 
         const balances: Record<string, number> = {};
         Object.keys(clientRecords).forEach(clientId => {
-            const records = sortLedgerRecords(clientRecords[clientId]); // Ensure sorted
+            const records = clientRecords[clientId];
             const client = clients?.find(c => c.id === clientId);
             const clientCode = client?.code?.toUpperCase() || '';
+            const sortedForSnapshot = [...records].sort((a,b) => b.date.localeCompare(a.date));
+            const latestSnapshot = sortedForSnapshot.find(r => r.id.startsWith('draw_') || r.typeLabel === '上欠');
             
-            const latestSnapshot = records.find(r => r.id.startsWith('draw_') || r.typeLabel === '上欠');
             let effectiveRecords = records;
-
             if (latestSnapshot) {
                 effectiveRecords = records.filter(r => {
                     if (r.id === latestSnapshot.id) return true; 
                     if (r.date > latestSnapshot.date) return true;
-                    if (r.date === latestSnapshot.date) return r.id !== latestSnapshot.id && !(r.id.startsWith('draw_') || r.typeLabel === '上欠');
                     return false;
                 });
             }
 
-            // Logic: Specific clients prioritize specific panels
             if (clientCode === 'C06') {
-                // ADJUSTMENT: C06 prioritizes Panel 2 (col2)
                 const col2Records = effectiveRecords.filter(r => r.column === 'col2' && r.isVisible);
-                if (col2Records.length > 0) {
-                    balances[clientId] = col2Records.reduce((acc, r) => acc + getNetAmount(r), 0);
-                } else {
-                    const mainRecords = effectiveRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
-                    balances[clientId] = mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
-                }
-            } else if (clientCode === 'C13' || clientCode === 'Z21') {
-                // Standard Panel 1 priority for these codes
+                balances[clientId] = col2Records.length > 0 ? col2Records.reduce((acc, r) => acc + getNetAmount(r), 0) : effectiveRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible).reduce((acc, r) => acc + getNetAmount(r), 0);
+            } else if (clientCode === 'C13' || clientCode === 'Z21' || clientCode === 'C19') {
                 const col1Records = effectiveRecords.filter(r => r.column === 'col1' && r.isVisible);
-                if (col1Records.length > 0) {
-                    balances[clientId] = col1Records.reduce((acc, r) => acc + getNetAmount(r), 0);
-                } else {
-                    const mainRecords = effectiveRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
-                    balances[clientId] = mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
-                }
+                balances[clientId] = col1Records.length > 0 ? col1Records.reduce((acc, r) => acc + getNetAmount(r), 0) : effectiveRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible).reduce((acc, r) => acc + getNetAmount(r), 0);
             } else {
-                // Default: ALWAYS Main Ledger total
-                const mainRecords = effectiveRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
-                balances[clientId] = mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
+                balances[clientId] = effectiveRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible).reduce((acc, r) => acc + getNetAmount(r), 0);
             }
         });
         return balances;
