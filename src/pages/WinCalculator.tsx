@@ -103,7 +103,7 @@ const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, se
     if (loading) return null;
 
     return (
-        <div className="fixed bottom-20 right-4 md:right-8 bg-white border border-gray-200 shadow-2xl rounded-xl z-[60] w-[320px] md:w-[400px] overflow-hidden animate-in slide-in-from-bottom-10 fade-in duration-300 flex flex-col max-h-[50vh]">
+        <div className="fixed bottom-20 left-4 md:left-8 md:right-auto bg-white border border-gray-200 shadow-2xl rounded-xl z-[60] w-[320px] md:w-[400px] overflow-hidden animate-in slide-in-from-bottom-10 fade-in duration-300 flex flex-col max-h-[50vh]">
             <div className="bg-gray-900 text-white p-3 flex justify-between items-center flex-shrink-0">
                 <div className="flex flex-col min-w-0">
                     <span className="font-bold truncate text-sm md:text-base">{clientName}</span>
@@ -118,7 +118,7 @@ const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, se
                     <div key={r.id} className="flex justify-between items-center px-4 py-2 border-b border-gray-100 last:border-0 bg-white text-xs">
                         <span className="text-gray-400 font-mono">{r.date.slice(5)}</span>
                         <span className="flex-1 px-2 truncate text-gray-600 font-medium">{r.typeLabel} {r.description && `(${r.description})`}</span>
-                        <span className={`font-mono font-bold ${r.operation === 'add' ? 'text-green-600' : r.operation === 'subtract' ? 'text-red-600' : 'text-gray-400'}`}>
+                        <span className={`font-mono font-bold ${r.operation === 'add' ? 'text-green-600' : 'text-red-600'}`}>
                             {r.operation === 'add' ? '+' : r.operation === 'subtract' ? '-' : ''}{r.amount.toLocaleString(undefined, {minimumFractionDigits: 2})}
                         </span>
                     </div>

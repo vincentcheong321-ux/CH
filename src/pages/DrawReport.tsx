@@ -55,7 +55,7 @@ const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, se
     if (loading) return null;
 
     return (
-        <div className="fixed bottom-2 left-2 right-2 md:left-auto md:right-8 md:bottom-8 bg-white border border-gray-200 shadow-2xl rounded-xl z-50 md:w-[450px] overflow-hidden animate-in slide-in-from-bottom-10 fade-in duration-300 flex flex-col max-h-[40vh] md:max-h-[600px]">
+        <div className="fixed bottom-2 left-2 right-2 md:right-auto md:left-8 md:bottom-8 bg-white border border-gray-200 shadow-2xl rounded-xl z-50 md:w-[450px] overflow-hidden animate-in slide-in-from-bottom-10 fade-in duration-300 flex flex-col max-h-[40vh] md:max-h-[600px]">
             <div className="bg-gray-900 text-white p-2 md:p-4 flex justify-between items-center flex-shrink-0 shadow-md z-10">
                 <div className="flex flex-col overflow-hidden mr-2">
                     <span className="font-bold truncate text-sm md:text-lg">{clientName}</span>

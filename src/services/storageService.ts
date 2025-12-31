@@ -399,9 +399,12 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
 
     let rowsToCopy: LedgerRecord[] = [];
     if (clientCode.toUpperCase() === 'Z21') {
-        const skippedSet = sortedCluster.slice(1);
-        rowsToCopy = skippedSet.slice(-4); 
+        // Z21 Special Logic: Bring 5 records, first (oldest) is gray (operation: none)
+        rowsToCopy = sortedCluster.slice(-5).map((rec, idx) => 
+            idx === 0 ? { ...rec, operation: 'none' as const } : rec
+        );
     } else if (clientCode.toUpperCase() === 'C19') {
+        // C19 Logic: Bring 5 records
         rowsToCopy = sortedCluster.slice(-5);
     } else { return 0; }
 
