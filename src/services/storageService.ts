@@ -120,7 +120,7 @@ export const getCategories = (): TransactionCategory[] => {
     const preferredSubsOrder = ['中', '出', '%', '来', '收', '中'];
     subs.sort((a,b) => {
         const idxA = preferredSubsOrder.indexOf(a.label);
-        const idxB = preferredAddsOrder.indexOf(b.label); // Note: preferredAddsOrder seems to be used for consistency in label logic
+        const idxB = preferredAddsOrder.indexOf(b.label); 
         if (idxA !== -1 && idxB !== -1) return idxA - idxB;
         if (idxA !== -1) return -1;
         if (idxB !== -1) return 1;
@@ -606,11 +606,10 @@ export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: 
             if (clientCode === 'C06') {
                 const col2Records = effectiveRecords.filter(r => r.column === 'col2' && r.isVisible);
                 balances[clientId] = col2Records.length > 0 ? col2Records.reduce((acc, r) => acc + getNetAmount(r), 0) : effectiveRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible).reduce((acc, r) => acc + getNetAmount(r), 0);
-            } else if (clientCode === 'C13' || clientCode === 'Z21' || clientCode === 'C19') {
-                const col1Records = HouseRulesFilter(effectiveRecords, 'col1');
-                balances[clientId] = col1Records.length > 0 ? col1Records.reduce((acc, r) => acc + getNetAmount(r), 0) : effectiveRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible).reduce((acc, r) => acc + getNetAmount(r), 0);
             } else {
-                balances[clientId] = effectiveRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible).reduce((acc, r) => acc + getNetAmount(r), 0);
+                // Unified logic for C13, Z21, C19 and generic clients: Priority P1 -> Main
+                const col1Records = effectiveRecords.filter(r => r.column === 'col1' && r.isVisible);
+                balances[clientId] = col1Records.length > 0 ? col1Records.reduce((acc, r) => acc + getNetAmount(r), 0) : effectiveRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible).reduce((acc, r) => acc + getNetAmount(r), 0);
             }
         });
         return balances;
