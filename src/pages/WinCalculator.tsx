@@ -1,9 +1,11 @@
+
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Calculator, Trophy, RotateCcw, Plus, Trash2, Save, User, CheckCircle, Calendar, Hash, Medal, Layers, RefreshCw } from 'lucide-react';
 import { getClients, saveLedgerRecord, getWinningsByDateRange, getLedgerRecords, getNetAmount } from '../services/storageService';
 import { Client, LedgerRecord } from '../types';
 import { getWeeksForMonth, MONTH_NAMES, getWeekRangeString } from '../utils/reportUtils';
+import { useGlobalState } from '../context/GlobalStateContext';
 
 type GameMode = '4D' | '3D';
 type PrizePosition = '1' | '2' | '3' | 'S' | 'C';
@@ -59,6 +61,7 @@ const getPermutationCount = (str: string, mode: GameMode): number => {
 
 // Preview Component for showing weekly main ledger status
 const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, selectedDate: string }) => {
+    // ... (same as before)
     const [balance, setBalance] = useState<number | null>(null);
     const [dailyRecords, setDailyRecords] = useState<LedgerRecord[]>([]);
     const [loading, setLoading] = useState(true);
@@ -178,6 +181,13 @@ const ClientWinInputRow = React.memo(({
 
 const WinCalculator: React.FC = () => {
     const navigate = useNavigate();
+    const { currentDate, setCurrentDate } = useGlobalState();
+    
+    // Format selectedDate from global context
+    const currentYear = currentDate.getFullYear();
+    const currentMonth = currentDate.getMonth();
+    const selectedDate = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
+
     const [mode, setMode] = useState<GameMode>('4D');
     const [winningNumber, setWinningNumber] = useState('');
     const [position, setPosition] = useState<PrizePosition>('1');
@@ -190,7 +200,6 @@ const WinCalculator: React.FC = () => {
     const [entries, setEntries] = useState<WinningEntry[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
     const [selectedClientId, setSelectedClientId] = useState('');
-    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [isSaving, setIsSaving] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
     const [clientWinnings, setClientWinnings] = useState<Record<string, string>>({});
@@ -484,6 +493,14 @@ const WinCalculator: React.FC = () => {
 
     const totalDailyWinnings: number = (Object.values(clientWinnings) as string[]).reduce((acc: number, val: string) => acc + (parseFloat(val) || 0), 0);
 
+    const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        // Parse "YYYY-MM-DD" back to Date
+        const [y, m, d] = e.target.value.split('-').map(Number);
+        if (y && m && d) {
+            setCurrentDate(new Date(y, m - 1, d));
+        }
+    };
+
     return (
         <div className="max-w-[1800px] mx-auto p-4 md:p-8 space-y-8 relative">
             {previewClientId && <LedgerPreviewOverlay clientId={previewClientId} selectedDate={selectedDate} />}
@@ -493,7 +510,7 @@ const WinCalculator: React.FC = () => {
                     <div className="bg-red-100 p-2 rounded-lg text-red-600"><Calendar size={24} /></div>
                     <div><h2 className="font-bold text-gray-800">Calculation Date</h2><p className="text-xs text-gray-500">Determines ledger entry date & summary week.</p></div>
                 </div>
-                <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="border-2 border-gray-300 rounded-lg px-4 py-2 font-bold text-gray-700 focus:border-blue-500 outline-none"/>
+                <input type="date" value={selectedDate} onChange={handleDateChange} className="border-2 border-gray-300 rounded-lg px-4 py-2 font-bold text-gray-700 focus:border-blue-500 outline-none"/>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">

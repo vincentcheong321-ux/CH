@@ -15,6 +15,7 @@ import MobileReport from './pages/MobileReport';
 import WinCalculator from './pages/WinCalculator';
 import Login from './pages/Login';
 import { seedData } from './services/storageService';
+import { GlobalStateProvider } from './context/GlobalStateContext';
 
 const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
@@ -40,103 +41,105 @@ const App: React.FC = () => {
   };
 
   return (
-    <Router>
-      <Routes>
-        <Route path="/login" element={
-          isAuthenticated ? <Navigate to="/" /> : <Login onLogin={handleLogin} />
-        } />
-        
-        <Route path="/" element={
-          isAuthenticated ? (
-            <Layout onLogout={handleLogout}>
-              <Dashboard />
-            </Layout>
-          ) : <Navigate to="/login" />
-        } />
+    <GlobalStateProvider>
+      <Router>
+        <Routes>
+          <Route path="/login" element={
+            isAuthenticated ? <Navigate to="/" /> : <Login onLogin={handleLogin} />
+          } />
+          
+          <Route path="/" element={
+            isAuthenticated ? (
+              <Layout onLogout={handleLogout}>
+                <Dashboard />
+              </Layout>
+            ) : <Navigate to="/login" />
+          } />
 
-        <Route path="/clients" element={
-          isAuthenticated ? (
-            <Layout onLogout={handleLogout}>
-              <ClientList />
-            </Layout>
-          ) : <Navigate to="/login" />
-        } />
+          <Route path="/clients" element={
+            isAuthenticated ? (
+              <Layout onLogout={handleLogout}>
+                <ClientList />
+              </Layout>
+            ) : <Navigate to="/login" />
+          } />
 
-        <Route path="/clients/:id" element={
-          isAuthenticated ? (
-            <Layout onLogout={handleLogout}>
-              <ClientLedger />
-            </Layout>
-          ) : <Navigate to="/login" />
-        } />
+          <Route path="/clients/:id" element={
+            isAuthenticated ? (
+              <Layout onLogout={handleLogout}>
+                <ClientLedger />
+              </Layout>
+            ) : <Navigate to="/login" />
+          } />
 
-        <Route path="/sales" element={
-          isAuthenticated ? (
-            <Layout onLogout={handleLogout}>
-              <SalesIndex />
-            </Layout>
-          ) : <Navigate to="/login" />
-        } />
+          <Route path="/sales" element={
+            isAuthenticated ? (
+              <Layout onLogout={handleLogout}>
+                <SalesIndex />
+              </Layout>
+            ) : <Navigate to="/login" />
+          } />
 
-        <Route path="/sales/mobile-report" element={
-          isAuthenticated ? (
-            <Layout onLogout={handleLogout}>
-              <MobileReport />
-            </Layout>
-          ) : <Navigate to="/login" />
-        } />
+          <Route path="/sales/mobile-report" element={
+            isAuthenticated ? (
+              <Layout onLogout={handleLogout}>
+                <MobileReport />
+              </Layout>
+            ) : <Navigate to="/login" />
+          } />
 
-        <Route path="/clients/:id/sales" element={
-          isAuthenticated ? (
-            <Layout onLogout={handleLogout}>
-              <ClientSales />
-            </Layout>
-          ) : <Navigate to="/login" />
-        } />
+          <Route path="/clients/:id/sales" element={
+            isAuthenticated ? (
+              <Layout onLogout={handleLogout}>
+                <ClientSales />
+              </Layout>
+            ) : <Navigate to="/login" />
+          } />
 
-        <Route path="/draw-report" element={
-          isAuthenticated ? (
-            <Layout onLogout={handleLogout}>
-              <DrawReport />
-            </Layout>
-          ) : <Navigate to="/login" />
-        } />
+          <Route path="/draw-report" element={
+            isAuthenticated ? (
+              <Layout onLogout={handleLogout}>
+                <DrawReport />
+              </Layout>
+            ) : <Navigate to="/login" />
+          } />
 
-        <Route path="/cash-transaction" element={
-          isAuthenticated ? (
-            <Layout onLogout={handleLogout}>
-              <CashAdvanceCredit />
-            </Layout>
-          ) : <Navigate to="/login" />
-        } />
+          <Route path="/cash-transaction" element={
+            isAuthenticated ? (
+              <Layout onLogout={handleLogout}>
+                <CashAdvanceCredit />
+              </Layout>
+            ) : <Navigate to="/login" />
+          } />
 
-        <Route path="/calculator" element={
-          isAuthenticated ? (
-            <Layout onLogout={handleLogout}>
-              <WinCalculator />
-            </Layout>
-          ) : <Navigate to="/login" />
-        } />
+          <Route path="/calculator" element={
+            isAuthenticated ? (
+              <Layout onLogout={handleLogout}>
+                <WinCalculator />
+              </Layout>
+            ) : <Navigate to="/login" />
+          } />
 
-        <Route path="/summary" element={
-          isAuthenticated ? (
-            <Layout onLogout={handleLogout}>
-              <Summary />
-            </Layout>
-          ) : <Navigate to="/login" />
-        } />
+          <Route path="/summary" element={
+            isAuthenticated ? (
+              <Layout onLogout={handleLogout}>
+                <Summary />
+              </Layout>
+            ) : <Navigate to="/login" />
+          } />
 
-        <Route path="/cashflow" element={
-          isAuthenticated ? (
-            <Layout onLogout={handleLogout}>
-              <CashFlow />
-            </Layout>
-          ) : <Navigate to="/login" />
-        } />
+          <Route path="/cashflow" element={
+            isAuthenticated ? (
+              <Layout onLogout={handleLogout}>
+                <CashFlow />
+              </Layout>
+            ) : <Navigate to="/login" />
+          } />
 
-        <Route path="*" element={<Navigate to="/" />} />
-      </Routes>
-    </Router>
+          <Route path="*" element={<Navigate to="/" />} />
+        </Routes>
+      </Router>
+    </GlobalStateProvider>
   );
 };
 

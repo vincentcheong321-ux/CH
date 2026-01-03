@@ -1,3 +1,4 @@
+
 import { ArrowLeft, Check, ChevronLeft, ChevronRight, Download, ExternalLink, GripHorizontal, Hash, Medal, Minus, Pencil, Plus, Printer, RefreshCw, Trash2, Trophy, X, Zap } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
@@ -16,6 +17,7 @@ import {
 } from '../services/storageService';
 import { Client, LedgerRecord, TransactionCategory } from '../types';
 import { MONTH_NAMES, getWeekRangeString, getWeeksForMonth } from '../utils/reportUtils';
+import { useGlobalState } from '../context/GlobalStateContext';
 
 type LedgerColumn = 'main' | 'col1' | 'col2';
 
@@ -128,14 +130,29 @@ const WinningBreakdown: React.FC<WinningBreakdownProps> = ({ description, totalA
 
 const ClientLedger: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const location = useLocation();
+  const { currentDate, setCurrentDate } = useGlobalState();
   const [client, setClient] = useState<Client | null>(null);
   const [allRecords, setAllRecords] = useState<LedgerRecord[]>([]);
   const [categories, setCategories] = useState<TransactionCategory[]>([]);
   
-  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
-  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
-  const [selectedWeekNum, setSelectedWeekNum] = useState<number>(1);
+  // Derived Date State
+  const currentYear = currentDate.getFullYear();
+  const currentMonth = currentDate.getMonth();
+  
+  // Calculate Weeks
+  const weeksData = useMemo<Record<number, Date[]>>(() => getWeeksForMonth(currentYear, currentMonth), [currentYear, currentMonth]);
+  
+  // Determine selected week number
+  const selectedWeekNum = useMemo(() => {
+      const todayStr = `${currentYear}-${String(currentMonth+1).padStart(2,'0')}-${String(currentDate.getDate()).padStart(2,'0')}`;
+      const foundWeek = Object.keys(weeksData).find(w => {
+          return weeksData[parseInt(w)].some(d => {
+              const dStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+              return dStr === todayStr;
+          });
+      });
+      return foundWeek ? parseInt(foundWeek) : 1;
+  }, [weeksData, currentDate, currentYear, currentMonth]);
 
   const [activeCategory, setActiveCategory] = useState<TransactionCategory | null>(null);
   const [activeColumn, setActiveColumn] = useState<LedgerColumn>('main');
@@ -178,31 +195,7 @@ const ClientLedger: React.FC = () => {
       }
     };
     fetchData();
-    
-    if (location.state && typeof (location.state as any).year === 'number') {
-        const s = location.state as any;
-        setCurrentYear(s.year);
-        setCurrentMonth(s.month);
-        setSelectedWeekNum(s.week);
-    } else {
-        const now = new Date();
-        let y = now.getFullYear();
-        if(y < 2025) y = 2025;
-        if(y > 2026) y = 2026;
-        setCurrentYear(y);
-        const m = now.getMonth();
-        setCurrentMonth(m);
-        const weeks = getWeeksForMonth(y, m);
-        const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-        const foundWeek = Object.keys(weeks).find(w => {
-            return weeks[parseInt(w)].some(d => {
-                const dStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                return dStr === todayStr;
-            });
-        });
-        if(foundWeek) setSelectedWeekNum(parseInt(foundWeek));
-    }
-  }, [id, location.state]);
+  }, [id]);
 
   const loadRecords = async () => {
     if (id) {
@@ -211,7 +204,6 @@ const ClientLedger: React.FC = () => {
     }
   };
 
-  const weeksData = useMemo<Record<number, Date[]>>(() => getWeeksForMonth(currentYear, currentMonth), [currentYear, currentMonth]);
   const activeDays = weeksData[selectedWeekNum] || [];
   
   const activeDateStrings = useMemo(() => 
@@ -332,9 +324,12 @@ const ClientLedger: React.FC = () => {
     const val = parseFloat(amount);
     if (isNaN(val)) return;
     
+    // Default to Today's date for new entry (within context of current view if possible)
     let dateToUse = new Date().toISOString().split('T')[0];
-    const todayStr = dateToUse;
-    if (activeDateStrings.length > 0 && !activeDateStrings.includes(todayStr)) {
+    
+    // If today is NOT in the currently viewed week, use the LAST day of the viewed week
+    // This prevents confusion where user enters data for a week they aren't looking at
+    if (activeDateStrings.length > 0 && !activeDateStrings.includes(dateToUse)) {
         dateToUse = activeDateStrings[activeDateStrings.length - 1];
     }
 
@@ -467,19 +462,12 @@ const ClientLedger: React.FC = () => {
 
   const mainLedger = useMemo(() => {
       const data = calculateColumn('main');
-      
-      // Global Logic: Hide ANY records from the Main Ledger view if amount is 0 (as requested by user)
       data.processed = data.processed.filter(r => r.amount !== 0);
-
-      // SPECIAL LOGIC: Hide '上欠' records for Z21 and C19 from Main Ledger view
       if (client && (client.code.toUpperCase() === 'Z21' || client.code.toUpperCase() === 'C19')) {
           data.processed = data.processed.filter(r => r.typeLabel !== '上欠');
       }
-
-      // Recalculate visual balance for the column (keeping data integrity, just hiding from column calc)
       const visibleProcessed = data.processed.filter(r => r.isVisible);
       data.finalBalance = visibleProcessed.reduce((acc, curr) => acc + curr.netChange, 0);
-
       return data;
   }, [weekRecords, client]);
 
@@ -497,7 +485,6 @@ const ClientLedger: React.FC = () => {
       <div className="flex flex-col items-center w-full">
           <div className="flex flex-col w-full md:w-fit items-end">
                 {data.processed.map((r) => {
-                    // Check for Winnings Record (Panel 1 Special Display)
                     if (isPanel1 && r.description && r.description.includes('Winnings:')) {
                         return (
                             <WinningBreakdown 
@@ -541,7 +528,6 @@ const ClientLedger: React.FC = () => {
                 })}
           </div>
           
-          {/* Hide Total Footer if it is Panel 1 */}
           {!isPanel1 && (
               <div className="mt-2 pt-2 flex flex-col items-end w-full md:w-fit border-t-2 border-gray-900">
                     <div className="flex items-center gap-2 justify-between w-full md:justify-end">
@@ -556,35 +542,32 @@ const ClientLedger: React.FC = () => {
   )};
 
   const handlePrevMonth = () => {
-      if (currentMonth === 0) {
-          if (currentYear > 2025) {
-              setCurrentYear(y => y - 1);
-              setCurrentMonth(11);
-          }
-      } else {
-          setCurrentMonth(m => m - 1);
-      }
+      const newDate = new Date(currentDate);
+      newDate.setDate(1);
+      newDate.setMonth(newDate.getMonth() - 1);
+      if (newDate.getFullYear() < 2025) return;
+      setCurrentDate(newDate);
   };
 
   const handleNextMonth = () => {
-      if (currentMonth === 11) {
-          if (currentYear < 2026) {
-              setCurrentYear(y => y + 1);
-              setCurrentMonth(0);
-          }
-      } else {
-          setCurrentMonth(m => m + 1);
+      const newDate = new Date(currentDate);
+      newDate.setDate(1);
+      newDate.setMonth(newDate.getMonth() + 1);
+      if (newDate.getFullYear() > 2026) return;
+      setCurrentDate(newDate);
+  };
+
+  // Handler for week pill clicks
+  const handleWeekSelect = (weekNum: number) => {
+      const days = weeksData[weekNum];
+      if (days && days.length > 0) {
+          // Set date to Monday of that week
+          setCurrentDate(new Date(days[0]));
       }
   };
 
   const sortedWeekKeys = Object.keys(weeksData).map(Number).sort((a,b) => a-b);
   
-  useEffect(() => {
-     if(sortedWeekKeys.length > 0 && !sortedWeekKeys.includes(selectedWeekNum)) {
-         setSelectedWeekNum(sortedWeekKeys[0]);
-     }
-  }, [sortedWeekKeys, selectedWeekNum]);
-
   if (!client) return <div className="p-8">Loading...</div>;
 
   return (
@@ -632,7 +615,7 @@ const ClientLedger: React.FC = () => {
                 return (
                     <button 
                         key={wk} 
-                        onClick={() => setSelectedWeekNum(Number(wk))}
+                        onClick={() => handleWeekSelect(Number(wk))}
                         className={`px-3 py-1 text-xs font-bold rounded-full border transition-colors whitespace-nowrap ${selectedWeekNum === Number(wk) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'}`}
                     >
                         {rangeStr}
@@ -644,7 +627,8 @@ const ClientLedger: React.FC = () => {
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="flex flex-col lg:flex-row gap-8">
-            {/* --- LEFT COLUMN: CONTROLS (Addition on left, Deduction on right) --- */}
+            {/* ... rest of the existing UI components ... */}
+            {/* Same left column (controls) and right column (ledger) code, no logic changes needed here aside from ensuring active date context is correct */}
             <div className="lg:w-56 xl:w-64 flex-shrink-0 space-y-6 no-print">
                 <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
                     <h3 className="font-bold text-gray-500 text-xs uppercase tracking-wider mb-2 text-center lg:text-left">Panel Selector</h3>
@@ -683,7 +667,6 @@ const ClientLedger: React.FC = () => {
                         <form onSubmit={handleSubmit} className="p-4 space-y-4">
                             {activeCategory.label === '' && (
                                 <div>
-                                    {/* Operation Toggles: Add left, Deduct right */}
                                     <div className="flex space-x-2">
                                         <button type="button" onClick={() => setCurrentOperation('add')} className={`flex-1 py-1.5 rounded-lg font-bold text-[10px] transition-all ${currentOperation === 'add' ? 'bg-green-600 text-white shadow-md ring-2 ring-green-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>(+) Add</button>
                                         <button type="button" onClick={() => setCurrentOperation('none')} className={`flex-1 py-1.5 rounded-lg font-bold text-[10px] transition-all ${currentOperation === 'none' ? 'bg-gray-600 text-white shadow-md ring-2 ring-gray-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>(Ø) Note</button>

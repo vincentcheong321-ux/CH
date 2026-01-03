@@ -1,12 +1,15 @@
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { getClients, getDrawBalances, saveDrawBalance, getClientBalancesPriorToDate, generateSpecialCarryForward, getLedgerRecords, getNetAmount } from '../services/storageService';
 import { Client, LedgerRecord } from '../types';
 import { Calendar, ChevronLeft, ChevronRight, Filter, Save, Layers, RefreshCw, Loader2, AlertCircle, Check } from 'lucide-react';
 import { MONTH_NAMES, getWeeksForMonth, getWeekRangeString } from '../utils/reportUtils';
 import { Link } from 'react-router-dom';
+import { useGlobalState } from '../context/GlobalStateContext';
 
 // Preview Component
 const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, selectedDate: string }) => {
+    // ... (same as before)
     const [balance, setBalance] = useState<number | null>(null);
     const [dailyRecords, setDailyRecords] = useState<LedgerRecord[]>([]);
     const [loading, setLoading] = useState(true);
@@ -132,9 +135,7 @@ const ClientInputRow = React.memo(({ client, value, onChange, onBlur, onFocus, n
 });
 
 const DrawReport: React.FC = () => {
-  const [currentYear, setCurrentYear] = useState(2025);
-  const [currentMonth, setCurrentMonth] = useState(0); 
-  const [selectedDate, setSelectedDate] = useState<string>(''); 
+  const { currentDate, setCurrentDate } = useGlobalState();
   const [clients, setClients] = useState<Client[]>([]);
   const [clientBalances, setClientBalances] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
@@ -147,38 +148,17 @@ const DrawReport: React.FC = () => {
   // Timeout reference to manage blur/focus race conditions
   const blurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Derived Date State
+  const currentYear = currentDate.getFullYear();
+  const currentMonth = currentDate.getMonth();
+  
+  // Format selectedDate string 'YYYY-MM-DD' from currentDate
+  // IMPORTANT: We need to ensure we map to the start of the week logic if not already aligned,
+  // but simpler is to just format the date directly. The week logic will handle finding the containing week.
+  const selectedDate = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
+
   useEffect(() => {
     fetchClients();
-    
-    // Auto-select nearest date to "Today"
-    const now = new Date();
-    let y = now.getFullYear();
-    if(y < 2025) y = 2025;
-    if(y > 2026) y = 2026;
-    setCurrentYear(y);
-
-    const m = now.getMonth();
-    setCurrentMonth(m);
-
-    const weeks = getWeeksForMonth(y, m);
-    const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-    
-    const weekNum = Object.keys(weeks).find(w => {
-        return weeks[parseInt(w)].some(d => {
-            const dStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-            return dStr === todayStr;
-        });
-    });
-    
-    if (weekNum) {
-        const startDay = weeks[parseInt(weekNum)][0];
-        handleDateClick(startDay);
-    } else {
-        const firstWeekNum = Object.keys(weeks)[0];
-        if (firstWeekNum) {
-            handleDateClick(weeks[parseInt(firstWeekNum)][0]);
-        }
-    }
   }, []);
 
   const fetchClients = async () => {
@@ -207,10 +187,7 @@ const DrawReport: React.FC = () => {
   };
 
   const handleDateClick = (dateObj: Date) => {
-      const yearStr = dateObj.getFullYear();
-      const m = String(dateObj.getMonth() + 1).padStart(2, '0');
-      const d = String(dateObj.getDate()).padStart(2, '0');
-      setSelectedDate(`${yearStr}-${m}-${d}`);
+      setCurrentDate(dateObj);
   };
 
   const handleInputChange = useCallback((clientId: string, val: string) => {
@@ -327,25 +304,19 @@ const DrawReport: React.FC = () => {
   };
 
   const nextMonth = () => {
-      if (currentMonth === 11) {
-          if (currentYear < 2026) {
-              setCurrentYear(y => y + 1);
-              setCurrentMonth(0);
-          }
-      } else {
-          setCurrentMonth(prev => prev + 1);
-      }
+      const newDate = new Date(currentDate);
+      newDate.setDate(1);
+      newDate.setMonth(newDate.getMonth() + 1);
+      if (newDate.getFullYear() > 2026) return;
+      setCurrentDate(newDate);
   };
 
   const prevMonth = () => {
-      if (currentMonth === 0) {
-          if (currentYear > 2025) {
-              setCurrentYear(y => y - 1);
-              setCurrentMonth(11);
-          }
-      } else {
-          setCurrentMonth(prev => prev - 1);
-      }
+      const newDate = new Date(currentDate);
+      newDate.setDate(1);
+      newDate.setMonth(newDate.getMonth() - 1);
+      if (newDate.getFullYear() < 2025) return;
+      setCurrentDate(newDate);
   };
 
   const currentMonthWeeks = useMemo<Record<number, Date[]>>(() => {

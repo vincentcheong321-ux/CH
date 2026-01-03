@@ -1,12 +1,15 @@
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { getClients, getCashAdvances, saveCashAdvance, getCashCredits, saveCashCredit, getLedgerRecords, getNetAmount } from '../services/storageService';
 import { Client, LedgerRecord } from '../types';
 import { Calendar, ChevronLeft, ChevronRight, Banknote, CreditCard, Search, Plus, UserPlus, X, Trash2, Repeat, Filter, Save } from 'lucide-react';
 import { MONTH_NAMES, getWeeksForMonth, getWeekRangeString } from '../utils/reportUtils';
 import { Link } from 'react-router-dom';
+import { useGlobalState } from '../context/GlobalStateContext';
 
 // Preview Component for showing weekly main ledger status
 const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, selectedDate: string }) => {
+    // ... (same as before)
     const [balance, setBalance] = useState<number | null>(null);
     const [dailyRecords, setDailyRecords] = useState<LedgerRecord[]>([]);
     const [loading, setLoading] = useState(true);
@@ -77,6 +80,7 @@ const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, se
     );
 };
 
+// Component for Individual Client Input
 const TransactionRow = React.memo(({ client, value, onChange, onBlur, onFocus, onRemove, type, navState }: { 
     client: Client, value: string, onChange: (id: string, val: string) => void, onBlur: (id: string) => void, onFocus: (id: string) => void, onRemove: (id: string) => void, type: 'ADV' | 'CRED', navState: any 
 }) => {
@@ -112,9 +116,13 @@ const TransactionRow = React.memo(({ client, value, onChange, onBlur, onFocus, o
 });
 
 const CashAdvanceCredit: React.FC = () => {
-    const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
-    const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
-    const [selectedDate, setSelectedDate] = useState('');
+    const { currentDate, setCurrentDate } = useGlobalState();
+    
+    // Derived Date State
+    const currentYear = currentDate.getFullYear();
+    const currentMonth = currentDate.getMonth();
+    const selectedDate = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
+
     const [clients, setClients] = useState<Client[]>([]);
     
     const [advances, setAdvances] = useState<Record<string, string>>({});
@@ -131,26 +139,6 @@ const CashAdvanceCredit: React.FC = () => {
         const init = async () => {
             const list = await getClients();
             setClients(list.filter(c => (c.category || 'paper') === 'paper'));
-            
-            const now = new Date();
-            let y = now.getFullYear();
-            if (y < 2025) y = 2025; if (y > 2026) y = 2026;
-            setCurrentYear(y);
-            setCurrentMonth(now.getMonth());
-            
-            const weeks = getWeeksForMonth(y, now.getMonth());
-            const todayStr = `${y}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-            const weekNum = Object.keys(weeks).find(w => weeks[parseInt(w)].some(d => {
-                const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                return ds === todayStr;
-            }));
-            
-            if (weekNum) {
-                setSelectedDate(todayStr);
-            } else if (Object.keys(weeks).length > 0) {
-                const first = weeks[parseInt(Object.keys(weeks)[0])][0];
-                setSelectedDate(`${first.getFullYear()}-${String(first.getMonth() + 1).padStart(2, '0')}-${String(first.getDate()).padStart(2, '0')}`);
-            }
         };
         init();
     }, []);
@@ -241,27 +229,23 @@ const CashAdvanceCredit: React.FC = () => {
     const activeWeekNum = Object.keys(weekWeeks).find(w => weekWeeks[parseInt(w)].some(d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` === selectedDate));
 
     const prevMonth = () => {
-        if (currentMonth === 0) {
-            if (currentYear > 2025) { setCurrentYear(y => y - 1); setCurrentMonth(11); }
-        } else { setCurrentMonth(prev => prev - 1); }
+        const newDate = new Date(currentDate);
+        newDate.setDate(1);
+        newDate.setMonth(newDate.getMonth() - 1);
+        if (newDate.getFullYear() < 2025) return;
+        setCurrentDate(newDate);
     };
 
     const nextMonth = () => {
-        if (currentMonth === 11) {
-            if (currentYear < 2026) {
-                setCurrentYear(y => y + 1);
-                setCurrentMonth(0);
-            }
-        } else {
-            setCurrentMonth(prev => prev + 1);
-        }
+        const newDate = new Date(currentDate);
+        newDate.setDate(1);
+        newDate.setMonth(newDate.getMonth() + 1);
+        if (newDate.getFullYear() > 2026) return;
+        setCurrentDate(newDate);
     };
 
     const handleDateClick = (dateObj: Date) => {
-        const yearStr = dateObj.getFullYear();
-        const m = String(dateObj.getMonth() + 1).padStart(2, '0');
-        const d = String(dateObj.getDate()).padStart(2, '0');
-        setSelectedDate(`${yearStr}-${m}-${d}`);
+        setCurrentDate(dateObj);
     };
 
     return (
@@ -359,7 +343,8 @@ const CashAdvanceCredit: React.FC = () => {
                         const days = weekWeeks[wn];
                         const isActive = wn.toString() === activeWeekNum;
                         return (
-                            <button key={wn} onClick={() => handleDateClick(days[0])} className={`px-4 py-1.5 rounded-full text-[10px] font-bold whitespace-nowrap transition-all border ${isActive ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200'}`}>
+                            <button key={wn} onClick={() => handleDateClick(days[0])} className={`px-4 py-1.5 rounded-full text-[10px] font-bold whitespace-nowrap transition-all border ${isActive ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200'}
+                            `}>
                                 W{sortedWeeks.indexOf(wn) + 1}: {getWeekRangeString(null, null, days)}
                             </button>
                         );

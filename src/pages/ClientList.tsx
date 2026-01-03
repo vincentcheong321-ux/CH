@@ -5,8 +5,10 @@ import { Plus, Search, User, Trash2, AlertTriangle, CheckSquare, Square, Printer
 import { getClients, saveClient, deleteClient, getLedgerRecords, getNetAmount, fetchClientTotalBalance } from '../services/storageService';
 import { Client, LedgerRecord } from '../types';
 import { MONTH_NAMES, getWeeksForMonth, getWeekRangeString } from '../utils/reportUtils';
+import { useGlobalState } from '../context/GlobalStateContext';
 
 const ClientList: React.FC = () => {
+  const { currentDate, setCurrentDate } = useGlobalState();
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -17,43 +19,30 @@ const ClientList: React.FC = () => {
   const [selectedClientIds, setSelectedClientIds] = useState<Set<string>>(new Set());
   const [isBulkPrintMode, setIsBulkPrintMode] = useState(false);
   
-  // Date/Week State
-  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
-  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
-  const [selectedWeekNum, setSelectedWeekNum] = useState<number>(1);
+  // Derived Date State from Global Context
+  const currentYear = currentDate.getFullYear();
+  const currentMonth = currentDate.getMonth();
+  
+  // Calculate Week Dates based on current month
+  const weeksData = useMemo<Record<number, Date[]>>(() => getWeeksForMonth(currentYear, currentMonth), [currentYear, currentMonth]);
+  
+  // Determine selected week number based on global currentDate
+  const selectedWeekNum = useMemo(() => {
+      const todayStr = `${currentYear}-${String(currentMonth+1).padStart(2,'0')}-${String(currentDate.getDate()).padStart(2,'0')}`;
+      const foundWeek = Object.keys(weeksData).find(w => {
+          return weeksData[parseInt(w)].some(d => {
+              const dStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+              return dStr === todayStr;
+          });
+      });
+      return foundWeek ? parseInt(foundWeek) : 1;
+  }, [weeksData, currentDate, currentYear, currentMonth]);
 
   // Delete Modal State
   const [deleteConfirm, setDeleteConfirm] = useState<{isOpen: boolean, clientId: string | null}>({
     isOpen: false,
     clientId: null
   });
-
-  // Calculate Week Dates
-  const weeksData = useMemo<Record<number, Date[]>>(() => getWeeksForMonth(currentYear, currentMonth), [currentYear, currentMonth]);
-  
-  useEffect(() => {
-    // Initialize date defaults
-    const now = new Date();
-    let y = now.getFullYear();
-    if(y < 2025) y = 2025;
-    if(y > 2026) y = 2026;
-    setCurrentYear(y);
-    const m = now.getMonth();
-    setCurrentMonth(m);
-    
-    const weeks = getWeeksForMonth(y, m);
-    
-    // Check if today matches any week
-    const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-    const foundWeek = Object.keys(weeks).find(w => {
-        return weeks[parseInt(w)].some(d => {
-            const dStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-            return dStr === todayStr;
-        });
-    });
-
-    if(foundWeek) setSelectedWeekNum(parseInt(foundWeek));
-  }, []);
 
   useEffect(() => {
     loadData();
@@ -154,7 +143,6 @@ const ClientList: React.FC = () => {
 
             <Link 
                 to={`/clients/${client.id}`}
-                state={{ year: currentYear, month: currentMonth, week: selectedWeekNum }}
                 className={`
                     block h-full bg-white rounded-xl border-2 transition-all duration-200 p-5
                     flex flex-col items-center justify-center text-center space-y-3
@@ -199,33 +187,38 @@ const ClientList: React.FC = () => {
   };
 
   const handlePrevMonth = () => {
-    if (currentMonth === 0) {
-        if (currentYear > 2025) {
-            setCurrentYear(y => y - 1);
-            setCurrentMonth(11);
-        }
-    } else {
-        setCurrentMonth(m => m - 1);
-    }
+      const newDate = new Date(currentDate);
+      // Set to 1st of previous month to avoid skipping months with fewer days
+      newDate.setDate(1);
+      newDate.setMonth(newDate.getMonth() - 1);
+      
+      // Bounds check 2025-2026
+      if (newDate.getFullYear() < 2025) return;
+      
+      setCurrentDate(newDate);
   };
 
   const handleNextMonth = () => {
-    if (currentMonth === 11) {
-        if (currentYear < 2026) {
-            setCurrentYear(y => y + 1);
-            setCurrentMonth(0);
-        }
-    } else {
-        setCurrentMonth(m => m + 1);
-    }
+      const newDate = new Date(currentDate);
+      newDate.setDate(1);
+      newDate.setMonth(newDate.getMonth() + 1);
+      
+      // Bounds check 2025-2026
+      if (newDate.getFullYear() > 2026) return;
+      
+      setCurrentDate(newDate);
+  };
+
+  // Handler to set the current date to the start of the selected week
+  const handleWeekSelect = (weekNum: number) => {
+      const days = weeksData[weekNum];
+      if (days && days.length > 0) {
+          // Select Monday of that week
+          setCurrentDate(new Date(days[0]));
+      }
   };
 
   const sortedWeekKeys = Object.keys(weeksData).map(Number).sort((a,b) => a-b);
-  useEffect(() => {
-     if(sortedWeekKeys.length > 0 && !sortedWeekKeys.includes(selectedWeekNum)) {
-         setSelectedWeekNum(sortedWeekKeys[0]);
-     }
-  }, [sortedWeekKeys, selectedWeekNum]);
 
   // --- Bulk Print Logic ---
   const handlePrint = () => window.print();
@@ -415,7 +408,7 @@ const ClientList: React.FC = () => {
                         return (
                             <button
                                 key={wk}
-                                onClick={() => setSelectedWeekNum(wk)}
+                                onClick={() => handleWeekSelect(wk)}
                                 className={`px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap border flex flex-col items-center justify-center min-w-[110px]
                                     ${selectedWeekNum === wk 
                                         ? 'bg-blue-600 text-white border-blue-600 shadow-md' 

@@ -1,9 +1,9 @@
-
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowLeft, RefreshCw, Save, CheckCircle, AlertCircle, History, FileText, Loader2, Zap, Calendar } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getClients, saveSaleRecord, saveMobileReportHistory, getMobileReportHistory, saveLedgerRecord, getLedgerRecords, updateLedgerRecord } from '../services/storageService';
 import { Client } from '../types';
+import { useGlobalState } from '../context/GlobalStateContext';
 
 // Mapping: Mobile Code -> Paper Code (Case Insensitive)
 const MOBILE_TO_PAPER_MAP: Record<string, string> = {
@@ -16,6 +16,7 @@ const MOBILE_TO_PAPER_MAP: Record<string, string> = {
 
 const MobileReport: React.FC = () => {
   const navigate = useNavigate();
+  const { currentDate, setCurrentDate } = useGlobalState();
   const [inputText, setInputText] = useState('');
   const [parsedData, setParsedData] = useState<any[]>([]);
   
@@ -26,14 +27,8 @@ const MobileReport: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'import' | 'history'>('import');
   const [isSaving, setIsSaving] = useState(false);
   
-  // New Date Selection State (Default to Today)
-  const [reportDate, setReportDate] = useState(() => {
-      const now = new Date();
-      const y = now.getFullYear();
-      const m = String(now.getMonth() + 1).padStart(2, '0');
-      const d = String(now.getDate()).padStart(2, '0');
-      return `${y}-${m}-${d}`;
-  });
+  // Derived formatted date for input (YYYY-MM-DD)
+  const reportDate = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
 
   useEffect(() => {
       loadClients();
@@ -285,9 +280,17 @@ const MobileReport: React.FC = () => {
   const viewHistoryItem = (item: any) => {
       setParsedData(item.json_data);
       // Set date to the report date from history
-      if (item.report_date) setReportDate(item.report_date);
+      if (item.report_date) {
+          const [y, m, d] = item.report_date.split('-').map(Number);
+          setCurrentDate(new Date(y, m - 1, d));
+      }
       setActiveTab('import');
       setSaveStatus({ type: 'success', message: 'Loaded historical data into view.' });
+  };
+
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const [y, m, d] = e.target.value.split('-').map(Number);
+      setCurrentDate(new Date(y, m - 1, d));
   };
 
   return (
@@ -324,190 +327,137 @@ const MobileReport: React.FC = () => {
             {activeTab === 'import' && (
                 <>
                     <div className="flex flex-col md:flex-row items-center gap-3 bg-white p-3 rounded-xl shadow-sm border border-gray-200 mb-6">
-                        {/* Date Picker */}
-                        <div className="flex items-center space-x-2 border-r border-gray-200 pr-4 mr-2">
-                            <div className="bg-gray-100 p-2 rounded-lg text-gray-600">
-                                <Calendar size={20} />
-                            </div>
-                            <div>
-                                <label className="block text-[10px] uppercase font-bold text-gray-400">Report Date</label>
-                                <input 
-                                    type="date" 
-                                    value={reportDate} 
-                                    onChange={(e) => setReportDate(e.target.value)}
-                                    className="font-bold text-gray-800 outline-none text-sm bg-transparent"
-                                />
-                            </div>
+                        <div className="flex items-center gap-2 flex-1 w-full">
+                            <Calendar size={18} className="text-gray-400" />
+                            <input 
+                                type="date" 
+                                value={reportDate} 
+                                onChange={handleDateChange} 
+                                className="font-bold text-gray-700 outline-none w-full cursor-pointer"
+                            />
                         </div>
-
-                        {/* Actions */}
-                        <div className="flex gap-2 flex-wrap">
-                            <button onClick={handleClear} className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg">
-                                Clear
-                            </button>
-                            
-                            <button onClick={handleParse} className="px-4 py-2 text-sm font-bold text-white bg-gray-600 hover:bg-gray-700 rounded-lg flex items-center">
-                                <RefreshCw size={16} className="mr-2" /> Parse Text
-                            </button>
-                        </div>
-
-                        {/* Save & Regenerate Actions (Visible when data exists) */}
-                        {parsedData.length > 0 && (
-                            <div className="flex gap-2 ml-auto border-l border-gray-200 pl-4">
-                                <button 
-                                    onClick={handleRegenerateDian}
-                                    disabled={isSaving}
-                                    className="px-4 py-2 text-sm font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 disabled:opacity-50 rounded-lg flex items-center border border-blue-200 shadow-sm"
-                                    title="Force update '电' records for this date"
-                                >
-                                    <Zap size={16} className="mr-2 text-blue-600" />
-                                    Regenerate 电
-                                </button>
-                                <button 
-                                    onClick={handleSaveToSystem} 
-                                    disabled={isSaving}
-                                    className="px-4 py-2 text-sm font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 rounded-lg flex items-center shadow-md animate-in fade-in"
-                                >
-                                    {isSaving ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Save size={16} className="mr-2" />}
-                                    {isSaving ? 'Saving...' : 'Save All'}
-                                </button>
+                        {saveStatus.message && (
+                            <div className={`text-xs px-3 py-1 rounded-full font-bold flex items-center ${saveStatus.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                {saveStatus.type === 'success' ? <CheckCircle size={14} className="mr-1" /> : <AlertCircle size={14} className="mr-1" />}
+                                {saveStatus.message}
                             </div>
                         )}
                     </div>
 
-                    {saveStatus.message && (
-                        <div className={`mb-6 p-4 rounded-lg flex items-center ${saveStatus.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
-                            {saveStatus.type === 'success' ? <CheckCircle className="mr-2" /> : <AlertCircle className="mr-2" />}
-                            {saveStatus.message}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[calc(100vh-200px)]">
+                        {/* Input Area */}
+                        <div className="flex flex-col bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                            <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+                                <h3 className="font-bold text-gray-700 flex items-center"><FileText size={18} className="mr-2 text-blue-500" /> Paste Report Data</h3>
+                                <div className="space-x-2">
+                                    <button onClick={handleClear} className="text-xs text-gray-500 hover:text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-200 transition-colors">Clear</button>
+                                    <button onClick={handleParse} disabled={!inputText} className="bg-blue-600 text-white text-xs px-4 py-1.5 rounded-lg font-bold hover:bg-blue-700 transition-colors disabled:opacity-50">Parse Data</button>
+                                </div>
+                            </div>
+                            <textarea 
+                                className="flex-1 w-full p-4 outline-none resize-none font-mono text-xs bg-gray-50/50 focus:bg-white transition-colors"
+                                placeholder="Paste raw text from mobile report here..."
+                                value={inputText}
+                                onChange={(e) => setInputText(e.target.value)}
+                            />
                         </div>
-                    )}
 
-                    {parsedData.length === 0 ? (
-                        <div className="grid grid-cols-1">
-                            <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200 flex flex-col">
-                                <h3 className="text-sm font-bold text-gray-800 mb-2 uppercase tracking-wide">Paste Report Text</h3>
-                                <p className="text-xs text-gray-400 mb-4">Copy the table from your spreadsheet or report and paste it here.</p>
-                                <textarea 
-                                    className="flex-1 w-full p-4 border border-gray-300 rounded-lg font-mono text-xs focus:ring-2 focus:ring-purple-500 focus:outline-none bg-gray-50 resize-none whitespace-pre"
-                                    placeholder="Paste excel content here..."
-                                    value={inputText}
-                                    onChange={(e) => setInputText(e.target.value)}
-                                    style={{ minHeight: '300px' }}
-                                />
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-center text-xs whitespace-nowrap">
-                                    <thead className="bg-gray-100 text-gray-700 font-bold">
-                                        <tr>
-                                            <th className="px-4 py-3 text-left sticky left-0 bg-gray-100 z-10 border-r border-gray-200">登陆帐号 / 名字</th>
-                                            {/* Member (1 col) */}
-                                            <th className="px-2 py-3 bg-gray-50 border-r border-gray-200">会员总投注</th>
-                                            
-                                            {/* Company (5 cols) */}
-                                            <th className="px-2 py-3">公司 营业额</th>
-                                            <th className="px-2 py-3">公司 佣金</th>
-                                            <th className="px-2 py-3">公司 赔出</th>
-                                            <th className="px-2 py-3">公司 补费用</th>
-                                            <th className="px-2 py-3 font-extrabold bg-blue-50 text-blue-800 border-r border-gray-200">公司 总额</th>
-                                            
-                                            {/* Shareholder (6 cols) */}
-                                            <th className="px-2 py-3">股东 营业额</th>
-                                            <th className="px-2 py-3">股东 佣金</th>
-                                            <th className="px-2 py-3">股东 赔出</th>
-                                            <th className="px-2 py-3 text-orange-600 bg-orange-50/20">股东 赢彩</th>
-                                            <th className="px-2 py-3">股东 补费用</th>
-                                            <th className="px-2 py-3 font-extrabold bg-indigo-50 text-indigo-800 border-r border-gray-200">股东 总额</th>
-                                            
-                                            {/* Agent (5 cols) */}
-                                            <th className="px-2 py-3">总代理 营业额</th>
-                                            <th className="px-2 py-3">总代理 佣金</th>
-                                            <th className="px-2 py-3">总代理 赔出</th>
-                                            <th className="px-2 py-3">总代理 抽费用</th>
-                                            <th className="px-2 py-3 font-extrabold bg-green-100 text-green-900 border-l border-green-200">总代理 总额</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-100 font-mono">
-                                        {parsedData.map((row, idx) => {
-                                            const isTotalRow = row.id === '总额';
-                                            const isMatched = clients.some(c => c.code.toLowerCase() === row.id.toLowerCase());
-                                            const mappedPaper = MOBILE_TO_PAPER_MAP[row.id.toLowerCase()];
-                                            const v = row.values;
-                                            
-                                            return (
-                                            <tr key={idx} className={`hover:bg-gray-50 ${isTotalRow ? 'bg-gray-100 font-bold border-t-2 border-gray-300' : (!isMatched ? 'opacity-50 bg-red-50/30' : '')}`}>
-                                                <td className={`px-4 py-2 text-left sticky left-0 z-10 border-r border-gray-100 ${isTotalRow ? 'bg-gray-100' : 'bg-white'}`}>
-                                                    <div className="font-bold text-gray-900">{row.id}</div>
-                                                    <div className="text-[10px] text-gray-500 mr-2">{row.name}</div>
-                                                    {!isMatched && !isTotalRow && <span className="text-[9px] text-red-500 font-bold px-1 border border-red-200 rounded">No Match</span>}
-                                                    {mappedPaper && <span className="text-[9px] text-blue-500 font-bold px-1 border border-blue-200 rounded ml-1">→ {mappedPaper.toUpperCase()}</span>}
-                                                </td>
-                                                {/* Member */}
-                                                <td className="px-2 py-2 border-r border-gray-100">{v[0]}</td>
-                                                
-                                                {/* Company */}
-                                                <td className="px-2 py-2">{v[1]}</td>
-                                                <td className="px-2 py-2">{v[2]}</td>
-                                                <td className="px-2 py-2">{v[3]}</td>
-                                                <td className="px-2 py-2">{v[4]}</td>
-                                                <td className={`px-2 py-2 ${isTotalRow ? 'bg-blue-100' : 'bg-blue-50'} text-blue-800 border-r border-blue-100`}>{v[5]}</td>
-                                                
-                                                {/* Shareholder */}
-                                                <td className="px-2 py-2">{v[6]}</td>
-                                                <td className="px-2 py-2">{v[7]}</td>
-                                                <td className="px-2 py-2">{v[8]}</td>
-                                                <td className="px-2 py-2 text-orange-600">{v[9]}</td>
-                                                <td className="px-2 py-2">{v[10]}</td>
-                                                <td className={`px-2 py-2 ${isTotalRow ? 'bg-indigo-100' : 'bg-indigo-50'} text-indigo-800 border-r border-indigo-100`}>{v[11]}</td>
-                                                
-                                                {/* Agent */}
-                                                <td className="px-2 py-2">{v[12]}</td>
-                                                <td className="px-2 py-2">{v[13]}</td>
-                                                <td className="px-2 py-2">{v[14]}</td>
-                                                <td className="px-2 py-2">{v[15]}</td>
-                                                <td className={`px-2 py-2 ${isTotalRow ? 'bg-green-200' : 'bg-green-100'} border-l border-green-200 ${parseFloat(String(v[16]).replace(/,/g,'')) >= 0 ? 'text-green-800' : 'text-red-700'}`}>{v[16]}</td>
-                                            </tr>
-                                        )})}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    )}
-                </>
-            )}
-            
-            {/* History Tab */}
-            {activeTab === 'history' && (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    {history.length === 0 ? (
-                        <div className="p-8 text-center text-gray-500">No import history found.</div>
-                    ) : (
-                        <div className="divide-y divide-gray-100">
-                            {history.map((item) => (
-                                <div key={item.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
-                                    <div className="flex items-center space-x-4">
-                                        <div className="bg-purple-50 p-3 rounded-lg text-purple-600">
-                                            <History size={20} />
-                                        </div>
-                                        <div>
-                                            <p className="font-bold text-gray-900">Import Report: {item.report_date}</p>
-                                            <p className="text-xs text-gray-500">
-                                                Imported on {new Date(item.created_at).toLocaleString()} • {item.json_data.length} records
-                                            </p>
-                                        </div>
-                                    </div>
+                        {/* Preview Area */}
+                        <div className="flex flex-col bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                            <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+                                <h3 className="font-bold text-gray-700 flex items-center"><Zap size={18} className="mr-2 text-yellow-500" /> Data Preview ({parsedData.length})</h3>
+                                <div className="space-x-2 flex">
                                     <button 
-                                        onClick={() => viewHistoryItem(item)}
-                                        className="px-4 py-2 text-sm font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg flex items-center"
+                                        onClick={handleRegenerateDian} 
+                                        disabled={parsedData.length === 0 || isSaving}
+                                        className="bg-blue-100 text-blue-700 text-xs px-3 py-1.5 rounded-lg font-bold hover:bg-blue-200 transition-colors disabled:opacity-50 flex items-center"
                                     >
-                                        <FileText size={16} className="mr-2" /> View Details
+                                        <RefreshCw size={14} className={`mr-1 ${isSaving ? 'animate-spin' : ''}`} /> Update 电 Only
+                                    </button>
+                                    <button 
+                                        onClick={handleSaveToSystem} 
+                                        disabled={parsedData.length === 0 || isSaving}
+                                        className="bg-green-600 text-white text-xs px-4 py-1.5 rounded-lg font-bold hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center"
+                                    >
+                                        {isSaving ? <Loader2 size={14} className="animate-spin mr-1" /> : <Save size={14} className="mr-1" />}
+                                        Save All
                                     </button>
                                 </div>
-                            ))}
+                            </div>
+                            <div className="flex-1 overflow-auto p-0 bg-white">
+                                {parsedData.length > 0 ? (
+                                    <table className="w-full text-xs text-left whitespace-nowrap">
+                                        <thead className="bg-gray-100 text-gray-500 sticky top-0 font-bold">
+                                            <tr>
+                                                <th className="p-2 border-b">ID</th>
+                                                <th className="p-2 border-b">Name</th>
+                                                <th className="p-2 border-b text-right">Agent Total</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                            {parsedData.map((row, idx) => (
+                                                <tr key={idx} className="hover:bg-gray-50">
+                                                    <td className="p-2 font-mono text-gray-600">{row.id}</td>
+                                                    <td className="p-2 font-bold text-gray-800">{row.name}</td>
+                                                    <td className="p-2 text-right font-mono">
+                                                        {row.values[16] || row.values[row.values.length-1]}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                ) : (
+                                    <div className="h-full flex flex-col items-center justify-center text-gray-400">
+                                        <p>No data parsed yet.</p>
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                    )}
+                    </div>
+                </>
+            )}
+
+            {activeTab === 'history' && (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="p-4 border-b border-gray-200 bg-gray-50">
+                        <h3 className="font-bold text-gray-700 flex items-center"><History size={18} className="mr-2 text-purple-500" /> Import History</h3>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                            <thead className="bg-gray-100 text-gray-500 uppercase text-xs">
+                                <tr>
+                                    <th className="px-6 py-3">Date Imported</th>
+                                    <th className="px-6 py-3">Report Date</th>
+                                    <th className="px-6 py-3 text-center">Records</th>
+                                    <th className="px-6 py-3 text-right">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {history.map((item) => (
+                                    <tr key={item.id} className="hover:bg-gray-50">
+                                        <td className="px-6 py-4 text-gray-500">{new Date(item.created_at).toLocaleString()}</td>
+                                        <td className="px-6 py-4 font-bold text-gray-800">{item.report_date}</td>
+                                        <td className="px-6 py-4 text-center">
+                                            <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-md text-xs font-bold">{item.json_data?.length || 0}</span>
+                                        </td>
+                                        <td className="px-6 py-4 text-right">
+                                            <button 
+                                                onClick={() => viewHistoryItem(item)}
+                                                className="text-blue-600 hover:text-blue-800 font-medium hover:underline"
+                                            >
+                                                Load Data
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {history.length === 0 && (
+                                    <tr>
+                                        <td colSpan={4} className="px-6 py-8 text-center text-gray-400">No history found.</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             )}
         </div>

@@ -5,6 +5,7 @@ import { Search, ChevronLeft, ChevronRight, Loader2, Calendar, Smartphone, FileT
 import { getClients, getSalesForDates, saveSaleRecord, getLedgerRecords, updateLedgerRecord, saveLedgerRecord } from '../services/storageService';
 import { Client, SaleRecord } from '../types';
 import { MONTH_NAMES, getWeeksForMonth } from '../utils/reportUtils';
+import { useGlobalState } from '../context/GlobalStateContext';
 
 // Specific Display Codes
 const PAPER_Z_CODES = ['Z03', 'Z05', 'Z07', 'Z15', 'Z19', 'Z20'];
@@ -242,35 +243,34 @@ const ClientWeeklyCard = React.memo(({
 
 const SalesIndex: React.FC = () => {
   const navigate = useNavigate();
+  const { currentDate, setCurrentDate } = useGlobalState();
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currentYear, setCurrentYear] = useState(2025);
-  const [currentMonth, setCurrentMonth] = useState(0);
-  const [selectedWeekNum, setSelectedWeekNum] = useState<number>(1);
   const [salesData, setSalesData] = useState<SaleRecord[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'paper' | 'mobile'>('paper');
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [regenMessage, setRegenMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-      const now = new Date();
-      let y = now.getFullYear();
-      let m = now.getMonth();
-      if (y < 2025) y = 2025;
-      if (y > 2026) y = 2026;
-      setCurrentYear(y);
-      setCurrentMonth(m);
-      const weeks = getWeeksForMonth(y, m);
-      const todayStr = `${y}-${String(m+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-      const foundWeek = Object.keys(weeks).find(wKey => weeks[parseInt(wKey)].some(dObj => {
-          const dStr = `${dObj.getFullYear()}-${String(dObj.getMonth()+1).padStart(2,'0')}-${String(dObj.getDate()).padStart(2,'0')}`;
-          return dStr === todayStr;
-      }));
-      setSelectedWeekNum(foundWeek ? parseInt(foundWeek) : parseInt(Object.keys(weeks)[0] || '1'));
-  }, []);
-
+  // Derived Date State
+  const currentYear = currentDate.getFullYear();
+  const currentMonth = currentDate.getMonth();
+  
+  // Calculate Weeks
   const weeksData = useMemo<Record<number, Date[]>>(() => getWeeksForMonth(currentYear, currentMonth), [currentYear, currentMonth]);
+  
+  // Determine selected week number
+  const selectedWeekNum = useMemo(() => {
+      const todayStr = `${currentYear}-${String(currentMonth+1).padStart(2,'0')}-${String(currentDate.getDate()).padStart(2,'0')}`;
+      const foundWeek = Object.keys(weeksData).find(w => {
+          return weeksData[parseInt(w)].some(d => {
+              const dStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+              return dStr === todayStr;
+          });
+      });
+      return foundWeek ? parseInt(foundWeek) : 1;
+  }, [weeksData, currentDate, currentYear, currentMonth]);
+
   const activeDays = weeksData[selectedWeekNum] || [];
   const activeDateStrings = useMemo(() => activeDays.map(d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`), [activeDays]);
 
@@ -341,12 +341,27 @@ const SalesIndex: React.FC = () => {
   };
 
   const handlePrevMonth = () => {
-      if (currentMonth === 0) { if (currentYear > 2025) { setCurrentYear(y => y - 1); setCurrentMonth(11); } } 
-      else { setCurrentMonth(m => m - 1); }
+      const newDate = new Date(currentDate);
+      newDate.setDate(1);
+      newDate.setMonth(newDate.getMonth() - 1);
+      if (newDate.getFullYear() < 2025) return;
+      setCurrentDate(newDate);
   };
   const handleNextMonth = () => {
-      if (currentMonth === 11) { if (currentYear < 2026) { setCurrentYear(y => y + 1); setCurrentMonth(0); } } 
-      else { setCurrentMonth(m => m + 1); }
+      const newDate = new Date(currentDate);
+      newDate.setDate(1);
+      newDate.setMonth(newDate.getMonth() + 1);
+      if (newDate.getFullYear() > 2026) return;
+      setCurrentDate(newDate);
+  };
+
+  // Handler for week pill clicks
+  const handleWeekSelect = (weekNum: number) => {
+      const days = weeksData[weekNum];
+      if (days && days.length > 0) {
+          // Set date to Monday of that week
+          setCurrentDate(new Date(days[0]));
+      }
   };
 
   const paperClients = useMemo(() => clients.filter(c => (c.category || 'paper') === 'paper'), [clients]);
@@ -401,7 +416,6 @@ const SalesIndex: React.FC = () => {
   const totalWeeklyProfit = totalPaperEarningsGlobal + totalMobileEarningsGlobal;
 
   const sortedWeekKeys = Object.keys(weeksData).map(Number).sort((a,b) => a-b);
-  useEffect(() => { if (sortedWeekKeys.length > 0 && !sortedWeekKeys.includes(selectedWeekNum)) setSelectedWeekNum(sortedWeekKeys[0]); }, [sortedWeekKeys, selectedWeekNum]);
 
   const getWeekRangeLabel = (weekNum: number) => {
       const days = weeksData[weekNum];
@@ -445,7 +459,7 @@ const SalesIndex: React.FC = () => {
                 </div>
                 <div className="flex space-x-1.5 md:space-x-2">
                     {sortedWeekKeys.map(wk => (
-                        <button key={wk} onClick={() => setSelectedWeekNum(wk)} className={`px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap flex flex-col items-center justify-center min-w-[90px] md:min-w-[110px] border ${selectedWeekNum === wk ? 'bg-blue-600 text-white shadow border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'}`}><span className="text-[9px] md:text-[10px] font-bold uppercase tracking-wider opacity-80">Week {Object.keys(weeksData).indexOf(String(wk)) + 1}</span><span className={`text-[10px] md:text-[11px] font-mono mt-0.5 ${selectedWeekNum === wk ? 'text-blue-100' : 'text-gray-400'}`}>{getWeekRangeLabel(wk)}</span></button>
+                        <button key={wk} onClick={() => handleWeekSelect(wk)} className={`px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap flex flex-col items-center justify-center min-w-[90px] md:min-w-[110px] border ${selectedWeekNum === wk ? 'bg-blue-600 text-white shadow border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'}`}><span className="text-[9px] md:text-[10px] font-bold uppercase tracking-wider opacity-80">Week {Object.keys(weeksData).indexOf(String(wk)) + 1}</span><span className={`text-[10px] md:text-[11px] font-mono mt-0.5 ${selectedWeekNum === wk ? 'text-blue-100' : 'text-gray-400'}`}>{getWeekRangeLabel(wk)}</span></button>
                     ))}
                 </div>
                 <button onClick={loadData} className="ml-auto p-2 text-gray-400 hover:text-blue-600 hover:bg-white rounded-full transition-colors border border-transparent hover:border-gray-200"><RefreshCw size={16} className={loading ? 'animate-spin' : ''} /></button>
