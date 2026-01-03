@@ -21,18 +21,13 @@ const getNoteDateScore = (text: string, entryDateStr: string) => {
         const entryMonth = entryDate.getMonth() + 1; // 1-12
 
         // Cross-year logic:
-        // If note month is high (e.g. 10, 11, 12) but entry month is low (e.g. 1, 2),
-        // the note refers to the previous year.
         if (month >= 10 && entryMonth <= 3) {
             year -= 1;
         } 
-        // If note month is low (e.g. 1, 2) but entry month is high (e.g. 11, 12),
-        // the note refers to the following year.
         else if (month <= 3 && entryMonth >= 10) {
             year += 1;
         }
 
-        // Return a comparable number: YYYYMMDD
         return year * 10000 + month * 100 + day;
     }
     return 0;
@@ -41,7 +36,7 @@ const getNoteDateScore = (text: string, entryDateStr: string) => {
 // Unified Sorter for Records
 const sortLedgerRecords = (records: LedgerRecord[]) => {
     records.sort((a, b) => {
-        // 1. Note Date Score (DD/MM in description/label) - Primary sorting for visual sequence
+        // 1. Note Date Score (DD/MM in description/label)
         const scoreA = getNoteDateScore(`${a.typeLabel} ${a.description}`, a.date);
         const scoreB = getNoteDateScore(`${b.typeLabel} ${b.description}`, b.date);
         
@@ -53,21 +48,21 @@ const sortLedgerRecords = (records: LedgerRecord[]) => {
             return 1;
         }
 
-        // 2. Database/Entry Date (Secondary)
+        // 2. Database/Entry Date
         if (a.date < b.date) return -1;
         if (a.date > b.date) return 1;
         
-        // 3. Priority Grouping (Tie breaker)
+        // 3. Priority Grouping
         const pA = getRecordSortPriority(a);
         const pB = getRecordSortPriority(b);
         if (pA !== pB) return pA - pB;
 
-        // 4. Sort Weight (Crucial for carry-forwards created on the same target date)
+        // 4. Sort Weight
         const swA = (a as any).sortWeight || 0;
         const swB = (b as any).sortWeight || 0;
         if (swA !== swB) return swA - swB;
 
-        // 5. Creation Time Tie-breaker (Final fallback)
+        // 5. Creation Time Tie-breaker
         if (a.createdAt && b.createdAt) {
             return a.createdAt.localeCompare(b.createdAt);
         }
@@ -92,45 +87,54 @@ export const getCategories = (): TransactionCategory[] => {
   const data = localStorage.getItem(CATEGORIES_KEY);
   let categories: TransactionCategory[] = data ? JSON.parse(data) : [];
 
-  // Reordered Defaults: Group Addition on left (odd index in 1-based or 0, 2, 4...) and Deductions on right
   const defaults: TransactionCategory[] = [
-    { id: '1', label: '收', operation: 'add', color: 'bg-green-100 text-green-800' },      // Left
-    { id: '2', label: '中', operation: 'subtract', color: 'bg-red-100 text-red-800' },    // Right
-    { id: '4', label: '支钱', operation: 'add', color: 'bg-green-100 text-green-800' },   // Left
-    { id: '3', label: '出', operation: 'subtract', color: 'bg-red-100 text-red-800' },    // Right
-    { id: '5', label: '上欠', operation: 'add', color: 'bg-green-100 text-green-800' },   // Left
-    { id: '6', label: '%', operation: 'subtract', color: 'bg-red-100 text-red-800' },      // Right
-    { id: '8', label: '电', operation: 'add', color: 'bg-green-100 text-green-800' },      // Left
-    { id: '7', label: '来', operation: 'subtract', color: 'bg-red-100 text-red-800' },    // Right
+    { id: '1', label: '收', operation: 'add', color: 'bg-green-100 text-green-800' },      // Pos 0 (L)
+    { id: '2', label: '中', operation: 'subtract', color: 'bg-red-100 text-red-800' },    // Pos 1 (R)
+    { id: '4', label: '支钱', operation: 'add', color: 'bg-green-100 text-green-800' },   // Pos 2 (L)
+    { id: '3', label: '出', operation: 'subtract', color: 'bg-red-100 text-red-800' },    // Pos 3 (R)
+    { id: '5', label: '上欠', operation: 'add', color: 'bg-green-100 text-green-800' },   // Pos 4 (L)
+    { id: '6', label: '%', operation: 'subtract', color: 'bg-red-100 text-red-800' },      // Pos 5 (R)
+    { id: '8', label: '电', operation: 'add', color: 'bg-green-100 text-green-800' },      // Pos 6 (L)
+    { id: '7', label: '来', operation: 'subtract', color: 'bg-red-100 text-red-800' },    // Pos 7 (R)
   ];
 
   if (categories.length === 0) {
     categories = defaults;
     localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories));
   } else {
-    // Maintenance migration (ensuring all exist and colors are correct)
-    let updated = false;
-    const missing = defaults.filter(d => !categories.find(c => c.label === d.label));
-    if (missing.length > 0) {
-        categories = [...categories, ...missing];
-        updated = true;
-    }
-
-    categories = categories.map(c => {
-        if (c.operation === 'add' && !c.color.includes('bg-green-100')) {
-            updated = true;
-            return { ...c, color: 'bg-green-100 text-green-800' };
-        }
-        if (c.operation === 'subtract' && !c.color.includes('bg-red-100')) {
-            updated = true;
-            return { ...c, color: 'bg-red-100 text-red-800' };
-        }
-        return c;
+    // Interleave sorting to ensure Addition on left, Deduction on right in 2-column grid
+    const adds = categories.filter(c => c.operation === 'add' || c.operation === 'none');
+    const subs = categories.filter(c => c.operation === 'subtract');
+    
+    // Sort additions by common labels first
+    const preferredAddsOrder = ['收', '支钱', '上欠', '电', '红', '补', '欠'];
+    adds.sort((a,b) => {
+        const idxA = preferredAddsOrder.indexOf(a.label);
+        const idxB = preferredAddsOrder.indexOf(b.label);
+        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+        if (idxA !== -1) return -1;
+        if (idxB !== -1) return 1;
+        return a.label.localeCompare(b.label);
     });
 
-    if (updated) {
-        localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories));
+    const preferredSubsOrder = ['中', '出', '%', '来', '收', '中'];
+    subs.sort((a,b) => {
+        const idxA = preferredSubsOrder.indexOf(a.label);
+        const idxB = preferredSubsOrder.indexOf(b.label);
+        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+        if (idxA !== -1) return -1;
+        if (idxB !== -1) return 1;
+        return a.label.localeCompare(b.label);
+    });
+
+    const interleaved: TransactionCategory[] = [];
+    const maxLen = Math.max(adds.length, subs.length);
+    for (let i = 0; i < maxLen; i++) {
+        if (adds[i]) interleaved.push(adds[i]);
+        if (subs[i]) interleaved.push(subs[i]);
     }
+    categories = interleaved;
+    localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories));
   }
   return categories;
 };
@@ -193,7 +197,6 @@ const mapJournalToLedgerRecord = (row: any): LedgerRecord => {
         column: row.data?.column || 'main',
         isVisible: true,
         createdAt: row.created_at,
-        // Flatten metadata
         ...row.data
     };
 
@@ -433,29 +436,25 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
         return d >= clusterStart && d <= latestDate;
     }).map(mapJournalToLedgerRecord);
 
-    // ASCENDING Chronological note-sort of the source cluster
     const sortedCluster = sortLedgerRecords(mappedCluster);
 
     let rowsToCopy: LedgerRecord[] = [];
     if (clientCode.toUpperCase() === 'Z21') {
-        // Z21 Special Logic: Bring exactly 5 records to maintain window, mark oldest as gray
+        // Z21: Exactly 5 records, first oldest is marked down
         rowsToCopy = sortedCluster.slice(-5).map((rec, idx) => 
             idx === 0 ? { ...rec, operation: 'none' as const } : rec
         );
     } else if (clientCode.toUpperCase() === 'C19') {
-        // C19 Logic: Bring 5 records
         rowsToCopy = sortedCluster.slice(-5);
     } else { return 0; }
 
     const sum = rowsToCopy.reduce((acc, r) => acc + getNetAmount(r), 0);
     
-    // Sequential inserts with index weight
     let weightIdx = 0;
     for (const r of rowsToCopy) {
         let signedAmount = r.operation === 'add' ? r.amount : (r.operation === 'subtract' ? -r.amount : r.amount);
         
-        // Stricter duplication check to prevent 'extra record' issue
-        // Check by client + targetDate + description + column (ignoring operation/amount shift if already exists)
+        // Strict check by description + targetDate + column to prevent 'extra record' issue
         const { data: dupes } = await supabase.from('financial_journal').select('id')
             .eq('client_id', clientId)
             .eq('entry_date', targetDate)
@@ -470,12 +469,33 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
                     operation: r.operation, 
                     column: 'col1', 
                     isCarryForward: true,
-                    sortWeight: weightIdx++ 
+                    sortWeight: weightIdx 
                 }
             });
-        } else {
-            weightIdx++; 
+
+            // NEW CONDITION: For Z21, add the marked down oldest first record to Panel 2 as a '收' record
+            if (clientCode.toUpperCase() === 'Z21' && weightIdx === 0) {
+                 const { data: dupesP2 } = await supabase.from('financial_journal').select('id')
+                    .eq('client_id', clientId)
+                    .eq('entry_date', targetDate)
+                    .contains('data', { description: r.description, column: 'col2' });
+                 
+                 if (!dupesP2 || dupesP2.length === 0) {
+                     await supabase.from('financial_journal').insert({
+                        client_id: clientId, entry_date: targetDate, entry_type: 'MANUAL', amount: r.amount,
+                        data: { 
+                            description: r.description, 
+                            typeLabel: '收', 
+                            operation: 'add', 
+                            column: 'col2', 
+                            isCarryForward: true,
+                            sortWeight: 0 
+                        }
+                    });
+                 }
+            }
         }
+        weightIdx++;
     }
     return sum;
 };
@@ -530,7 +550,6 @@ export const fetchClientTotalBalance = async (clientId: string): Promise<number>
     const client = clients.find(c => c.id === clientId);
     const clientCode = client?.code?.toUpperCase() || '';
 
-    // Snapshot search (Descending)
     const sortedForSnapshot = [...records].sort((a,b) => b.date.localeCompare(a.date));
     const latestSnapshot = sortedForSnapshot.find(r => r.id.startsWith('draw_') || r.typeLabel === '上欠');
     
