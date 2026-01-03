@@ -5,13 +5,21 @@ import { getClients, saveSaleRecord, saveMobileReportHistory, getMobileReportHis
 import { Client } from '../types';
 import { useGlobalState } from '../context/GlobalStateContext';
 
-// Mapping: Mobile Code -> Paper Code (Case Insensitive)
+// Mapping: Mobile Code/Name -> Paper Code (Case Insensitive)
 const MOBILE_TO_PAPER_MAP: Record<string, string> = {
-    'sk3964': 'z07',  // SINGER -> 顺
-    'sk3818': 'z19',  // MOOI -> 妹
-    'sk3619': 'c13',  // ZHONG -> 中
-    'sk8959': 'c17',  // YEE -> 仪
-    'vc9486': '9486'  // vincent -> 张
+    // Codes
+    'sk3964': 'z07',  // 顺
+    'sk3818': 'z19',  // 妹
+    'sk3619': 'c13',  // 中
+    'sk8959': 'c17',  // 仪
+    'vc9486': '9486', // 张
+
+    // Names (Just in case parser picks name as ID or user manually corrects)
+    'singer': 'z07',
+    'mooi': 'z19',
+    'zhong': 'c13',
+    'yee': 'c17',
+    'vincent': '9486'
 };
 
 const MobileReport: React.FC = () => {
@@ -169,7 +177,12 @@ const MobileReport: React.FC = () => {
           }
 
           // 2. Special Paper Client "Dian" (电) Cross-Posting
-          const mappedPaperCode = MOBILE_TO_PAPER_MAP[row.id.toLowerCase()];
+          // Try matching ID
+          let mappedPaperCode = MOBILE_TO_PAPER_MAP[row.id.toLowerCase()];
+          // If not found, try matching Name (sometimes parser swaps them or user uses name)
+          if (!mappedPaperCode && row.name) {
+              mappedPaperCode = MOBILE_TO_PAPER_MAP[row.name.toLowerCase()];
+          }
           
           if (mappedPaperCode) {
               const paperClient = clients.find(c => c.code.toLowerCase() === mappedPaperCode.toLowerCase());
@@ -179,10 +192,10 @@ const MobileReport: React.FC = () => {
                   const companyAmount = parseFloat(String(companyTotalRaw).replace(/,/g, ''));
 
                   if (!isNaN(companyAmount) && companyAmount !== 0) {
-                      // Logic REVERSED: 
-                      // Positive Company Total -> Subtract from Ledger (Red)
-                      // Negative Company Total -> Add to Ledger (Green)
-                      const operation = companyAmount >= 0 ? 'subtract' : 'add';
+                      // Logic:
+                      // Company Total > 0 (Company Won) -> Client Owes Company -> Balance Increases -> 'add'
+                      // Company Total < 0 (Company Lost) -> Company Owes Client -> Balance Decreases -> 'subtract'
+                      const operation = companyAmount >= 0 ? 'add' : 'subtract';
                       
                       await saveLedgerRecord({
                           clientId: paperClient.id,
@@ -228,7 +241,11 @@ const MobileReport: React.FC = () => {
         for (const row of parsedData) {
             if (row.id === '总额') continue;
             
-            const mappedPaperCode = MOBILE_TO_PAPER_MAP[row.id.toLowerCase()];
+            let mappedPaperCode = MOBILE_TO_PAPER_MAP[row.id.toLowerCase()];
+            if (!mappedPaperCode && row.name) {
+                mappedPaperCode = MOBILE_TO_PAPER_MAP[row.name.toLowerCase()];
+            }
+
             if (mappedPaperCode) {
                 const paperClient = clients.find(c => c.code.toLowerCase() === mappedPaperCode.toLowerCase());
                 if (paperClient) {
@@ -245,10 +262,10 @@ const MobileReport: React.FC = () => {
                             r.column === 'main'
                         );
 
-                        // Logic REVERSED: 
-                        // Positive Company Total -> Subtract from Ledger (Red)
-                        // Negative Company Total -> Add to Ledger (Green)
-                        const operation = companyAmount >= 0 ? 'subtract' : 'add';
+                        // Logic:
+                        // Company Total > 0 (Company Won) -> Client Owes -> Add
+                        // Company Total < 0 (Company Lost) -> Client Credited -> Subtract
+                        const operation = companyAmount >= 0 ? 'add' : 'subtract';
                         const amount = Math.abs(companyAmount);
 
                         if (existingDian) {
@@ -391,19 +408,26 @@ const MobileReport: React.FC = () => {
                                             <tr>
                                                 <th className="p-2 border-b">ID</th>
                                                 <th className="p-2 border-b">Name</th>
+                                                <th className="p-2 border-b text-right">Company Total</th>
                                                 <th className="p-2 border-b text-right">Agent Total</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-100">
-                                            {parsedData.map((row, idx) => (
-                                                <tr key={idx} className="hover:bg-gray-50">
-                                                    <td className="p-2 font-mono text-gray-600">{row.id}</td>
+                                            {parsedData.map((row, idx) => {
+                                                const mappedCode = MOBILE_TO_PAPER_MAP[row.id.toLowerCase()] || MOBILE_TO_PAPER_MAP[row.name?.toLowerCase()];
+                                                return (
+                                                <tr key={idx} className={`hover:bg-gray-50 ${mappedCode ? 'bg-blue-50/50' : ''}`}>
+                                                    <td className="p-2 font-mono text-gray-600">
+                                                        {row.id} 
+                                                        {mappedCode && <span className="ml-2 text-[9px] bg-blue-100 text-blue-700 px-1 rounded">→ {mappedCode.toUpperCase()}</span>}
+                                                    </td>
                                                     <td className="p-2 font-bold text-gray-800">{row.name}</td>
+                                                    <td className="p-2 text-right font-mono text-gray-500">{row.values[5]}</td>
                                                     <td className="p-2 text-right font-mono">
                                                         {row.values[16] || row.values[row.values.length-1]}
                                                     </td>
                                                 </tr>
-                                            ))}
+                                            )})}
                                         </tbody>
                                     </table>
                                 ) : (
