@@ -579,7 +579,8 @@ export const fetchClientTotalBalance = async (clientId: string): Promise<number>
 
 export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: Client[]): Promise<Record<string, number>> => {
     if (supabase) {
-        const { data } = await supabase.from('financial_journal').select('*').lt('entry_date', dateLimit).order('entry_date', { ascending: true });
+        // UPDATED: Using LTE to include transactions on the cutoff date (e.g., Mobile '电' records)
+        const { data } = await supabase.from('financial_journal').select('*').lte('entry_date', dateLimit).order('entry_date', { ascending: true });
         if (!data) return {};
 
         const clientRecords: Record<string, LedgerRecord[]> = {};
@@ -595,14 +596,16 @@ export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: 
             const client = clients?.find(c => c.id === clientId);
             const clientCode = client?.code?.toUpperCase() || '';
             const sortedForSnapshot = [...records].sort((a,b) => b.date.localeCompare(a.date));
-            const latestSnapshot = sortedForSnapshot.find(r => r.id.startsWith('draw_') || r.typeLabel === '上欠');
+            
+            // UPDATED: strictly find a snapshot BEFORE the dateLimit to ensure we recalculate everything up to dateLimit
+            const latestSnapshot = sortedForSnapshot.find(r => (r.id.startsWith('draw_') || r.typeLabel === '上欠') && r.date < dateLimit);
             
             let effectiveRecords = records;
             if (latestSnapshot) {
                 effectiveRecords = records.filter(r => {
                     if (r.id === latestSnapshot.id) return true; 
                     if (r.date > latestSnapshot.date) return true;
-                    // Fix: Include same-day transactions
+                    // Include same-day transactions relative to the snapshot we found
                     if (r.date === latestSnapshot.date && !r.id.startsWith('draw_') && r.typeLabel !== '上欠') return true;
                     return false;
                 });

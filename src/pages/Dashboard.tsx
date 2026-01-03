@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { 
   BarChart, 
@@ -11,8 +10,8 @@ import {
   LineChart,
   Line
 } from 'recharts';
-import { getAllLedgerRecords, getAssetRecords, getNetAmount, getClients, getAllDrawRecords } from '../services/storageService';
-import { TrendingUp, TrendingDown, DollarSign, Wallet, BarChart3 } from 'lucide-react';
+import { getAllLedgerRecords, getAssetRecords, getNetAmount, getClients, fetchClientTotalBalance, getSalesForDates } from '../services/storageService';
+import { TrendingUp, TrendingDown, DollarSign, Wallet, BarChart3, Briefcase } from 'lucide-react';
 import { getWeeksForMonth, MONTH_NAMES } from '../utils/reportUtils';
 import { supabase } from '../supabaseClient';
 
@@ -23,8 +22,7 @@ const Dashboard: React.FC = () => {
   const [stats, setStats] = useState({
     totalCompanyValue: 0,
     totalEarnings: 0,
-    totalAssetsIn: 0,
-    totalAssetsOut: 0
+    weeklyEarning: 0
   });
   const [chartData, setChartData] = useState<any[]>([]);
   const [weeklyChartData, setWeeklyChartData] = useState<any[]>([]);
@@ -35,18 +33,20 @@ const Dashboard: React.FC = () => {
         setLoading(true);
         const clients = await getClients();
         const assets = getAssetRecords();
-        const allDraws = await getAllDrawRecords();
+        
+        // 1. Calculate Liquid Cash (Assets In - Assets Out)
+        const assetsIn = assets.filter(a => a.type === 'IN').reduce((acc, curr) => acc + curr.amount, 0);
+        const assetsOut = assets.filter(a => a.type === 'OUT').reduce((acc, curr) => acc + curr.amount, 0);
+        const liquidCash = assetsIn - assetsOut;
 
-        // 1. Calculate Total Company Value (Total of LATEST draw report week)
-        // Find the most recent date in draw records
-        let latestDrawValue = 0;
-        if (allDraws.length > 0) {
-            const sortedDrawDates = [...new Set(allDraws.map(d => d.date))].sort((a, b) => b.localeCompare(a));
-            const latestDate = sortedDrawDates[0];
-            latestDrawValue = allDraws.filter(d => d.date === latestDate).reduce((acc, curr) => acc + curr.balance, 0);
-        }
+        // 2. Calculate Total Client Receivables (Real-time sum of all client balances)
+        const clientBalances = await Promise.all(clients.map(c => fetchClientTotalBalance(c.id)));
+        const totalReceivables = clientBalances.reduce((acc, curr) => acc + curr, 0);
 
-        // 2. Calculate Total Earnings (All-time sales profit)
+        // TOTAL COMPANY VALUE = Liquid Cash + Receivables
+        const totalCompanyValue = liquidCash + totalReceivables;
+
+        // 3. Calculate Total Earnings (All-time sales profit) - Kept existing logic
         let totalEarnings = 0;
         if (supabase) {
             const { data: sales } = await supabase.from('financial_journal').select('*').eq('entry_type', 'SALE');
@@ -74,14 +74,47 @@ const Dashboard: React.FC = () => {
             }
         }
 
-        const assetsIn = assets.filter(a => a.type === 'IN').reduce((acc, curr) => acc + curr.amount, 0);
-        const assetsOut = assets.filter(a => a.type === 'OUT').reduce((acc, curr) => acc + curr.amount, 0);
+        // 4. Calculate Weekly Earning (Current Week Profit)
+        const now = new Date();
+        const weeks = getWeeksForMonth(now.getFullYear(), now.getMonth());
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+        
+        // Find current week days
+        const currentWeekDays = Object.values(weeks).find(days => 
+            days.some(d => {
+                const dStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                return dStr === todayStr;
+            })
+        ) || Object.values(weeks)[Object.values(weeks).length - 1]; // Fallback to last week if undefined
+
+        let weeklyEarning = 0;
+        if (currentWeekDays) {
+            const activeDateStrings = currentWeekDays.map(d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+            const currentWeekSales = await getSalesForDates(activeDateStrings);
+            
+            currentWeekSales.forEach(r => {
+                const client = clients.find(c => c.id === r.clientId);
+                if (!client) return;
+
+                const isMobileProfile = client.category === 'mobile';
+                const codeUpper = (client.code || '').toUpperCase();
+                const isValidPaper = PAPER_Z_CODES.includes(codeUpper) || PAPER_C_CODES.includes(codeUpper);
+
+                if (isMobileProfile) {
+                    const shareholderTotalStr = r.mobileRawData?.[11] || '0';
+                    weeklyEarning += Math.abs(parseFloat(String(shareholderTotalStr).replace(/,/g, '')) || 0);
+                } else if (isValidPaper) {
+                    const rawTotal = (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0);
+                    // Paper Earning Logic: abs(Client14% - Company17%)
+                    weeklyEarning += Math.abs((rawTotal * 0.86) - (rawTotal * 0.83));
+                }
+            });
+        }
 
         setStats({
-            totalCompanyValue: latestDrawValue,
-            totalEarnings: totalEarnings,
-            totalAssetsIn: assetsIn,
-            totalAssetsOut: assetsOut
+            totalCompanyValue,
+            totalEarnings,
+            weeklyEarning
         });
 
         // --- Ledger Line Chart Data ---
@@ -93,48 +126,25 @@ const Dashboard: React.FC = () => {
         }));
         setChartData(data);
 
-        // --- Weekly Draw Chart Data (Current Month) ---
-        const currentYear = new Date().getFullYear();
-        const currentMonthIndex = new Date().getMonth();
-        const weeks = getWeeksForMonth(currentYear, currentMonthIndex);
-        
-        const wData = Object.keys(weeks).sort((a,b)=>Number(a)-Number(b)).map((weekNum, index) => {
-            const days = weeks[Number(weekNum)];
-            const weekTotal = allDraws.reduce((acc, r) => {
-                const match = days.some(d => {
-                    const yearStr = d.getFullYear();
-                    const m = String(d.getMonth() + 1).padStart(2, '0');
-                    const dayStr = String(d.getDate()).padStart(2, '0');
-                    return r.date === `${yearStr}-${m}-${dayStr}`;
-                });
-                return match ? acc + r.balance : acc;
-            }, 0);
-            
-            return {
-                name: `Week ${index + 1}`,
-                total: weekTotal
-            };
-        });
-        setWeeklyChartData(wData);
         setLoading(false);
     };
 
     fetchData();
   }, []);
 
-  const Card = ({ title, value, icon: Icon, color, subText }: any) => (
-    <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100 transition-all hover:shadow-md">
+  const Card = ({ title, value, icon: Icon, color, subText, bgClass }: any) => (
+    <div className={`rounded-2xl shadow-sm p-6 border border-gray-100 transition-all hover:shadow-md ${bgClass || 'bg-white'}`}>
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-gray-400 text-xs font-black uppercase tracking-widest">{title}</h3>
-        <div className={`p-2 rounded-xl ${color} bg-opacity-10`}>
-          <Icon className={color} size={20} />
+        <h3 className={`text-xs font-black uppercase tracking-widest ${bgClass ? 'text-blue-100' : 'text-gray-400'}`}>{title}</h3>
+        <div className={`p-2 rounded-xl ${bgClass ? 'bg-white/10' : color + ' bg-opacity-10'}`}>
+          <Icon className={bgClass ? 'text-white' : color} size={20} />
         </div>
       </div>
       <div className="flex flex-col">
-        <span className="text-2xl font-black text-gray-900 font-mono">
+        <span className={`text-2xl font-black font-mono ${bgClass ? 'text-white' : 'text-gray-900'}`}>
           ${value.toLocaleString(undefined, { minimumFractionDigits: 2 })}
         </span>
-        <span className="text-[10px] text-gray-400 font-bold uppercase mt-1 tracking-tighter">{subText}</span>
+        <span className={`text-[10px] font-bold uppercase mt-1 tracking-tighter ${bgClass ? 'text-blue-200' : 'text-gray-400'}`}>{subText}</span>
       </div>
     </div>
   );
@@ -157,71 +167,29 @@ const Dashboard: React.FC = () => {
         <p className="text-gray-500">Financial summary and cutoff data monitoring.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card 
           title="Total Company Value" 
           value={stats.totalCompanyValue} 
           icon={Wallet} 
-          color="text-blue-600"
-          subText="Latest Draw Report Total"
+          color="text-white"
+          bgClass="bg-blue-600"
+          subText="Assets + Receivables"
         />
         <Card 
-          title="Total Earnings" 
+          title="Total Lifetime Earnings" 
           value={stats.totalEarnings} 
           icon={TrendingUp} 
           color="text-emerald-600"
           subText="All-time Sales Profits"
         />
         <Card 
-          title="Total Cash In" 
-          value={stats.totalAssetsIn} 
-          icon={DollarSign} 
+          title="Weekly Earning" 
+          value={stats.weeklyEarning} 
+          icon={Briefcase} 
           color="text-indigo-600"
-          subText="Recorded asset injections"
+          subText="Current Week Profit"
         />
-        <Card 
-          title="Total Cash Out" 
-          value={stats.totalAssetsOut} 
-          icon={TrendingDown} 
-          color="text-rose-600"
-          subText="Recorded expenses"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-3 bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
-            <div className="flex justify-between items-start mb-8">
-                <div>
-                    <h3 className="text-lg font-black text-gray-800 uppercase tracking-tight">Weekly Draw Reports</h3>
-                    <p className="text-sm text-gray-400 font-medium">Monitoring cutoff balances for {currentMonthName} {displayYear}</p>
-                </div>
-                <BarChart3 className="text-gray-200" size={32} />
-            </div>
-            <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={weeklyChartData}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                        <XAxis 
-                            dataKey="name" 
-                            axisLine={false} 
-                            tickLine={false} 
-                            tick={{fill: '#9ca3af', fontSize: 10, fontWeight: 'bold'}}
-                        />
-                        <YAxis 
-                            axisLine={false} 
-                            tickLine={false} 
-                            tick={{fill: '#9ca3af', fontSize: 10}} 
-                        />
-                        <Tooltip 
-                            contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
-                            formatter={(value: number) => [`$${value.toLocaleString()}`, 'Balance']}
-                            cursor={{fill: '#f9fafb'}}
-                        />
-                        <Bar dataKey="total" fill="#3b82f6" radius={[6, 6, 0, 0]} barSize={50} />
-                    </BarChart>
-                </ResponsiveContainer>
-            </div>
-        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
