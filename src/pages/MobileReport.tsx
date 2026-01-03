@@ -1,17 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, RefreshCw, Save, CheckCircle, AlertCircle, History, FileText, Loader2, Zap, Calendar } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { getClients, saveSaleRecord, saveMobileReportHistory, getMobileReportHistory, saveLedgerRecord, getLedgerRecords, updateLedgerRecord } from '../services/storageService';
+import { getClients, saveSaleRecord, saveMobileReportHistory, getMobileReportHistory, saveLedgerRecord, getLedgerRecords, updateLedgerRecord, deleteLedgerRecord } from '../services/storageService';
 import { Client } from '../types';
 import { useGlobalState } from '../context/GlobalStateContext';
 
-// Mapping: Mobile Code -> Paper Code (Case Insensitive)
+// Mapping: Mobile Code/Name -> Paper Code (Case Insensitive)
 const MOBILE_TO_PAPER_MAP: Record<string, string> = {
-    'sk3964': 'z07',  // SINGER -> 顺
-    'sk3818': 'z19',  // MOOI -> 妹
-    'sk3619': 'c13',  // ZHONG -> 中
-    'sk8959': 'c17',  // YEE -> 仪
-    'vc9486': '9486'  // vincent -> 张
+    // Codes
+    'sk3964': 'z07',  // 顺
+    'sk3818': 'z19',  // 妹
+    'sk3619': 'c13',  // 中
+    'sk8959': 'c17',  // 仪
+    'vc9486': '9486', // 张
+
+    // Names (Just in case parser picks name as ID or user manually corrects)
+    'singer': 'z07',
+    'mooi': 'z19',
+    'zhong': 'c13',
+    'yee': 'c17',
+    'vincent': '9486'
 };
 
 const MobileReport: React.FC = () => {
@@ -169,7 +177,12 @@ const MobileReport: React.FC = () => {
           }
 
           // 2. Special Paper Client "Dian" (电) Cross-Posting
-          const mappedPaperCode = MOBILE_TO_PAPER_MAP[row.id.toLowerCase()];
+          // Try matching ID
+          let mappedPaperCode = MOBILE_TO_PAPER_MAP[row.id.toLowerCase()];
+          // If not found, try matching Name
+          if (!mappedPaperCode && row.name) {
+              mappedPaperCode = MOBILE_TO_PAPER_MAP[row.name.toLowerCase()];
+          }
           
           if (mappedPaperCode) {
               const paperClient = clients.find(c => c.code.toLowerCase() === mappedPaperCode.toLowerCase());
@@ -179,21 +192,37 @@ const MobileReport: React.FC = () => {
                   const companyAmount = parseFloat(String(companyTotalRaw).replace(/,/g, ''));
 
                   if (!isNaN(companyAmount) && companyAmount !== 0) {
-                      // Logic REVERSED: 
-                      // Positive Company Total -> Subtract from Ledger (Red)
-                      // Negative Company Total -> Add to Ledger (Green)
-                      const operation = companyAmount >= 0 ? 'subtract' : 'add';
-                      
-                      await saveLedgerRecord({
-                          clientId: paperClient.id,
-                          date: targetDate,
-                          description: '', 
-                          typeLabel: '电',
-                          amount: Math.abs(companyAmount),
-                          operation: operation,
-                          column: 'main',
-                          isVisible: true
-                      });
+                      // Logic:
+                      // Company Total > 0 (Company Won) -> Client Owes Company -> Balance Increases -> 'add'
+                      // Company Total < 0 (Company Lost) -> Company Owes Client -> Balance Decreases -> 'subtract'
+                      const operation = companyAmount >= 0 ? 'add' : 'subtract';
+                      const amount = Math.abs(companyAmount);
+
+                      // Check for existing records to PREVENT DUPLICATES
+                      const existingRecords = await getLedgerRecords(paperClient.id);
+                      const existingDian = existingRecords.find(r => 
+                          r.date === targetDate && 
+                          r.typeLabel === '电' &&
+                          r.column === 'main'
+                      );
+
+                      if (existingDian) {
+                          await updateLedgerRecord(existingDian.id, {
+                              amount: amount,
+                              operation: operation
+                          });
+                      } else {
+                          await saveLedgerRecord({
+                              clientId: paperClient.id,
+                              date: targetDate,
+                              description: '', 
+                              typeLabel: '电',
+                              amount: amount,
+                              operation: operation,
+                              column: 'main',
+                              isVisible: true
+                          });
+                      }
                   }
               }
           }
@@ -228,7 +257,11 @@ const MobileReport: React.FC = () => {
         for (const row of parsedData) {
             if (row.id === '总额') continue;
             
-            const mappedPaperCode = MOBILE_TO_PAPER_MAP[row.id.toLowerCase()];
+            let mappedPaperCode = MOBILE_TO_PAPER_MAP[row.id.toLowerCase()];
+            if (!mappedPaperCode && row.name) {
+                mappedPaperCode = MOBILE_TO_PAPER_MAP[row.name.toLowerCase()];
+            }
+
             if (mappedPaperCode) {
                 const paperClient = clients.find(c => c.code.toLowerCase() === mappedPaperCode.toLowerCase());
                 if (paperClient) {
@@ -238,25 +271,35 @@ const MobileReport: React.FC = () => {
                     if (!isNaN(companyAmount) && companyAmount !== 0) {
                         // Fetch existing records to dedupe/update
                         const existingRecords = await getLedgerRecords(paperClient.id);
-                        // Find '电' record for this date
-                        const existingDian = existingRecords.find(r => 
+                        
+                        // Find ALL '电' records for this date to handle duplicate cleanups
+                        const existingDianRecords = existingRecords.filter(r => 
                             r.date === targetDate && 
                             r.typeLabel === '电' &&
                             r.column === 'main'
                         );
 
-                        // Logic REVERSED: 
-                        // Positive Company Total -> Subtract from Ledger (Red)
-                        // Negative Company Total -> Add to Ledger (Green)
-                        const operation = companyAmount >= 0 ? 'subtract' : 'add';
+                        // Logic:
+                        // Company Total > 0 (Company Won) -> Client Owes -> Add
+                        // Company Total < 0 (Company Lost) -> Client Credited -> Subtract
+                        const operation = companyAmount >= 0 ? 'add' : 'subtract';
                         const amount = Math.abs(companyAmount);
 
-                        if (existingDian) {
-                            await updateLedgerRecord(existingDian.id, {
+                        if (existingDianRecords.length > 0) {
+                            // Update the FIRST one found
+                            await updateLedgerRecord(existingDianRecords[0].id, {
                                 amount: amount,
                                 operation: operation
                             });
+                            
+                            // AUTO-FIX: If multiple duplicates exist, delete the extras
+                            if (existingDianRecords.length > 1) {
+                                for (let i = 1; i < existingDianRecords.length; i++) {
+                                    await deleteLedgerRecord(existingDianRecords[i].id);
+                                }
+                            }
                         } else {
+                            // Create new if none exist
                             await saveLedgerRecord({
                                 clientId: paperClient.id,
                                 date: targetDate,
@@ -391,19 +434,26 @@ const MobileReport: React.FC = () => {
                                             <tr>
                                                 <th className="p-2 border-b">ID</th>
                                                 <th className="p-2 border-b">Name</th>
+                                                <th className="p-2 border-b text-right">Company Total</th>
                                                 <th className="p-2 border-b text-right">Agent Total</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-100">
-                                            {parsedData.map((row, idx) => (
-                                                <tr key={idx} className="hover:bg-gray-50">
-                                                    <td className="p-2 font-mono text-gray-600">{row.id}</td>
+                                            {parsedData.map((row, idx) => {
+                                                const mappedCode = MOBILE_TO_PAPER_MAP[row.id.toLowerCase()] || MOBILE_TO_PAPER_MAP[row.name?.toLowerCase()];
+                                                return (
+                                                <tr key={idx} className={`hover:bg-gray-50 ${mappedCode ? 'bg-blue-50/50' : ''}`}>
+                                                    <td className="p-2 font-mono text-gray-600">
+                                                        {row.id} 
+                                                        {mappedCode && <span className="ml-2 text-[9px] bg-blue-100 text-blue-700 px-1 rounded">→ {mappedCode.toUpperCase()}</span>}
+                                                    </td>
                                                     <td className="p-2 font-bold text-gray-800">{row.name}</td>
+                                                    <td className="p-2 text-right font-mono text-gray-500">{row.values[5]}</td>
                                                     <td className="p-2 text-right font-mono">
                                                         {row.values[16] || row.values[row.values.length-1]}
                                                     </td>
                                                 </tr>
-                                            ))}
+                                            )})}
                                         </tbody>
                                     </table>
                                 ) : (
