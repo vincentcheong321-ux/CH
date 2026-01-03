@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { getClients, getCashAdvances, saveCashAdvance, getCashCredits, saveCashCredit, getLedgerRecords, getNetAmount } from '../services/storageService';
 import { Client, LedgerRecord } from '../types';
@@ -9,7 +8,6 @@ import { useGlobalState } from '../context/GlobalStateContext';
 
 // Preview Component for showing weekly main ledger status
 const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, selectedDate: string }) => {
-    // ... (same as before)
     const [balance, setBalance] = useState<number | null>(null);
     const [dailyRecords, setDailyRecords] = useState<LedgerRecord[]>([]);
     const [loading, setLoading] = useState(true);
@@ -81,12 +79,19 @@ const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, se
 };
 
 // Component for Individual Client Input
-const TransactionRow = React.memo(({ client, value, onChange, onBlur, onFocus, onRemove, type, navState }: { 
-    client: Client, value: string, onChange: (id: string, val: string) => void, onBlur: (id: string) => void, onFocus: (id: string) => void, onRemove: (id: string) => void, type: 'ADV' | 'CRED', navState: any 
+const TransactionRow = React.memo(({ client, value, onChange, onBlur, onFocus, onRemove, type, navState, shouldAutoFocus }: { 
+    client: Client, value: string, onChange: (id: string, val: string) => void, onBlur: (id: string) => void, onFocus: (id: string) => void, onRemove: (id: string) => void, type: 'ADV' | 'CRED', navState: any, shouldAutoFocus?: boolean 
 }) => {
     const isAdv = type === 'ADV';
     const numVal = parseFloat(value);
     const hasValue = !isNaN(numVal) && numVal !== 0;
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (shouldAutoFocus && inputRef.current) {
+            inputRef.current.focus();
+        }
+    }, [shouldAutoFocus]);
 
     return (
         <div className="flex items-center justify-between p-3 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors animate-in fade-in">
@@ -97,6 +102,7 @@ const TransactionRow = React.memo(({ client, value, onChange, onBlur, onFocus, o
             <div className="w-32 md:w-40 relative">
                 <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-300 font-bold text-xs">$</span>
                 <input 
+                    ref={inputRef}
                     type="text" inputMode="decimal" placeholder="0.00" value={value} 
                     onChange={(e) => onChange(client.id, e.target.value)} 
                     onBlur={() => onBlur(client.id)}
@@ -133,6 +139,9 @@ const CashAdvanceCredit: React.FC = () => {
     const [isSelectingClient, setIsSelectingClient] = useState<{ type: 'ADV' | 'CRED' | null }>({ type: null });
     const [clientSearch, setClientSearch] = useState('');
     
+    // New state for auto-focus target
+    const [autoFocusClientId, setAutoFocusClientId] = useState<string | null>(null);
+    
     const blurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
@@ -166,6 +175,8 @@ const CashAdvanceCredit: React.FC = () => {
     }, []);
 
     const handleInputBlur = useCallback(async (cid: string, type: 'ADV' | 'CRED') => {
+        if (autoFocusClientId === cid) setAutoFocusClientId(null);
+
         // Immediate cleanup management to avoid racing with async save calls
         if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
         blurTimeoutRef.current = setTimeout(() => {
@@ -184,7 +195,7 @@ const CashAdvanceCredit: React.FC = () => {
             if (val === 0) setCredits(prev => { const n = {...prev}; delete n[cid]; return n; });
             else setCredits(prev => ({...prev, [cid]: val.toFixed(2)}));
         }
-    }, [selectedDate, advances, credits]);
+    }, [selectedDate, advances, credits, autoFocusClientId]);
 
     const handleRemoveClient = useCallback(async (cid: string, type: 'ADV' | 'CRED') => {
         if (type === 'ADV') {
@@ -211,6 +222,8 @@ const CashAdvanceCredit: React.FC = () => {
         else setCredits(prev => ({ ...prev, [client.id]: '' }));
         setIsSelectingClient({ type: null });
         setClientSearch('');
+        // Set the newly added client ID to auto-focus
+        setAutoFocusClientId(client.id);
     };
 
     const filteredClientList = useMemo(() => {
@@ -387,6 +400,7 @@ const CashAdvanceCredit: React.FC = () => {
                                                         onBlur={(id) => handleInputBlur(id, 'ADV')} 
                                                         onFocus={handleInputFocus}
                                                         onRemove={(id) => handleRemoveClient(id, 'ADV')}
+                                                        shouldAutoFocus={cid === autoFocusClientId}
                                                     />
                                                 ) : null;
                                             })}
@@ -425,6 +439,7 @@ const CashAdvanceCredit: React.FC = () => {
                                                         onBlur={(id) => handleInputBlur(id, 'CRED')} 
                                                         onFocus={handleInputFocus}
                                                         onRemove={(id) => handleRemoveClient(id, 'CRED')}
+                                                        shouldAutoFocus={cid === autoFocusClientId}
                                                     />
                                                 ) : null;
                                             })}

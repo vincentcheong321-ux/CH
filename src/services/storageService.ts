@@ -260,6 +260,24 @@ export const getAllLedgerRecords = async (): Promise<LedgerRecord[]> => {
     return [];
 };
 
+// Synchronous helper for ClientList display - now STRICTLY Main Ledger unless C06 (handled via manual check if needed, but here generic)
+export const getClientBalance = (clientId: string): number => {
+  // NOTE: This function reads from local storage 'ledger_records' key if used in legacy mode, 
+  // but since we are shifting to Supabase, this might return 0 if 'ledger_records' is empty.
+  // However, for completeness with the requested logic change:
+  const data = localStorage.getItem('ledger_records');
+  const allRecords: any[] = data ? JSON.parse(data) : [];
+  const records = allRecords
+    .filter(r => r.clientId === clientId)
+    .map(r => ({ ...r, column: r.column || 'main' } as LedgerRecord));
+
+  // OLD LOGIC REMOVED: No longer prioritizing Panel 1 (col1).
+  
+  // New Logic: Main Ledger Only
+  const mainRecords = records.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
+  return mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
+};
+
 export const saveLedgerRecord = async (record: Omit<LedgerRecord, 'id'>): Promise<LedgerRecord> => {
     if (supabase) {
         let signedAmount = record.operation === 'add' ? record.amount : (record.operation === 'subtract' ? -record.amount : 0);
@@ -445,7 +463,8 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
             idx === 0 ? { ...rec, operation: 'none' as const } : rec
         );
     } else if (clientCode.toUpperCase() === 'C19') {
-        rowsToCopy = sortedCluster.slice(-5);
+        // C19: Exactly 6 latest records (updated from 5)
+        rowsToCopy = sortedCluster.slice(-6);
     } else { return 0; }
 
     const sum = rowsToCopy.reduce((acc, r) => acc + getNetAmount(r), 0);
@@ -551,7 +570,13 @@ export const fetchClientTotalBalance = async (clientId: string): Promise<number>
     const clientCode = client?.code?.toUpperCase() || '';
 
     const sortedForSnapshot = [...records].sort((a,b) => b.date.localeCompare(a.date));
-    const latestSnapshot = sortedForSnapshot.find(r => r.id.startsWith('draw_') || r.typeLabel === '上欠');
+    
+    // STRICTLY find a snapshot that belongs to the MAIN ledger.
+    // This prevents picking up a P1 '上欠' record and calculating incorrectly.
+    const latestSnapshot = sortedForSnapshot.find(r => 
+        (r.id.startsWith('draw_') || r.typeLabel === '上欠') && 
+        (r.column === 'main' || !r.column)
+    );
     
     let effectiveRecords = records;
     if (latestSnapshot) {
@@ -559,7 +584,6 @@ export const fetchClientTotalBalance = async (clientId: string): Promise<number>
             if (r.id === latestSnapshot.id) return true; // Always include the snapshot
             if (r.date > latestSnapshot.date) return true; // Include later dates
             // Include records on SAME DAY as snapshot, as long as they are not OTHER snapshots
-            // This captures transactions made on the cutoff day (e.g. Sales)
             if (r.date === latestSnapshot.date && !r.id.startsWith('draw_') && r.typeLabel !== '上欠') return true;
             return false;
         });
@@ -595,8 +619,13 @@ export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: 
             const clientCode = client?.code?.toUpperCase() || '';
             const sortedForSnapshot = [...records].sort((a,b) => b.date.localeCompare(a.date));
             
-            // UPDATED: strictly find a snapshot BEFORE the dateLimit to ensure we recalculate everything up to dateLimit
-            const latestSnapshot = sortedForSnapshot.find(r => (r.id.startsWith('draw_') || r.typeLabel === '上欠') && r.date < dateLimit);
+            // STRICTLY find a snapshot that belongs to the MAIN ledger before the date limit.
+            // Ignore any snapshots that might exist in 'col1' or 'col2' (unless they are relevant to C06, handled separately).
+            const latestSnapshot = sortedForSnapshot.find(r => 
+                (r.id.startsWith('draw_') || r.typeLabel === '上欠') && 
+                (r.column === 'main' || !r.column) &&
+                r.date < dateLimit
+            );
             
             let effectiveRecords = records;
             if (latestSnapshot) {
