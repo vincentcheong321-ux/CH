@@ -761,34 +761,48 @@ const ClientLedger: React.FC = () => {
 
       {editingRecord && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 no-print font-sans">
-            <div className="bg-white rounded-xl shadow-xl w-full max-md p-6 max-h-[90vh] overflow-y-auto">
-                <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold">Edit Transaction</h2><button onClick={() => setEditingRecord(null)}><X size={24} /></button></div>
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-5 max-h-[90vh] overflow-y-auto">
+                <div className="flex justify-between items-center mb-4"><h2 className="text-lg font-bold">Edit Transaction</h2><button onClick={() => setEditingRecord(null)} className="p-1 hover:bg-gray-100 rounded-full"><X size={20} /></button></div>
                 <form onSubmit={handleUpdateRecord} className="space-y-4">
                     {/* Advanced Winnings Editor */}
                     {winningsEntries.length > 0 ? (
-                        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-3">
-                            <h3 className="text-sm font-bold text-gray-600 uppercase">Winning Entries Breakdown</h3>
+                        <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 space-y-2">
+                            <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Entries Breakdown</h3>
                             {winningsEntries.map((entry, idx) => (
-                                <div key={idx} className="grid grid-cols-[2rem_3rem_3rem_3rem_2rem] gap-2 items-center text-xs">
-                                    <input type="text" className="border p-1 rounded font-bold uppercase" value={entry.sides || ''} onChange={e => updateWinningEntry(idx, 'sides', e.target.value)} />
-                                    <input type="text" className="border p-1 rounded font-mono" value={entry.number || ''} onChange={e => updateWinningEntry(idx, 'number', e.target.value)} />
-                                    <input type="text" className="border p-1 rounded text-right" value={entry.bet || ''} onChange={e => updateWinningEntry(idx, 'bet', e.target.value)} />
-                                    <input type="text" className="border p-1 rounded text-right font-bold" value={entry.win || ''} onChange={e => updateWinningEntry(idx, 'win', e.target.value)} />
-                                    <input type="text" className="border p-1 rounded text-center" value={entry.pos || ''} onChange={e => updateWinningEntry(idx, 'pos', e.target.value)} />
+                                <div key={idx} className="grid grid-cols-[2rem_3rem_3rem_3rem_2rem] gap-1.5 items-center text-[10px]">
+                                    <input type="text" className="border p-1 rounded font-bold uppercase text-center bg-white" value={entry.sides || ''} onChange={e => updateWinningEntry(idx, 'sides', e.target.value)} />
+                                    <input type="text" className="border p-1 rounded font-mono text-center bg-white" value={entry.number || ''} onChange={e => updateWinningEntry(idx, 'number', e.target.value)} />
+                                    <input type="text" className="border p-1 rounded text-right bg-white" value={entry.bet || ''} onChange={e => updateWinningEntry(idx, 'bet', e.target.value)} />
+                                    <input type="text" className="border p-1 rounded text-right font-bold bg-white" value={entry.win || ''} onChange={e => updateWinningEntry(idx, 'win', e.target.value)} />
+                                    <input type="text" className="border p-1 rounded text-center bg-white" value={entry.pos || ''} onChange={e => updateWinningEntry(idx, 'pos', e.target.value)} />
                                 </div>
                             ))}
-                            <div className="text-xs text-center text-gray-400 mt-2">Modify values directly. Total amount will recalculate on save.</div>
                         </div>
                     ) : (
                         // Standard Editor Fields
                         <>
-                            <div><label className="block text-sm font-bold text-gray-500 uppercase">Amount</label><input type="number" step="0.01" value={editingRecord.amount} onChange={e => setEditingRecord({...editingRecord, amount: parseFloat(e.target.value)})} className="w-full p-2 border rounded"/></div>
-                            <div><label className="block text-sm font-bold text-gray-500 uppercase">Description</label><input type="text" value={editingRecord.description} onChange={e => setEditingRecord({...editingRecord, description: e.target.value})} className="w-full p-2 border rounded"/></div>
+                            <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Amount</label>
+                                <input type="number" step="0.01" value={editingRecord.amount} onChange={e => setEditingRecord({...editingRecord, amount: parseFloat(e.target.value)})} className="w-full p-2 border border-gray-200 rounded-lg font-mono text-base focus:ring-2 focus:ring-blue-500 outline-none"/>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Note</label>
+                                <input type="text" value={editingRecord.description} onChange={e => setEditingRecord({...editingRecord, description: e.target.value})} className="w-full p-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"/>
+                            </div>
                         </>
                     )}
                     
-                    <div><label className="block text-sm font-bold text-gray-500 uppercase">Column</label><select value={editingRecord.column} onChange={e => setEditingRecord({...editingRecord, column: e.target.value as any})} className="w-full p-2 border rounded"><option value="main">Main</option><option value="col1">Panel 1</option><option value="col2">Panel 2</option></select></div>
-                    <div className="flex justify-end pt-4"><button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Update</button></div>
+                    <div>
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Column</label>
+                        <select value={editingRecord.column} onChange={e => setEditingRecord({...editingRecord, column: e.target.value as any})} className="w-full p-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                            <option value="main">Main Ledger</option>
+                            <option value="col1">Panel 1 (P1)</option>
+                            <option value="col2">Panel 2 (P2)</option>
+                        </select>
+                    </div>
+                    <div className="flex justify-end pt-2">
+                        <button type="submit" className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-sm transition-all active:scale-95 text-sm">Update Transaction</button>
+                    </div>
                 </form>
             </div>
         </div>
