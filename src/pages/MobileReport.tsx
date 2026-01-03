@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ArrowLeft, RefreshCw, Save, CheckCircle, AlertCircle, History, FileText, Loader2, Zap, Calendar } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getClients, saveSaleRecord, saveMobileReportHistory, getMobileReportHistory, saveLedgerRecord, getLedgerRecords, updateLedgerRecord, deleteLedgerRecord } from '../services/storageService';
-import { Client } from '../types';
+import { Client, LedgerRecord } from '../types';
 import { useGlobalState } from '../context/GlobalStateContext';
 
 // Mapping: Mobile Code/Name -> Paper Code (Case Insensitive)
@@ -131,6 +131,10 @@ const MobileReport: React.FC = () => {
       let matchedCount = 0;
       let skippedCount = 0;
 
+      // Cache to track '电' records during this session to prevent race conditions
+      // Key: ClientID, Value: LedgerRecord (or stub with id)
+      const recordCache: Record<string, LedgerRecord> = {};
+
       for (const row of parsedData) {
           // Skip the Total row from saving logic if it was parsed
           if (row.id === '总额') continue;
@@ -198,21 +202,29 @@ const MobileReport: React.FC = () => {
                       const operation = companyAmount >= 0 ? 'add' : 'subtract';
                       const amount = Math.abs(companyAmount);
 
-                      // Check for existing records to PREVENT DUPLICATES
-                      const existingRecords = await getLedgerRecords(paperClient.id);
-                      const existingDian = existingRecords.find(r => 
-                          r.date === targetDate && 
-                          r.typeLabel === '电' &&
-                          r.column === 'main'
-                      );
+                      // Check CACHE first
+                      let existingDian = recordCache[paperClient.id];
+
+                      // If not in cache, fetch from DB
+                      if (!existingDian) {
+                          const existingRecords = await getLedgerRecords(paperClient.id);
+                          const found = existingRecords.find(r => 
+                              r.date === targetDate && 
+                              r.typeLabel === '电' &&
+                              r.column === 'main'
+                          );
+                          if (found) existingDian = found;
+                      }
 
                       if (existingDian) {
                           await updateLedgerRecord(existingDian.id, {
                               amount: amount,
                               operation: operation
                           });
+                          // Update cache
+                          recordCache[paperClient.id] = { ...existingDian, amount, operation };
                       } else {
-                          await saveLedgerRecord({
+                          const newRecord = await saveLedgerRecord({
                               clientId: paperClient.id,
                               date: targetDate,
                               description: '', 
@@ -222,6 +234,8 @@ const MobileReport: React.FC = () => {
                               column: 'main',
                               isVisible: true
                           });
+                          // Add to cache
+                          recordCache[paperClient.id] = newRecord;
                       }
                   }
               }
@@ -254,6 +268,9 @@ const MobileReport: React.FC = () => {
         const targetDate = reportDate;
         let updateCount = 0;
 
+        // Local cache to ensure we track creations/updates within this loop
+        const recordCache: Record<string, LedgerRecord> = {};
+
         for (const row of parsedData) {
             if (row.id === '总额') continue;
             
@@ -269,15 +286,31 @@ const MobileReport: React.FC = () => {
                     const companyAmount = parseFloat(String(companyTotalRaw).replace(/,/g, ''));
                     
                     if (!isNaN(companyAmount) && companyAmount !== 0) {
-                        // Fetch existing records to dedupe/update
-                        const existingRecords = await getLedgerRecords(paperClient.id);
                         
-                        // Find ALL '电' records for this date to handle duplicate cleanups
-                        const existingDianRecords = existingRecords.filter(r => 
-                            r.date === targetDate && 
-                            r.typeLabel === '电' &&
-                            r.column === 'main'
-                        );
+                        // 1. Check Local Cache First
+                        let existingDian = recordCache[paperClient.id];
+
+                        // 2. If not in cache, check Database
+                        if (!existingDian) {
+                            const existingRecords = await getLedgerRecords(paperClient.id);
+                            const dbMatches = existingRecords.filter(r => 
+                                r.date === targetDate && 
+                                r.typeLabel === '电' &&
+                                r.column === 'main'
+                            );
+
+                            if (dbMatches.length > 0) {
+                                // Use the first one
+                                existingDian = dbMatches[0];
+                                
+                                // Cleanup duplicates if DB has them
+                                if (dbMatches.length > 1) {
+                                    for (let i = 1; i < dbMatches.length; i++) {
+                                        await deleteLedgerRecord(dbMatches[i].id);
+                                    }
+                                }
+                            }
+                        }
 
                         // Logic:
                         // Company Total > 0 (Company Won) -> Client Owes -> Add
@@ -285,22 +318,17 @@ const MobileReport: React.FC = () => {
                         const operation = companyAmount >= 0 ? 'add' : 'subtract';
                         const amount = Math.abs(companyAmount);
 
-                        if (existingDianRecords.length > 0) {
-                            // Update the FIRST one found
-                            await updateLedgerRecord(existingDianRecords[0].id, {
+                        if (existingDian) {
+                            // Update existing record
+                            await updateLedgerRecord(existingDian.id, {
                                 amount: amount,
                                 operation: operation
                             });
-                            
-                            // AUTO-FIX: If multiple duplicates exist, delete the extras
-                            if (existingDianRecords.length > 1) {
-                                for (let i = 1; i < existingDianRecords.length; i++) {
-                                    await deleteLedgerRecord(existingDianRecords[i].id);
-                                }
-                            }
+                            // Update cache
+                            recordCache[paperClient.id] = { ...existingDian, amount, operation };
                         } else {
-                            // Create new if none exist
-                            await saveLedgerRecord({
+                            // Create new record
+                            const newRec = await saveLedgerRecord({
                                 clientId: paperClient.id,
                                 date: targetDate,
                                 description: '',
@@ -310,6 +338,8 @@ const MobileReport: React.FC = () => {
                                 column: 'main',
                                 isVisible: true
                             });
+                            // Update cache
+                            recordCache[paperClient.id] = newRec;
                         }
                         updateCount++;
                     }
