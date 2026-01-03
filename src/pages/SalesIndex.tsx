@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Search, ChevronLeft, ChevronRight, Loader2, Calendar, Smartphone, FileText, DollarSign, RefreshCw, FileSpreadsheet, Zap, CheckCircle, TrendingUp, Info } from 'lucide-react';
-import { getClients, getSalesForDates, saveSaleRecord, getLedgerRecords, updateLedgerRecord, saveLedgerRecord } from '../services/storageService';
+import { getClients, getSalesForDates, saveSaleRecord, getLedgerRecords, updateLedgerRecord, saveLedgerRecord, deleteLedgerRecord } from '../services/storageService';
 import { Client, SaleRecord } from '../types';
 import { MONTH_NAMES, getWeeksForMonth } from '../utils/reportUtils';
 import { useGlobalState } from '../context/GlobalStateContext';
@@ -322,13 +321,42 @@ const SalesIndex: React.FC = () => {
                       const rawData = record.mobileRawData;
                       if (!rawData || rawData.length < 6) continue;
                       const companyAmount = parseFloat(String(rawData[5]).replace(/,/g, ''));
+                      
                       if (!isNaN(companyAmount) && companyAmount !== 0) {
                           const records = await getLedgerRecords(paperClient.id);
-                          const existingDian = records.find(r => r.date === record.date && r.typeLabel === '电' && r.column === 'main');
-                          const operation = companyAmount >= 0 ? 'subtract' : 'add';
+                          
+                          // Find duplicates or existing '电' records
+                          const existingDianRecords = records.filter(r => 
+                              r.date === record.date && 
+                              r.typeLabel === '电' && 
+                              r.column === 'main'
+                          );
+
+                          // Correct Logic: Positive Company Total = Company Won = Client Owes = Add Debt
+                          const operation = companyAmount >= 0 ? 'add' : 'subtract';
                           const amount = Math.abs(companyAmount);
-                          if (existingDian) { await updateLedgerRecord(existingDian.id, { amount, operation }); } 
-                          else { await saveLedgerRecord({ clientId: paperClient.id, date: record.date, description: '', typeLabel: '电', amount, operation, column: 'main', isVisible: true }); }
+                          
+                          if (existingDianRecords.length > 0) {
+                              // Update the first one
+                              await updateLedgerRecord(existingDianRecords[0].id, { amount, operation });
+                              // Clean up duplicates if found
+                              if (existingDianRecords.length > 1) {
+                                  for (let i = 1; i < existingDianRecords.length; i++) {
+                                      await deleteLedgerRecord(existingDianRecords[i].id);
+                                  }
+                              }
+                          } else { 
+                              await saveLedgerRecord({ 
+                                  clientId: paperClient.id, 
+                                  date: record.date, 
+                                  description: '', 
+                                  typeLabel: '电', 
+                                  amount, 
+                                  operation, 
+                                  column: 'main', 
+                                  isVisible: true 
+                              }); 
+                          }
                           updateCount++;
                       }
                   }
