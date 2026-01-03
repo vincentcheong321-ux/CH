@@ -92,33 +92,45 @@ export const getCategories = (): TransactionCategory[] => {
   const data = localStorage.getItem(CATEGORIES_KEY);
   let categories: TransactionCategory[] = data ? JSON.parse(data) : [];
 
+  // Reordered Defaults: Group Addition on left (odd index in 1-based or 0, 2, 4...) and Deductions on right
   const defaults: TransactionCategory[] = [
-    { id: '1', label: '收', operation: 'add', color: 'bg-green-100 text-green-800' },
-    { id: '2', label: '中', operation: 'subtract', color: 'bg-red-100 text-red-800' },
-    { id: '3', label: '出', operation: 'subtract', color: 'bg-red-100 text-red-800' },
-    { id: '4', label: '支钱', operation: 'add', color: 'bg-green-100 text-green-800' },
-    { id: '5', label: '上欠', operation: 'add', color: 'bg-green-100 text-green-800' },
-    { id: '6', label: '%', operation: 'subtract', color: 'bg-red-100 text-red-800' },
-    { id: '7', label: '来', operation: 'subtract', color: 'bg-red-100 text-red-800' },
-    { id: '8', label: '电', operation: 'add', color: 'bg-green-100 text-green-800' },
+    { id: '1', label: '收', operation: 'add', color: 'bg-green-100 text-green-800' },      // Left
+    { id: '2', label: '中', operation: 'subtract', color: 'bg-red-100 text-red-800' },    // Right
+    { id: '4', label: '支钱', operation: 'add', color: 'bg-green-100 text-green-800' },   // Left
+    { id: '3', label: '出', operation: 'subtract', color: 'bg-red-100 text-red-800' },    // Right
+    { id: '5', label: '上欠', operation: 'add', color: 'bg-green-100 text-green-800' },   // Left
+    { id: '6', label: '%', operation: 'subtract', color: 'bg-red-100 text-red-800' },      // Right
+    { id: '8', label: '电', operation: 'add', color: 'bg-green-100 text-green-800' },      // Left
+    { id: '7', label: '来', operation: 'subtract', color: 'bg-red-100 text-red-800' },    // Right
   ];
 
   if (categories.length === 0) {
     categories = defaults;
     localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories));
   } else {
+    // Maintenance migration (ensuring all exist and colors are correct)
     let updated = false;
-    if (!categories.find(c => c.label === '上欠')) { categories.push({ id: generateId(), label: '上欠', operation: 'add', color: 'bg-green-100 text-green-800' }); updated = true; }
-    if (!categories.find(c => c.label === '%')) { categories.push({ id: generateId(), label: '%', operation: 'subtract', color: 'bg-red-100 text-red-800' }); updated = true; }
-    if (!categories.find(c => c.label === '来')) { categories.push({ id: generateId(), label: '来', operation: 'subtract', color: 'bg-red-100 text-red-800' }); updated = true; }
-    const dianIndex = categories.findIndex(c => c.label === '电');
-    if (dianIndex === -1) { categories.push({ id: generateId(), label: '电', operation: 'add', color: 'bg-green-100 text-green-800' }); updated = true; } 
+    const missing = defaults.filter(d => !categories.find(c => c.label === d.label));
+    if (missing.length > 0) {
+        categories = [...categories, ...missing];
+        updated = true;
+    }
+
     categories = categories.map(c => {
-        if (c.operation === 'add' && c.color.includes('bg-blue-100')) { updated = true; return { ...c, color: 'bg-green-100 text-green-800' }; }
-        if (c.label === '出' && c.color.includes('bg-orange-100')) { updated = true; return { ...c, color: 'bg-red-100 text-red-800' }; }
+        if (c.operation === 'add' && !c.color.includes('bg-green-100')) {
+            updated = true;
+            return { ...c, color: 'bg-green-100 text-green-800' };
+        }
+        if (c.operation === 'subtract' && !c.color.includes('bg-red-100')) {
+            updated = true;
+            return { ...c, color: 'bg-red-100 text-red-800' };
+        }
         return c;
     });
-    if (updated) localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories));
+
+    if (updated) {
+        localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories));
+    }
   }
   return categories;
 };
@@ -258,7 +270,6 @@ export const saveLedgerRecord = async (record: Omit<LedgerRecord, 'id'>): Promis
                 typeLabel: record.typeLabel, 
                 operation: record.operation, 
                 column: record.column,
-                // Include sortWeight if provided (for carry-forwards)
                 sortWeight: (record as any).sortWeight || 0
             }
         }]).select();
@@ -427,8 +438,8 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
 
     let rowsToCopy: LedgerRecord[] = [];
     if (clientCode.toUpperCase() === 'Z21') {
-        // Z21 Special Logic: Bring ALL records from last week's cluster, first (oldest) is gray (operation: none)
-        rowsToCopy = sortedCluster.map((rec, idx) => 
+        // Z21 Special Logic: Bring exactly 5 records to maintain window, mark oldest as gray
+        rowsToCopy = sortedCluster.slice(-5).map((rec, idx) => 
             idx === 0 ? { ...rec, operation: 'none' as const } : rec
         );
     } else if (clientCode.toUpperCase() === 'C19') {
@@ -438,13 +449,17 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
 
     const sum = rowsToCopy.reduce((acc, r) => acc + getNetAmount(r), 0);
     
-    // Forced sequential inserts with index weight to guarantee arrangement in sortLedgerRecords
+    // Sequential inserts with index weight
     let weightIdx = 0;
     for (const r of rowsToCopy) {
         let signedAmount = r.operation === 'add' ? r.amount : (r.operation === 'subtract' ? -r.amount : r.amount);
         
-        // Use exact check on sortWeight and description to prevent duplication
-        const { data: dupes } = await supabase.from('financial_journal').select('id').eq('client_id', clientId).eq('entry_date', targetDate).eq('amount', signedAmount).contains('data', { description: r.description, column: 'col1', sortWeight: weightIdx }); 
+        // Stricter duplication check to prevent 'extra record' issue
+        // Check by client + targetDate + description + column (ignoring operation/amount shift if already exists)
+        const { data: dupes } = await supabase.from('financial_journal').select('id')
+            .eq('client_id', clientId)
+            .eq('entry_date', targetDate)
+            .contains('data', { description: r.description, column: 'col1', sortWeight: weightIdx }); 
         
         if (!dupes || dupes.length === 0) {
             await supabase.from('financial_journal').insert({
@@ -455,11 +470,11 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
                     operation: r.operation, 
                     column: 'col1', 
                     isCarryForward: true,
-                    sortWeight: weightIdx++ // Assign sequential weight for deterministic sorting
+                    sortWeight: weightIdx++ 
                 }
             });
         } else {
-            weightIdx++; // Increment even if skipped to keep parity
+            weightIdx++; 
         }
     }
     return sum;
@@ -573,7 +588,7 @@ export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: 
                 const col2Records = effectiveRecords.filter(r => r.column === 'col2' && r.isVisible);
                 balances[clientId] = col2Records.length > 0 ? col2Records.reduce((acc, r) => acc + getNetAmount(r), 0) : effectiveRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible).reduce((acc, r) => acc + getNetAmount(r), 0);
             } else if (clientCode === 'C13' || clientCode === 'Z21' || clientCode === 'C19') {
-                const col1Records = effectiveRecords.filter(r => r.column === 'col1' && r.isVisible);
+                const col1Records = HouseRulesFilter(effectiveRecords, 'col1');
                 balances[clientId] = col1Records.length > 0 ? col1Records.reduce((acc, r) => acc + getNetAmount(r), 0) : effectiveRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible).reduce((acc, r) => acc + getNetAmount(r), 0);
             } else {
                 balances[clientId] = effectiveRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible).reduce((acc, r) => acc + getNetAmount(r), 0);
@@ -582,6 +597,10 @@ export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: 
         return balances;
     }
     return {};
+};
+
+const HouseRulesFilter = (records: LedgerRecord[], column: string) => {
+    return records.filter(r => r.column === column && r.isVisible);
 };
 
 export const getTotalDrawReceivables = async (): Promise<number> => {
