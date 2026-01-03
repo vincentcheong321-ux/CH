@@ -644,14 +644,14 @@ const ClientLedger: React.FC = () => {
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="flex flex-col lg:flex-row gap-8">
-            {/* --- LEFT COLUMN: CONTROLS (Updated Width) --- */}
+            {/* --- LEFT COLUMN: CONTROLS (Addition on left, Deduction on right) --- */}
             <div className="lg:w-56 xl:w-64 flex-shrink-0 space-y-6 no-print">
                 <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
                     <h3 className="font-bold text-gray-500 text-xs uppercase tracking-wider mb-2 text-center lg:text-left">Panel Selector</h3>
-                    <div className="bg-gray-100 rounded-lg p-1 flex w-full">
-                        <button onClick={() => setActiveColumn('col1')} className={`flex-1 px-2 py-2 text-[10px] md:text-xs font-bold rounded-md transition-all ${activeColumn === 'col1' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:bg-gray-200/50'}`}>P1</button>
-                        <button onClick={() => setActiveColumn('col2')} className={`flex-1 px-2 py-2 text-[10px] md:text-xs font-bold rounded-md transition-all ${activeColumn === 'col2' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:bg-gray-200/50'}`}>P2</button>
-                        <button onClick={() => setActiveColumn('main')} className={`flex-1 px-2 py-2 text-[10px] md:text-xs font-bold rounded-md transition-all ${activeColumn === 'main' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>Main</button>
+                    <div className="bg-gray-100 rounded-lg p-1 flex w-full shadow-inner">
+                        <button onClick={() => setActiveColumn('col1')} className={`flex-1 px-2 py-2 text-[10px] md:text-xs font-bold rounded-md transition-all ${activeColumn === 'col1' ? 'bg-white text-blue-700 shadow-sm border border-blue-100' : 'text-gray-500 hover:bg-gray-200/50'}`}>P1</button>
+                        <button onClick={() => setActiveColumn('col2')} className={`flex-1 px-2 py-2 text-[10px] md:text-xs font-bold rounded-md transition-all ${activeColumn === 'col2' ? 'bg-white text-blue-700 shadow-sm border border-blue-100' : 'text-gray-500 hover:bg-gray-200/50'}`}>P2</button>
+                        <button onClick={() => setActiveColumn('main')} className={`flex-1 px-2 py-2 text-[10px] md:text-xs font-bold rounded-md transition-all ${activeColumn === 'main' ? 'bg-blue-600 text-white shadow-md border border-blue-700' : 'text-gray-500 hover:bg-gray-200/50'}`}>Main</button>
                     </div>
                 </div>
 
@@ -683,15 +683,16 @@ const ClientLedger: React.FC = () => {
                         <form onSubmit={handleSubmit} className="p-4 space-y-4">
                             {activeCategory.label === '' && (
                                 <div>
+                                    {/* Operation Toggles: Add left, Deduct right */}
                                     <div className="flex space-x-2">
-                                        <button type="button" onClick={() => setCurrentOperation('add')} className={`flex-1 py-1.5 rounded-lg font-bold text-[10px] ${currentOperation === 'add' ? 'bg-green-100 text-green-800 ring-2 ring-green-500' : 'bg-gray-100 text-gray-500'}`}>(+) Add</button>
-                                        <button type="button" onClick={() => setCurrentOperation('subtract')} className={`flex-1 py-1.5 rounded-lg font-bold text-[10px] ${currentOperation === 'subtract' ? 'bg-red-100 text-red-800 ring-2 ring-red-500' : 'bg-gray-100 text-gray-500'}`}>(-) Ded</button>
-                                        <button type="button" onClick={() => setCurrentOperation('none')} className={`flex-1 py-1.5 rounded-lg font-bold text-[10px] ${currentOperation === 'none' ? 'bg-gray-200 text-gray-800 ring-2 ring-gray-500' : 'bg-gray-100 text-gray-500'}`}>(Ø) Note</button>
+                                        <button type="button" onClick={() => setCurrentOperation('add')} className={`flex-1 py-1.5 rounded-lg font-bold text-[10px] transition-all ${currentOperation === 'add' ? 'bg-green-600 text-white shadow-md ring-2 ring-green-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>(+) Add</button>
+                                        <button type="button" onClick={() => setCurrentOperation('none')} className={`flex-1 py-1.5 rounded-lg font-bold text-[10px] transition-all ${currentOperation === 'none' ? 'bg-gray-600 text-white shadow-md ring-2 ring-gray-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>(Ø) Note</button>
+                                        <button type="button" onClick={() => setCurrentOperation('subtract')} className={`flex-1 py-1.5 rounded-lg font-bold text-[10px] transition-all ${currentOperation === 'subtract' ? 'bg-red-600 text-white shadow-md ring-2 ring-red-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>(-) Ded</button>
                                     </div>
                                 </div>
                             )}
-                            <div><label className="text-[10px] font-bold text-gray-400 uppercase">Amount</label><input ref={amountInputRef} autoFocus type="number" step="0.01" required value={amount} onChange={e => setAmount(e.target.value)} className="w-full mt-1 p-2 text-xl font-mono border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="0.00"/></div>
-                            <div><label className="text-[10px] font-bold text-gray-400 uppercase">Note</label><input type="text" value={description} onChange={e => setDescription(e.target.value)} className="w-full mt-1 p-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"/></div>
+                            <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Amount</label><input ref={amountInputRef} autoFocus type="number" step="0.01" required value={amount} onChange={e => setAmount(e.target.value)} className="w-full mt-1 p-2 text-xl font-mono border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="0.00"/></div>
+                            <div><label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Note</label><input type="text" value={description} onChange={e => setDescription(e.target.value)} className="w-full mt-1 p-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"/></div>
                             <div><button type="submit" className={`w-full py-2.5 rounded-lg text-white font-bold shadow-md active:scale-95 transition-transform text-sm ${activeCategory.label === '' ? (currentOperation === 'add' ? 'bg-green-600' : currentOperation === 'subtract' ? 'bg-red-600' : 'bg-gray-600') : (activeCategory.operation === 'add' ? 'bg-green-600' : activeCategory.operation === 'subtract' ? 'bg-red-600' : 'bg-gray-600')}`}>Confirm</button></div>
                         </form>
                     </div>

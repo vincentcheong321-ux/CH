@@ -62,9 +62,12 @@ const sortLedgerRecords = (records: LedgerRecord[]) => {
         const pB = getRecordSortPriority(b);
         if (pA !== pB) return pA - pB;
 
-        // 4. Creation Time Tie-breaker (Final)
-        // Crucial for carry-forward records which share the same entry date.
-        // We use the database creation time to preserve the original sequence.
+        // 4. Sort Weight (Crucial for carry-forwards created on the same target date)
+        const swA = (a as any).sortWeight || 0;
+        const swB = (b as any).sortWeight || 0;
+        if (swA !== swB) return swA - swB;
+
+        // 5. Creation Time Tie-breaker (Final fallback)
         if (a.createdAt && b.createdAt) {
             return a.createdAt.localeCompare(b.createdAt);
         }
@@ -177,7 +180,9 @@ const mapJournalToLedgerRecord = (row: any): LedgerRecord => {
         operation: row.data?.operation || (row.amount === 0 ? 'none' : (isAdd ? 'add' : 'subtract')),
         column: row.data?.column || 'main',
         isVisible: true,
-        createdAt: row.created_at
+        createdAt: row.created_at,
+        // Flatten metadata
+        ...row.data
     };
 
     switch (row.entry_type) {
@@ -248,7 +253,14 @@ export const saveLedgerRecord = async (record: Omit<LedgerRecord, 'id'>): Promis
             entry_date: record.date,
             entry_type: 'MANUAL',
             amount: signedAmount,
-            data: { description: record.description, typeLabel: record.typeLabel, operation: record.operation, column: record.column }
+            data: { 
+                description: record.description, 
+                typeLabel: record.typeLabel, 
+                operation: record.operation, 
+                column: record.column,
+                // Include sortWeight if provided (for carry-forwards)
+                sortWeight: (record as any).sortWeight || 0
+            }
         }]).select();
         if (data && data[0]) return mapJournalToLedgerRecord(data[0]);
     }
@@ -261,7 +273,13 @@ export const updateLedgerRecord = async (id: string, updates: Partial<LedgerReco
         let signedAmount = updates.operation === 'add' ? updates.amount! : (updates.operation === 'subtract' ? -updates.amount! : 0);
         await supabase.from('financial_journal').update({
             amount: signedAmount,
-            data: { description: updates.description, typeLabel: updates.typeLabel, operation: updates.operation, column: updates.column }
+            data: { 
+                description: updates.description, 
+                typeLabel: updates.typeLabel, 
+                operation: updates.operation, 
+                column: updates.column,
+                sortWeight: (updates as any).sortWeight || 0
+            }
         }).eq('id', id);
     }
 };
@@ -404,7 +422,7 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
         return d >= clusterStart && d <= latestDate;
     }).map(mapJournalToLedgerRecord);
 
-    // ASCENDING Chronological note-sort
+    // ASCENDING Chronological note-sort of the source cluster
     const sortedCluster = sortLedgerRecords(mappedCluster);
 
     let rowsToCopy: LedgerRecord[] = [];
@@ -419,17 +437,29 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
     } else { return 0; }
 
     const sum = rowsToCopy.reduce((acc, r) => acc + getNetAmount(r), 0);
+    
+    // Forced sequential inserts with index weight to guarantee arrangement in sortLedgerRecords
+    let weightIdx = 0;
     for (const r of rowsToCopy) {
         let signedAmount = r.operation === 'add' ? r.amount : (r.operation === 'subtract' ? -r.amount : r.amount);
         
-        const { data: dupes } = await supabase.from('financial_journal').select('id').eq('client_id', clientId).eq('entry_date', targetDate).eq('amount', signedAmount).contains('data', { description: r.description, column: 'col1' }); 
+        // Use exact check on sortWeight and description to prevent duplication
+        const { data: dupes } = await supabase.from('financial_journal').select('id').eq('client_id', clientId).eq('entry_date', targetDate).eq('amount', signedAmount).contains('data', { description: r.description, column: 'col1', sortWeight: weightIdx }); 
+        
         if (!dupes || dupes.length === 0) {
-            // We use the original records' relative arrangement.
-            // Small delay or sequential execution helps, but the sortLedgerRecords createdAt tie-breaker is the true fix.
             await supabase.from('financial_journal').insert({
                 client_id: clientId, entry_date: targetDate, entry_type: 'MANUAL', amount: signedAmount,
-                data: { description: r.description, typeLabel: r.typeLabel, operation: r.operation, column: 'col1', isCarryForward: true }
+                data: { 
+                    description: r.description, 
+                    typeLabel: r.typeLabel, 
+                    operation: r.operation, 
+                    column: 'col1', 
+                    isCarryForward: true,
+                    sortWeight: weightIdx++ // Assign sequential weight for deterministic sorting
+                }
             });
+        } else {
+            weightIdx++; // Increment even if skipped to keep parity
         }
     }
     return sum;
@@ -494,8 +524,6 @@ export const fetchClientTotalBalance = async (clientId: string): Promise<number>
         effectiveRecords = records.filter(r => {
             if (r.id === latestSnapshot.id) return true; 
             if (r.date > latestSnapshot.date) return true; 
-            // PREVENT DOUBLING: If same date as snapshot, ONLY keep if it's the snapshot itself.
-            // This assumes snapshot represents the final balance for its specific date.
             return false;
         });
     }
