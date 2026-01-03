@@ -568,11 +568,9 @@ export const fetchClientTotalBalance = async (clientId: string): Promise<number>
     if (clientCode === 'C06') {
         const col2Records = effectiveRecords.filter(r => r.column === 'col2' && r.isVisible);
         if (col2Records.length > 0) return col2Records.reduce((acc, r) => acc + getNetAmount(r), 0);
-    } else {
-        const col1Records = effectiveRecords.filter(r => r.column === 'col1' && r.isVisible);
-        if (col1Records.length > 0) return col1Records.reduce((acc, r) => acc + getNetAmount(r), 0);
-    }
+    } 
     
+    // Default: Main Ledger Only (Includes snapshot if it is in main)
     const mainRecords = effectiveRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
     return mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
 };
@@ -615,9 +613,9 @@ export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: 
                 const col2Records = effectiveRecords.filter(r => r.column === 'col2' && r.isVisible);
                 balances[clientId] = col2Records.length > 0 ? col2Records.reduce((acc, r) => acc + getNetAmount(r), 0) : effectiveRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible).reduce((acc, r) => acc + getNetAmount(r), 0);
             } else {
-                // Unified logic for C13, Z21, C19 and generic clients: Priority P1 -> Main
-                const col1Records = effectiveRecords.filter(r => r.column === 'col1' && r.isVisible);
-                balances[clientId] = col1Records.length > 0 ? col1Records.reduce((acc, r) => acc + getNetAmount(r), 0) : effectiveRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible).reduce((acc, r) => acc + getNetAmount(r), 0);
+                // Unified logic for all other clients: Use Final Total Balance of Main Ledger (ignore P1)
+                const mainRecords = effectiveRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
+                balances[clientId] = mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
             }
         });
         return balances;

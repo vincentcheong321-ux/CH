@@ -1,4 +1,3 @@
-
 import { ArrowLeft, Check, ChevronLeft, ChevronRight, Download, ExternalLink, GripHorizontal, Hash, Medal, Minus, Pencil, Plus, Printer, RefreshCw, Trash2, Trophy, X, Zap } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
@@ -324,11 +323,8 @@ const ClientLedger: React.FC = () => {
     const val = parseFloat(amount);
     if (isNaN(val)) return;
     
-    // Default to Today's date for new entry (within context of current view if possible)
     let dateToUse = new Date().toISOString().split('T')[0];
     
-    // If today is NOT in the currently viewed week, use the LAST day of the viewed week
-    // This prevents confusion where user enters data for a week they aren't looking at
     if (activeDateStrings.length > 0 && !activeDateStrings.includes(dateToUse)) {
         dateToUse = activeDateStrings[activeDateStrings.length - 1];
     }
@@ -474,6 +470,9 @@ const ClientLedger: React.FC = () => {
   const col1Ledger = useMemo(() => calculateColumn('col1'), [weekRecords]);
   const col2Ledger = useMemo(() => calculateColumn('col2'), [weekRecords]);
 
+  // CHANGED: Use Main Ledger Only for the header total balance
+  const totalOwed = mainLedger.finalBalance;
+
   const LedgerColumnView = ({ data, footerLabel = "收", isPanel1 = false }: { data: ReturnType<typeof calculateColumn>, footerLabel?: string, isPanel1?: boolean }) => {
       if (data.processed.length === 0) return <div className="flex-1 min-h-[50px]" />;
 
@@ -594,9 +593,9 @@ const ClientLedger: React.FC = () => {
           </div>
 
           <div className="flex items-center space-x-2">
-             <div className="text-right mr-2 hidden md:block">
-                <p className={`text-lg font-bold leading-tight ${weekTotal >= 0 ? 'text-green-600' : 'text-red-600'}`}>${Math.abs(weekTotal).toLocaleString()}</p>
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Week Activity</p>
+             <div className="text-right mr-2">
+                <p className={`text-lg font-bold leading-tight ${totalOwed >= 0 ? 'text-green-600' : 'text-red-600'}`}>${Math.abs(totalOwed).toLocaleString()}</p>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{totalOwed >= 0 ? 'OWES' : 'CREDIT'}</p>
              </div>
              <div className="hidden md:flex space-x-2">
                  <button onClick={handleDownloadImage} disabled={isDownloading} className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-50 shadow-sm disabled:opacity-50" title="Download Image">
