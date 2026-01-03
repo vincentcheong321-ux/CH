@@ -559,23 +559,18 @@ export const fetchClientTotalBalance = async (clientId: string): Promise<number>
             if (r.id === latestSnapshot.id) return true; // Always include the snapshot
             if (r.date > latestSnapshot.date) return true; // Include later dates
             // Include records on SAME DAY as snapshot, as long as they are not OTHER snapshots
+            // This captures transactions made on the cutoff day (e.g. Sales)
             if (r.date === latestSnapshot.date && !r.id.startsWith('draw_') && r.typeLabel !== '上欠') return true;
             return false;
         });
     }
 
-    const mainDian = effectiveRecords.filter(r => r.column === 'main' && r.typeLabel === '电' && r.isVisible).reduce((acc, r) => acc + getNetAmount(r), 0);
-
     if (clientCode === 'C06') {
         const col2Records = effectiveRecords.filter(r => r.column === 'col2' && r.isVisible);
-        if (col2Records.length > 0) {
-            return col2Records.reduce((acc, r) => acc + getNetAmount(r), 0) + mainDian;
-        }
+        if (col2Records.length > 0) return col2Records.reduce((acc, r) => acc + getNetAmount(r), 0);
     } else {
         const col1Records = effectiveRecords.filter(r => r.column === 'col1' && r.isVisible);
-        if (col1Records.length > 0) {
-            return col1Records.reduce((acc, r) => acc + getNetAmount(r), 0) + mainDian;
-        }
+        if (col1Records.length > 0) return col1Records.reduce((acc, r) => acc + getNetAmount(r), 0);
     }
     
     const mainRecords = effectiveRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
@@ -613,23 +608,13 @@ export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: 
                 });
             }
 
-            const mainDian = effectiveRecords.filter(r => r.column === 'main' && r.typeLabel === '电' && r.isVisible).reduce((acc, r) => acc + getNetAmount(r), 0);
-
             if (clientCode === 'C06') {
                 const col2Records = effectiveRecords.filter(r => r.column === 'col2' && r.isVisible);
-                if (col2Records.length > 0) {
-                    balances[clientId] = col2Records.reduce((acc, r) => acc + getNetAmount(r), 0) + mainDian;
-                } else {
-                    balances[clientId] = effectiveRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible).reduce((acc, r) => acc + getNetAmount(r), 0);
-                }
+                balances[clientId] = col2Records.length > 0 ? col2Records.reduce((acc, r) => acc + getNetAmount(r), 0) : effectiveRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible).reduce((acc, r) => acc + getNetAmount(r), 0);
             } else {
                 // Unified logic for C13, Z21, C19 and generic clients: Priority P1 -> Main
                 const col1Records = effectiveRecords.filter(r => r.column === 'col1' && r.isVisible);
-                if (col1Records.length > 0) {
-                    balances[clientId] = col1Records.reduce((acc, r) => acc + getNetAmount(r), 0) + mainDian;
-                } else {
-                    balances[clientId] = effectiveRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible).reduce((acc, r) => acc + getNetAmount(r), 0);
-                }
+                balances[clientId] = col1Records.length > 0 ? col1Records.reduce((acc, r) => acc + getNetAmount(r), 0) : effectiveRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible).reduce((acc, r) => acc + getNetAmount(r), 0);
             }
         });
         return balances;
