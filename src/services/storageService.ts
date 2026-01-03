@@ -46,12 +46,12 @@ const sortLedgerRecords = (records: LedgerRecord[]) => {
         const scoreB = getNoteDateScore(`${b.typeLabel} ${b.description}`, b.date);
         
         if (scoreA !== 0 && scoreB !== 0) {
-            return scoreA - scoreB;
+            if (scoreA !== scoreB) return scoreA - scoreB;
+        } else if (scoreA !== 0) {
+            return -1;
+        } else if (scoreB !== 0) {
+            return 1;
         }
-        
-        // If one has a note date and other doesn't, put dated ones first
-        if (scoreA !== 0) return -1;
-        if (scoreB !== 0) return 1;
 
         // 2. Database/Entry Date (Secondary)
         if (a.date < b.date) return -1;
@@ -60,7 +60,16 @@ const sortLedgerRecords = (records: LedgerRecord[]) => {
         // 3. Priority Grouping (Tie breaker)
         const pA = getRecordSortPriority(a);
         const pB = getRecordSortPriority(b);
-        return pA - pB;
+        if (pA !== pB) return pA - pB;
+
+        // 4. Creation Time Tie-breaker (Final)
+        // Crucial for carry-forward records which share the same entry date.
+        // We use the database creation time to preserve the original sequence.
+        if (a.createdAt && b.createdAt) {
+            return a.createdAt.localeCompare(b.createdAt);
+        }
+
+        return 0;
     });
     return records;
 };
@@ -167,7 +176,8 @@ const mapJournalToLedgerRecord = (row: any): LedgerRecord => {
         typeLabel: row.data?.typeLabel || '',
         operation: row.data?.operation || (row.amount === 0 ? 'none' : (isAdd ? 'add' : 'subtract')),
         column: row.data?.column || 'main',
-        isVisible: true
+        isVisible: true,
+        createdAt: row.created_at
     };
 
     switch (row.entry_type) {
@@ -410,13 +420,12 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
 
     const sum = rowsToCopy.reduce((acc, r) => acc + getNetAmount(r), 0);
     for (const r of rowsToCopy) {
-        // Fix: Even if operation is 'none' (marked down), store the magnitude so it shows up in the UI (not as 0).
-        // Since operation: 'none' means getNetAmount returns 0, the sum logic is safe.
-        // We use a positive magnitude for 'none' to ensure visibility.
         let signedAmount = r.operation === 'add' ? r.amount : (r.operation === 'subtract' ? -r.amount : r.amount);
         
         const { data: dupes } = await supabase.from('financial_journal').select('id').eq('client_id', clientId).eq('entry_date', targetDate).eq('amount', signedAmount).contains('data', { description: r.description, column: 'col1' }); 
         if (!dupes || dupes.length === 0) {
+            // We use the original records' relative arrangement.
+            // Small delay or sequential execution helps, but the sortLedgerRecords createdAt tie-breaker is the true fix.
             await supabase.from('financial_journal').insert({
                 client_id: clientId, entry_date: targetDate, entry_type: 'MANUAL', amount: signedAmount,
                 data: { description: r.description, typeLabel: r.typeLabel, operation: r.operation, column: 'col1', isCarryForward: true }

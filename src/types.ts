@@ -1,4 +1,3 @@
-
 export interface Client {
   id: string;
   code: string;
@@ -34,6 +33,8 @@ export interface LedgerRecord {
   column?: 'main' | 'col1' | 'col2'; 
   
   isVisible: boolean; 
+
+  createdAt?: string; // For sorting tie-breakers
 
   // Legacy fields (optional, kept for type compatibility if needed during migration)
   shou?: number; 
