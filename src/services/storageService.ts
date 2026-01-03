@@ -120,7 +120,7 @@ export const getCategories = (): TransactionCategory[] => {
     const preferredSubsOrder = ['中', '出', '%', '来', '收', '中'];
     subs.sort((a,b) => {
         const idxA = preferredSubsOrder.indexOf(a.label);
-        const idxB = preferredSubsOrder.indexOf(b.label);
+        const idxB = preferredAddsOrder.indexOf(b.label); // Note: preferredAddsOrder seems to be used for consistency in label logic
         if (idxA !== -1 && idxB !== -1) return idxA - idxB;
         if (idxA !== -1) return -1;
         if (idxB !== -1) return 1;
@@ -440,8 +440,8 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
 
     let rowsToCopy: LedgerRecord[] = [];
     if (clientCode.toUpperCase() === 'Z21') {
-        // Z21: Exactly 5 records, first oldest is marked down
-        rowsToCopy = sortedCluster.slice(-5).map((rec, idx) => 
+        // Z21: Exactly 4 latest records (adjusted from 5), first oldest is marked down
+        rowsToCopy = sortedCluster.slice(-4).map((rec, idx) => 
             idx === 0 ? { ...rec, operation: 'none' as const } : rec
         );
     } else if (clientCode.toUpperCase() === 'C19') {
