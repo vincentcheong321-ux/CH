@@ -310,6 +310,8 @@ const SalesIndex: React.FC = () => {
       if (salesData.length === 0) return;
       setIsRegenerating(true); setRegenMessage(null);
       let updateCount = 0;
+      const processedClientIds = new Set<string>();
+
       try {
           for (const record of salesData) {
               const mobileClient = clients.find(c => c.id === record.clientId);
@@ -317,12 +319,17 @@ const SalesIndex: React.FC = () => {
               const mappedPaperCode = MOBILE_TO_PAPER_MAP[mobileClient.code.toLowerCase()];
               if (mappedPaperCode) {
                   const paperClient = clients.find(c => c.code.toLowerCase() === mappedPaperCode.toLowerCase());
-                  if (paperClient) {
+                  
+                  // Deduplication check
+                  if (paperClient && !processedClientIds.has(paperClient.id)) {
                       const rawData = record.mobileRawData;
                       if (!rawData || rawData.length < 6) continue;
                       const companyAmount = parseFloat(String(rawData[5]).replace(/,/g, ''));
                       
                       if (!isNaN(companyAmount) && companyAmount !== 0) {
+                          
+                          processedClientIds.add(paperClient.id);
+
                           const records = await getLedgerRecords(paperClient.id);
                           
                           // Find duplicates or existing '电' records
@@ -332,8 +339,8 @@ const SalesIndex: React.FC = () => {
                               r.column === 'main'
                           );
 
-                          // Correct Logic: Positive Company Total = Company Won = Client Owes = Add Debt
-                          const operation = companyAmount >= 0 ? 'add' : 'subtract';
+                          // Logic Updated: Company Total > 0 -> Subtract, Company Total < 0 -> Add
+                          const operation = companyAmount >= 0 ? 'subtract' : 'add';
                           const amount = Math.abs(companyAmount);
                           
                           if (existingDianRecords.length > 0) {

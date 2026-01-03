@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ArrowLeft, RefreshCw, Save, CheckCircle, AlertCircle, History, FileText, Loader2, Zap, Calendar } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getClients, saveSaleRecord, saveMobileReportHistory, getMobileReportHistory, saveLedgerRecord, getLedgerRecords, updateLedgerRecord, deleteLedgerRecord } from '../services/storageService';
-import { Client } from '../types';
+import { Client, LedgerRecord } from '../types';
 import { useGlobalState } from '../context/GlobalStateContext';
 
 // Mapping: Mobile Code/Name -> Paper Code (Case Insensitive)
@@ -131,6 +131,9 @@ const MobileReport: React.FC = () => {
       let matchedCount = 0;
       let skippedCount = 0;
 
+      // Track processed paper clients to avoid duplicates within the same batch
+      const processedPaperClientIds = new Set<string>();
+
       for (const row of parsedData) {
           // Skip the Total row from saving logic if it was parsed
           if (row.id === '总额') continue;
@@ -187,30 +190,39 @@ const MobileReport: React.FC = () => {
           if (mappedPaperCode) {
               const paperClient = clients.find(c => c.code.toLowerCase() === mappedPaperCode.toLowerCase());
               
-              if (paperClient) {
+              // Prevent duplicate processing for same paper client in this loop
+              if (paperClient && !processedPaperClientIds.has(paperClient.id)) {
+                  
                   const companyTotalRaw = values[5]; 
                   const companyAmount = parseFloat(String(companyTotalRaw).replace(/,/g, ''));
 
                   if (!isNaN(companyAmount) && companyAmount !== 0) {
-                      // Logic:
-                      // Company Total > 0 (Company Won) -> Client Owes Company -> Balance Increases -> 'add'
-                      // Company Total < 0 (Company Lost) -> Company Owes Client -> Balance Decreases -> 'subtract'
-                      const operation = companyAmount >= 0 ? 'add' : 'subtract';
+                      // Mark as processed immediately
+                      processedPaperClientIds.add(paperClient.id);
+
+                      // Logic Updated: Company Total > 0 -> Subtract, Company Total < 0 -> Add
+                      const operation = companyAmount >= 0 ? 'subtract' : 'add';
                       const amount = Math.abs(companyAmount);
 
                       // Check for existing records to PREVENT DUPLICATES
                       const existingRecords = await getLedgerRecords(paperClient.id);
-                      const existingDian = existingRecords.find(r => 
+                      const existingDianRecords = existingRecords.filter(r => 
                           r.date === targetDate && 
                           r.typeLabel === '电' &&
                           r.column === 'main'
                       );
 
-                      if (existingDian) {
-                          await updateLedgerRecord(existingDian.id, {
+                      if (existingDianRecords.length > 0) {
+                          await updateLedgerRecord(existingDianRecords[0].id, {
                               amount: amount,
                               operation: operation
                           });
+                          // Cleanup duplicates
+                          if (existingDianRecords.length > 1) {
+                              for(let i=1; i<existingDianRecords.length; i++) {
+                                  await deleteLedgerRecord(existingDianRecords[i].id);
+                              }
+                          }
                       } else {
                           await saveLedgerRecord({
                               clientId: paperClient.id,
@@ -253,6 +265,8 @@ const MobileReport: React.FC = () => {
 
         const targetDate = reportDate;
         let updateCount = 0;
+        
+        const processedPaperClientIds = new Set<string>();
 
         for (const row of parsedData) {
             if (row.id === '总额') continue;
@@ -264,25 +278,29 @@ const MobileReport: React.FC = () => {
 
             if (mappedPaperCode) {
                 const paperClient = clients.find(c => c.code.toLowerCase() === mappedPaperCode.toLowerCase());
-                if (paperClient) {
+                
+                // Deduplication Check
+                if (paperClient && !processedPaperClientIds.has(paperClient.id)) {
+                    
                     const companyTotalRaw = row.values[5];
                     const companyAmount = parseFloat(String(companyTotalRaw).replace(/,/g, ''));
                     
                     if (!isNaN(companyAmount) && companyAmount !== 0) {
+                        
+                        processedPaperClientIds.add(paperClient.id);
+
                         // Fetch existing records to dedupe/update
                         const existingRecords = await getLedgerRecords(paperClient.id);
                         
-                        // Find ALL '电' records for this date to handle duplicate cleanups
+                        // Find ALL '电' records for this date
                         const existingDianRecords = existingRecords.filter(r => 
                             r.date === targetDate && 
                             r.typeLabel === '电' &&
                             r.column === 'main'
                         );
 
-                        // Logic:
-                        // Company Total > 0 (Company Won) -> Client Owes -> Add
-                        // Company Total < 0 (Company Lost) -> Client Credited -> Subtract
-                        const operation = companyAmount >= 0 ? 'add' : 'subtract';
+                        // Logic Updated: Company Total > 0 -> Subtract, Company Total < 0 -> Add
+                        const operation = companyAmount >= 0 ? 'subtract' : 'add';
                         const amount = Math.abs(companyAmount);
 
                         if (existingDianRecords.length > 0) {
