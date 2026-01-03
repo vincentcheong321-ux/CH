@@ -556,8 +556,11 @@ export const fetchClientTotalBalance = async (clientId: string): Promise<number>
     let effectiveRecords = records;
     if (latestSnapshot) {
         effectiveRecords = records.filter(r => {
-            if (r.id === latestSnapshot.id) return true; 
-            if (r.date > latestSnapshot.date) return true; 
+            if (r.id === latestSnapshot.id) return true; // Always include the snapshot
+            if (r.date > latestSnapshot.date) return true; // Include later dates
+            // Include records on SAME DAY as snapshot, as long as they are not OTHER snapshots
+            // This captures transactions made on the cutoff day (e.g. Sales)
+            if (r.date === latestSnapshot.date && !r.id.startsWith('draw_') && r.typeLabel !== '上欠') return true;
             return false;
         });
     }
@@ -599,6 +602,8 @@ export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: 
                 effectiveRecords = records.filter(r => {
                     if (r.id === latestSnapshot.id) return true; 
                     if (r.date > latestSnapshot.date) return true;
+                    // Fix: Include same-day transactions
+                    if (r.date === latestSnapshot.date && !r.id.startsWith('draw_') && r.typeLabel !== '上欠') return true;
                     return false;
                 });
             }
