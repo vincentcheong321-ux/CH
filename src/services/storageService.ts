@@ -260,24 +260,6 @@ export const getAllLedgerRecords = async (): Promise<LedgerRecord[]> => {
     return [];
 };
 
-// Synchronous helper for ClientList display - now STRICTLY Main Ledger unless C06 (handled via manual check if needed, but here generic)
-export const getClientBalance = (clientId: string): number => {
-  // NOTE: This function reads from local storage 'ledger_records' key if used in legacy mode, 
-  // but since we are shifting to Supabase, this might return 0 if 'ledger_records' is empty.
-  // However, for completeness with the requested logic change:
-  const data = localStorage.getItem('ledger_records');
-  const allRecords: any[] = data ? JSON.parse(data) : [];
-  const records = allRecords
-    .filter(r => r.clientId === clientId)
-    .map(r => ({ ...r, column: r.column || 'main' } as LedgerRecord));
-
-  // OLD LOGIC REMOVED: No longer prioritizing Panel 1 (col1).
-  
-  // New Logic: Main Ledger Only
-  const mainRecords = records.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
-  return mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
-};
-
 export const saveLedgerRecord = async (record: Omit<LedgerRecord, 'id'>): Promise<LedgerRecord> => {
     if (supabase) {
         let signedAmount = record.operation === 'add' ? record.amount : (record.operation === 'subtract' ? -record.amount : 0);
@@ -444,27 +426,23 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
     const col1Records = recentRecords.filter(r => r.data?.column === 'col1');
     if (col1Records.length === 0) return 0;
 
-    col1Records.sort((a, b) => new Date(b.entry_date).getTime() - new Date(a.entry_date).getTime());
-    const latestDate = new Date(col1Records[0].entry_date);
-    const clusterStart = new Date(latestDate);
-    clusterStart.setDate(clusterStart.getDate() - 7);
-    
-    const mappedCluster = col1Records.filter(r => {
-        const d = new Date(r.entry_date);
-        return d >= clusterStart && d <= latestDate;
-    }).map(mapJournalToLedgerRecord);
-
-    const sortedCluster = sortLedgerRecords(mappedCluster);
+    const mappedAll = col1Records.map(mapJournalToLedgerRecord);
+    // Sort descending by date (Newest First)
+    const sortedAll = sortLedgerRecords(mappedAll).reverse();
 
     let rowsToCopy: LedgerRecord[] = [];
     if (clientCode.toUpperCase() === 'Z21') {
-        // Z21: Exactly 4 latest records (adjusted from 5), first oldest is marked down
-        rowsToCopy = sortedCluster.slice(-4).map((rec, idx) => 
+        // Z21: Exactly 4 latest records (Oldest of the 4 is first in result array because of slice(-4) on ascending, or slice(0,4) on descending?)
+        // Let's use ascending sort for slicing to be consistent with previous logic
+        const sortedAsc = sortLedgerRecords(mappedAll);
+        
+        rowsToCopy = sortedAsc.slice(-4).map((rec, idx) => 
             idx === 0 ? { ...rec, operation: 'none' as const } : rec
         );
     } else if (clientCode.toUpperCase() === 'C19') {
-        // C19: Exactly 6 latest records (updated from 5)
-        rowsToCopy = sortedCluster.slice(-6);
+        // C19: Exactly 6 latest records
+        const sortedAsc = sortLedgerRecords(mappedAll);
+        rowsToCopy = sortedAsc.slice(-6);
     } else { return 0; }
 
     const sum = rowsToCopy.reduce((acc, r) => acc + getNetAmount(r), 0);
@@ -601,8 +579,9 @@ export const fetchClientTotalBalance = async (clientId: string): Promise<number>
 
 export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: Client[]): Promise<Record<string, number>> => {
     if (supabase) {
-        // UPDATED: Using LTE to include transactions on the cutoff date (e.g., Mobile '电' records)
-        const { data } = await supabase.from('financial_journal').select('*').lte('entry_date', dateLimit).order('entry_date', { ascending: true });
+        // UPDATED: Use LT (Strictly Less Than) dateLimit to get CLOSING balance of previous week.
+        // Also changed query to use LT to minimize data fetch if possible, though LTE for safety on boundaries.
+        const { data } = await supabase.from('financial_journal').select('*').lt('entry_date', dateLimit).order('entry_date', { ascending: true });
         if (!data) return {};
 
         const clientRecords: Record<string, LedgerRecord[]> = {};
@@ -620,11 +599,9 @@ export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: 
             const sortedForSnapshot = [...records].sort((a,b) => b.date.localeCompare(a.date));
             
             // STRICTLY find a snapshot that belongs to the MAIN ledger before the date limit.
-            // Ignore any snapshots that might exist in 'col1' or 'col2' (unless they are relevant to C06, handled separately).
             const latestSnapshot = sortedForSnapshot.find(r => 
                 (r.id.startsWith('draw_') || r.typeLabel === '上欠') && 
-                (r.column === 'main' || !r.column) &&
-                r.date < dateLimit
+                (r.column === 'main' || !r.column)
             );
             
             let effectiveRecords = records;
@@ -632,7 +609,6 @@ export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: 
                 effectiveRecords = records.filter(r => {
                     if (r.id === latestSnapshot.id) return true; 
                     if (r.date > latestSnapshot.date) return true;
-                    // Include same-day transactions relative to the snapshot we found
                     if (r.date === latestSnapshot.date && !r.id.startsWith('draw_') && r.typeLabel !== '上欠') return true;
                     return false;
                 });
