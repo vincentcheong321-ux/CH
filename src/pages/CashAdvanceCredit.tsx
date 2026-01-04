@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { getClients, getCashAdvances, saveCashAdvance, getCashCredits, saveCashCredit, getLedgerRecords, getNetAmount } from '../services/storageService';
 import { Client, LedgerRecord } from '../types';
@@ -139,7 +140,6 @@ const CashAdvanceCredit: React.FC = () => {
     const [isSelectingClient, setIsSelectingClient] = useState<{ type: 'ADV' | 'CRED' | null }>({ type: null });
     const [clientSearch, setClientSearch] = useState('');
     
-    // New state for auto-focus target
     const [autoFocusClientId, setAutoFocusClientId] = useState<string | null>(null);
     
     const blurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -177,7 +177,6 @@ const CashAdvanceCredit: React.FC = () => {
     const handleInputBlur = useCallback(async (cid: string, type: 'ADV' | 'CRED') => {
         if (autoFocusClientId === cid) setAutoFocusClientId(null);
 
-        // Immediate cleanup management to avoid racing with async save calls
         if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
         blurTimeoutRef.current = setTimeout(() => {
             setPreviewClientId(null);
@@ -222,7 +221,6 @@ const CashAdvanceCredit: React.FC = () => {
         else setCredits(prev => ({ ...prev, [client.id]: '' }));
         setIsSelectingClient({ type: null });
         setClientSearch('');
-        // Set the newly added client ID to auto-focus
         setAutoFocusClientId(client.id);
     };
 
@@ -265,40 +263,26 @@ const CashAdvanceCredit: React.FC = () => {
         <div className="flex flex-col lg:flex-row h-screen overflow-hidden bg-gray-50 relative">
             {previewClientId && <LedgerPreviewOverlay clientId={previewClientId} selectedDate={selectedDate} />}
 
-            {/* RESTORED LEFT SIDEBAR */}
+            {/* Sidebar */}
             <div className="lg:w-80 flex-shrink-0 no-print hidden lg:flex flex-col border-r border-gray-200 bg-white p-6 overflow-y-auto">
                 <h1 className="text-2xl font-bold text-gray-800 mb-2 flex items-center">
                     <Repeat className="mr-2 text-blue-600" /> Advance & Credit
                 </h1>
-                <p className="text-gray-500 mb-6 text-sm">Select a date to enter data.</p>
-                
+                <p className="text-gray-500 mb-6 text-sm">Record data for paper clients.</p>
                 <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
                     <div className="flex items-center justify-between mb-4 pb-4 border-b">
                         <button onClick={prevMonth} disabled={currentYear === 2025 && currentMonth === 0} className="p-2 hover:bg-gray-100 rounded-full disabled:opacity-30"><ChevronLeft size={20}/></button>
                         <h2 className="text-sm font-bold text-gray-800">{MONTH_NAMES[currentMonth]} {currentYear}</h2>
                         <button onClick={nextMonth} disabled={currentYear === 2026 && currentMonth === 11} className="p-2 hover:bg-gray-100 rounded-full disabled:opacity-30"><ChevronRight size={20}/></button>
                     </div>
-                    
                     <div className="space-y-2">
                         {sortedWeeks.map((weekNum, idx) => {
                             const days = weekWeeks[weekNum];
                             const isActiveWeek = weekNum.toString() === activeWeekNum;
                             const rangeStr = getWeekRangeString(null, null, days);
-
                             return (
-                                <button
-                                    key={weekNum}
-                                    onClick={() => handleDateClick(days[0])}
-                                    className={`
-                                        w-full p-3 rounded-lg font-bold transition-all flex flex-col items-center justify-center text-center
-                                        ${isActiveWeek
-                                            ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-300' 
-                                            : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'}
-                                    `}
-                                >
-                                    <span className={`text-[10px] uppercase tracking-wider opacity-70 ${isActiveWeek ? 'text-blue-100' : 'text-gray-400'}`}>
-                                        Week {idx + 1}
-                                    </span>
+                                <button key={weekNum} onClick={() => handleDateClick(days[0])} className={`w-full p-3 rounded-lg font-bold transition-all flex flex-col items-center justify-center text-center ${isActiveWeek ? 'bg-blue-600 text-white shadow-md ring-2 ring-blue-300' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'}`}>
+                                    <span className={`text-[10px] uppercase tracking-wider opacity-70 ${isActiveWeek ? 'text-blue-100' : 'text-gray-400'}`}>Week {idx + 1}</span>
                                     <span className="text-sm font-mono mt-1 whitespace-nowrap">{rangeStr}</span>
                                 </button>
                             );
@@ -310,54 +294,63 @@ const CashAdvanceCredit: React.FC = () => {
             {/* Main Content Area */}
             <div className="flex-1 flex flex-col min-w-0">
                 
-                {/* Unified Header with Summary */}
-                <div className="bg-white border-b border-gray-200 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 z-40">
-                    <div className="flex items-center">
-                        <div className="lg:hidden mr-4">
-                            <h1 className="text-xl font-bold text-gray-800 flex items-center">
-                                <Repeat className="mr-1 text-blue-600" size={20} /> Trans
-                            </h1>
-                        </div>
-                        <div className="flex items-center space-x-3 md:space-x-6 overflow-x-auto no-scrollbar">
-                            <div className="flex items-center px-3 py-1.5 bg-blue-50 rounded-xl border border-blue-100">
-                                <Banknote size={16} className="mr-2 text-blue-600" />
-                                <div className="flex flex-col md:flex-row md:items-baseline md:space-x-2">
-                                    <span className="text-[10px] md:text-xs font-bold text-blue-800 whitespace-nowrap">Advance</span>
-                                    <span className="text-sm md:text-lg font-mono font-bold text-blue-600">${totals.advances.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                                </div>
-                            </div>
-                            <div className="flex items-center px-3 py-1.5 bg-green-50 rounded-xl border border-green-100">
-                                <CreditCard size={16} className="mr-2 text-green-600" />
-                                <div className="flex flex-col md:flex-row md:items-baseline md:space-x-2">
-                                    <span className="text-[10px] md:text-xs font-bold text-green-800 whitespace-nowrap">Credit</span>
-                                    <span className="text-sm md:text-lg font-mono font-bold text-green-600">${totals.credits.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                                </div>
-                            </div>
+                {/* Unified Header with Summary - Optimized for Mobile Layout */}
+                <div className="bg-white border-b border-gray-200 p-3 md:p-4 sticky top-0 z-40 shadow-sm">
+                    {/* Top Row for Mobile: Title + Month Nav */}
+                    <div className="flex lg:hidden justify-between items-center mb-3">
+                        <h1 className="text-lg font-bold text-gray-800 flex items-center">
+                            <Repeat className="mr-2 text-blue-600" size={20} /> 
+                            Trans
+                        </h1>
+                        <div className="flex items-center bg-gray-100 rounded-lg p-0.5 border border-gray-200 shadow-sm">
+                             <button onClick={prevMonth} disabled={currentYear === 2025 && currentMonth === 0} className="p-1.5 hover:bg-white rounded-md disabled:opacity-30 text-gray-600"><ChevronLeft size={16}/></button>
+                             <span className="text-[11px] font-bold text-gray-700 w-16 text-center">{MONTH_NAMES[currentMonth].slice(0,3)} {currentYear}</span>
+                             <button onClick={nextMonth} disabled={currentYear === 2026 && currentMonth === 11} className="p-1.5 hover:bg-white rounded-md disabled:opacity-30 text-gray-600"><ChevronRight size={16}/></button>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                        {/* Mobile Month Navigation inside Mobile Header */}
-                        <div className="flex lg:hidden items-center bg-gray-100 rounded-xl p-1 border border-gray-200">
-                            <button onClick={prevMonth} disabled={currentYear === 2025 && currentMonth === 0} className="p-1 hover:bg-white rounded-lg disabled:opacity-30"><ChevronLeft size={16}/></button>
-                            <span className="text-[11px] font-bold text-gray-700 w-16 text-center">{MONTH_NAMES[currentMonth].slice(0,3)} {currentYear}</span>
-                            <button onClick={nextMonth} disabled={currentYear === 2026 && currentMonth === 11} className="p-1 hover:bg-white rounded-lg disabled:opacity-30"><ChevronRight size={16}/></button>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        {/* Summary Cards Row */}
+                        <div className="flex items-center gap-3 overflow-x-auto no-scrollbar">
+                             <div className="hidden lg:block mr-2">
+                                <h1 className="text-xl font-bold text-gray-800 flex items-center">
+                                    <Repeat className="mr-2 text-blue-600" size={20} /> 
+                                    Transactions
+                                </h1>
+                             </div>
+
+                             <div className="flex items-center px-3 py-2 bg-blue-50 rounded-xl border border-blue-100 flex-shrink-0 min-w-[130px]">
+                                <Banknote size={16} className="mr-2 text-blue-600" />
+                                <div className="flex flex-col">
+                                    <span className="text-[10px] font-bold text-blue-800 uppercase leading-none mb-0.5">Advance</span>
+                                    <span className="text-sm font-mono font-bold text-blue-600 leading-none">${totals.advances.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                                </div>
+                            </div>
+                            <div className="flex items-center px-3 py-2 bg-green-50 rounded-xl border border-green-100 flex-shrink-0 min-w-[130px]">
+                                <CreditCard size={16} className="mr-2 text-green-600" />
+                                <div className="flex flex-col">
+                                    <span className="text-[10px] font-bold text-green-800 uppercase leading-none mb-0.5">Credit</span>
+                                    <span className="text-sm font-mono font-bold text-green-600 leading-none">${totals.credits.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                                </div>
+                            </div>
                         </div>
-                        
-                        <div className="flex items-center text-xs text-gray-500 bg-yellow-50 px-3 py-2 rounded-full border border-yellow-200 whitespace-nowrap">
-                            <Save size={14} className="mr-1.5" /> Auto-saves
+
+                        {/* Auto Save Badge */}
+                        <div className="flex items-center justify-end">
+                            <div className="flex items-center text-[10px] md:text-xs text-gray-500 bg-yellow-50 px-3 py-1.5 rounded-full border border-yellow-200 whitespace-nowrap">
+                                <Save size={14} className="mr-1.5" /> Auto-saves
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 {/* Week Pills Mobile */}
-                <div className="bg-gray-100 px-4 py-2 lg:hidden overflow-x-auto flex space-x-2 no-scrollbar border-b border-gray-200">
+                <div className="bg-gray-50/95 backdrop-blur px-2 py-2 lg:hidden overflow-x-auto flex space-x-2 no-scrollbar border-b border-gray-200 sticky top-[108px] z-30 shadow-sm">
                     {sortedWeeks.map(wn => {
                         const days = weekWeeks[wn];
                         const isActive = wn.toString() === activeWeekNum;
                         return (
-                            <button key={wn} onClick={() => handleDateClick(days[0])} className={`px-4 py-1.5 rounded-full text-[10px] font-bold whitespace-nowrap transition-all border ${isActive ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200'}
-                            `}>
+                            <button key={wn} onClick={() => handleDateClick(days[0])} className={`px-3 py-1.5 rounded-full text-[10px] font-bold whitespace-nowrap transition-all border ${isActive ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200'}`}>
                                 W{sortedWeeks.indexOf(wn) + 1}: {getWeekRangeString(null, null, days)}
                             </button>
                         );
@@ -372,29 +365,26 @@ const CashAdvanceCredit: React.FC = () => {
                 ) : (
                     <div className="flex-1 flex overflow-hidden flex-col md:flex-row">
                         {/* Left Column: Advance */}
-                        <div className="flex-1 flex flex-col border-r border-gray-200 bg-white">
-                            <div className="p-4 bg-blue-50/50 border-b border-blue-100 flex items-center justify-between sticky top-0 z-20">
-                                <div className="flex items-center space-x-3">
-                                    <div className="bg-blue-600 p-2 rounded-lg text-white shadow-md"><Banknote size={20} /></div>
-                                    <h3 className="font-bold text-blue-900 leading-tight">Cash Advance (支)</h3>
+                        <div className="flex-1 flex flex-col border-r border-gray-200 bg-white min-w-0">
+                            <div className="p-3 bg-blue-50/50 border-b border-blue-100 flex items-center justify-between sticky top-0 z-20">
+                                <div className="flex items-center space-x-2">
+                                    <div className="bg-blue-600 p-1.5 rounded-lg text-white shadow-sm"><Banknote size={16} /></div>
+                                    <h3 className="font-bold text-blue-900 text-sm">Advance</h3>
                                 </div>
-                                <button onClick={() => setIsSelectingClient({ type: 'ADV' })} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-all flex items-center"><UserPlus size={14} className="mr-1.5"/> Add Client</button>
+                                <button onClick={() => setIsSelectingClient({ type: 'ADV' })} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-all flex items-center"><UserPlus size={14} className="mr-1"/> Add</button>
                             </div>
                             
                             <div className="flex-1 overflow-y-auto">
                                 {loading ? <div className="p-12 text-center text-gray-400 text-sm">Loading...</div> : (
                                     Object.keys(advances).length === 0 ? (
-                                        <div className="p-12 text-center text-gray-300 italic text-sm">No advance records for this date.</div>
+                                        <div className="p-8 text-center text-gray-300 italic text-xs">No advance records.</div>
                                     ) : (
                                         <div className="divide-y divide-gray-100">
                                             {Object.entries(advances).map(([cid, val]) => {
                                                 const c = clients.find(cl => cl.id === cid);
                                                 return c ? (
                                                     <TransactionRow 
-                                                        key={cid} 
-                                                        client={c} 
-                                                        value={val} 
-                                                        type="ADV" 
+                                                        key={cid} client={c} value={val} type="ADV" 
                                                         navState={{ year: currentYear, month: currentMonth, week: activeWeekNum ? parseInt(activeWeekNum) : 1 }} 
                                                         onChange={(id, v) => setAdvances(p => ({...p, [id]: v}))} 
                                                         onBlur={(id) => handleInputBlur(id, 'ADV')} 
@@ -411,29 +401,26 @@ const CashAdvanceCredit: React.FC = () => {
                         </div>
 
                         {/* Right Column: Credit */}
-                        <div className="flex-1 flex flex-col bg-white">
-                            <div className="p-4 bg-green-50/50 border-b border-green-100 flex items-center justify-between sticky top-0 z-20">
-                                <div className="flex items-center space-x-3">
-                                    <div className="bg-green-600 p-2 rounded-lg text-white shadow-md"><CreditCard size={20} /></div>
-                                    <h3 className="font-bold text-green-900 leading-tight">Cash Credit (来)</h3>
+                        <div className="flex-1 flex flex-col bg-white min-w-0">
+                            <div className="p-3 bg-green-50/50 border-b border-green-100 flex items-center justify-between sticky top-0 z-20">
+                                <div className="flex items-center space-x-2">
+                                    <div className="bg-green-600 p-1.5 rounded-lg text-white shadow-sm"><CreditCard size={16} /></div>
+                                    <h3 className="font-bold text-green-900 text-sm">Credit</h3>
                                 </div>
-                                <button onClick={() => setIsSelectingClient({ type: 'CRED' })} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-all flex items-center"><UserPlus size={14} className="mr-1.5"/> Add Client</button>
+                                <button onClick={() => setIsSelectingClient({ type: 'CRED' })} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-all flex items-center"><UserPlus size={14} className="mr-1"/> Add</button>
                             </div>
 
                             <div className="flex-1 overflow-y-auto">
                                 {loading ? <div className="p-12 text-center text-gray-400 text-sm">Loading...</div> : (
                                     Object.keys(credits).length === 0 ? (
-                                        <div className="p-12 text-center text-gray-300 italic text-sm">No credit records for this date.</div>
+                                        <div className="p-8 text-center text-gray-300 italic text-xs">No credit records.</div>
                                     ) : (
                                         <div className="divide-y divide-gray-100">
                                             {Object.entries(credits).map(([cid, val]) => {
                                                 const c = clients.find(cl => cl.id === cid);
                                                 return c ? (
                                                     <TransactionRow 
-                                                        key={cid} 
-                                                        client={c} 
-                                                        value={val} 
-                                                        type="CRED" 
+                                                        key={cid} client={c} value={val} type="CRED" 
                                                         navState={{ year: currentYear, month: currentMonth, week: activeWeekNum ? parseInt(activeWeekNum) : 1 }} 
                                                         onChange={(id, v) => setCredits(p => ({...p, [id]: v}))} 
                                                         onBlur={(id) => handleInputBlur(id, 'CRED')} 
