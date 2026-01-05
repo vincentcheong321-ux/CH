@@ -323,12 +323,14 @@ const ClientLedger: React.FC = () => {
               const tailSplit = tail.split(/\s+(.+)/);
               win = tailSplit[0] || '0';
               let restVal = tailSplit[1] || '';
+              
+              // Cleanly extract position and type, avoiding duplication
               const posMatch = restVal.match(/\((.)\)$/);
               if (posMatch) {
                   pos = posMatch[1];
-                  type = restVal.replace(/\s*\‍(.\‍)$/, '').replace(/\(|\)/g, '').trim();
+                  type = restVal.replace(/\(.\)$/, '').trim();
               } else {
-                  type = restVal.replace(/\(|\)/g, '').trim();
+                  type = restVal;
               }
           } else {
               num = line;
@@ -449,6 +451,8 @@ const ClientLedger: React.FC = () => {
                     const hideLabel = isWinning && columnType === 'col1';
                     // User Request: Column 3 (main) shows amount only, hide win description details
                     const showDescription = !(isWinning && columnType === 'main');
+                    // User Request: Hide the right-side amount for '中' in Col 1 to avoid overlap/duplication
+                    const showAmountColumn = !(isWinning && columnType === 'col1');
                     
                     return (
                     <div key={r.id} className={`group flex items-start py-1 relative gap-1 md:gap-2 w-full ${!r.isVisible ? 'opacity-30 grayscale no-print' : ''}`}>
@@ -469,13 +473,17 @@ const ClientLedger: React.FC = () => {
                                 )}
                             </div>
                             
-                            <div className={`text-base md:text-2xl font-mono font-bold shrink-0 w-[110px] md:w-[160px] text-right leading-none pl-2 pt-0.5 ${
-                                r.operation === 'add' ? 'text-green-700' : 
-                                r.operation === 'subtract' ? (isMain ? 'text-red-700' : 'text-gray-900') : 
-                                'text-gray-600'
-                            }`}>
-                                {r.operation === 'none' ? r.amount.toLocaleString(undefined, {minimumFractionDigits: 2}) : Math.abs(r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2})}
-                            </div>
+                            {showAmountColumn ? (
+                                <div className={`text-base md:text-2xl font-mono font-bold shrink-0 w-[110px] md:w-[160px] text-right leading-none pl-2 pt-0.5 ${
+                                    r.operation === 'add' ? 'text-green-700' : 
+                                    r.operation === 'subtract' ? (isMain ? 'text-red-700' : 'text-gray-900') : 
+                                    'text-gray-600'
+                                }`}>
+                                    {r.operation === 'none' ? r.amount.toLocaleString(undefined, {minimumFractionDigits: 2}) : Math.abs(r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                </div>
+                            ) : (
+                                <div className="shrink-0 w-[110px] md:w-[160px]" />
+                            )}
                         </div>
                     </div>
                 )})}
