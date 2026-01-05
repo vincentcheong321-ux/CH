@@ -408,54 +408,48 @@ const ClientLedger: React.FC = () => {
         <div className="flex flex-col w-full min-w-0 pt-0.5 overflow-visible font-mono">
             {/* Date on Top */}
             {dateStr && (
-                <div className="text-[12px] md:text-[14px] text-gray-400 select-none pb-1 font-bold">
+                <div className="text-[10px] md:text-[11px] text-gray-400 select-none pb-0.5 pl-1 font-bold">
                     {dateStr}
                 </div>
             )}
             
-            <div className="flex flex-col w-full min-w-0 gap-3 overflow-visible">
+            <div className="flex flex-col w-full min-w-0 gap-0.5 overflow-visible">
                 {parsedLines.map((line, i) => (
-                    <div key={i} className="flex flex-col w-full gap-1 border-b border-gray-100 pb-2 last:border-0">
-                        {/* Sides on their own line */}
-                        <div className="text-[12px] md:text-[15px] font-black text-gray-800 uppercase tracking-widest leading-none">
+                    <div key={i} className="grid grid-cols-[24px_34px_40px_28px_20px_1fr] gap-0.5 items-center text-[12px] md:text-[13px] leading-none py-0.5 w-full whitespace-nowrap">
+                        {/* Sides */}
+                        <div className="font-extrabold text-gray-800 uppercase tracking-tighter text-left">
                             {line.sides}
                         </div>
                         
-                        {/* Details Row */}
-                        <div className="flex items-center gap-1 md:gap-3 text-[13px] md:text-[18px] leading-none">
-                            {/* Number */}
-                            <span className="font-black text-gray-900 tracking-tighter w-[45px] md:w-[60px] shrink-0">
-                                {line.number}
-                            </span>
-                            
-                            {/* Bet (Big-Small) */}
-                            <span className="text-gray-400 font-bold text-[11px] md:text-[14px] w-[50px] md:w-[65px] shrink-0 text-center">
-                                {line.big}-{line.small}
-                            </span>
-                            
-                            {/* Type (e.g. ibox) */}
-                            <span className="text-gray-400 text-[10px] md:text-[12px] uppercase font-bold w-[35px] md:w-[45px] shrink-0 text-center truncate">
-                                {line.type}
-                            </span>
-                            
-                            {/* Position in Circle */}
-                            <div className="flex justify-center items-center shrink-0 w-[28px] md:w-[36px]">
-                                {line.pos && (
-                                    <div className="w-6 h-6 md:w-8 md:h-8 rounded-full border border-gray-900 flex items-center justify-center bg-white shadow-sm">
-                                        <span className="text-[11px] md:text-[15px] font-black text-gray-900 leading-none">
-                                            {line.pos}
-                                        </span>
-                                    </div>
-                                )}
-                            </div>
+                        {/* Number */}
+                        <div className="font-black text-gray-900 tracking-tighter text-center">
+                            {line.number}
+                        </div>
+                        
+                        {/* Bet (Big-Small) */}
+                        <div className="text-gray-500 font-bold text-[10px] md:text-[11px] text-center tracking-tighter">
+                            {line.big}-{line.small}
+                        </div>
+                        
+                        {/* Type */}
+                        <div className="text-gray-400 text-[9px] md:text-[10px] uppercase font-bold text-center truncate">
+                            {line.type}
+                        </div>
+                        
+                        {/* Position in Circle */}
+                        <div className="flex justify-center">
+                            {line.pos && (
+                                <div className="w-4 h-4 rounded-full border border-gray-900 flex items-center justify-center bg-white shadow-sm">
+                                    <span className="text-[9px] font-black text-gray-900 leading-none scale-90">
+                                        {line.pos}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
 
-                            {/* Win Amount - Spacious and bold */}
-                            <div className="flex items-center justify-end flex-1 min-w-[70px] md:min-w-[120px] pr-1">
-                                <span className="text-gray-300 px-1 font-light">-</span>
-                                <span className="text-red-600 font-black text-right truncate text-lg md:text-3xl tracking-tighter">
-                                    {parseFloat(line.win) > 0 ? parseFloat(line.win).toLocaleString() : ''}
-                                </span>
-                            </div>
+                        {/* Win Amount */}
+                        <div className="text-red-600 font-black text-right truncate text-base md:text-lg tracking-tighter">
+                            {parseFloat(line.win) > 0 ? parseFloat(line.win).toLocaleString() : ''}
                         </div>
                     </div>
                 ))}
