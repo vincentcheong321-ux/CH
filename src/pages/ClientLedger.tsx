@@ -317,9 +317,6 @@ const ClientLedger: React.FC = () => {
 
   // Special formatter for Winning descriptions
   const parseWinningLine = (line: string) => {
-    // Expected formats:
-    // 1. "KMT 2323 - 10 - 10 - 1,833 ibox (头)" (4 parts, 3 dashes)
-    // 2. "KMT 2323 - 10 - 611 ibox (二)" (3 parts, 2 dashes)
     const parts = line.split(/\s+-\s+/);
     
     if (parts.length >= 4) {
@@ -350,18 +347,18 @@ const ClientLedger: React.FC = () => {
     
     return (
         <div className="flex flex-col w-full min-w-0 pt-0.5">
-            <div className="flex items-start gap-2">
-                {date && <span className="text-[10px] md:text-[11px] font-mono text-gray-400 shrink-0 select-none pt-0.5">{date}</span>}
-                <div className="flex flex-col w-full min-w-0 gap-0.5">
+            <div className="flex items-start gap-1">
+                {date && <span className="text-[10px] md:text-[11px] font-mono text-gray-400 shrink-0 select-none pt-0.5 w-[32px] text-left">{date}</span>}
+                <div className="flex flex-col w-full min-w-0 gap-1">
                     {lines.map((line, i) => {
                         const parsed = parseWinningLine(line);
                         if (parsed.valid) {
                             return (
-                                <div key={i} className="flex items-baseline text-[10px] md:text-sm text-gray-700 leading-tight">
-                                    <span className="font-bold w-[70px] md:w-[90px] shrink-0 truncate mr-1">{parsed.head}</span>
-                                    <span className="text-gray-400 w-[40px] shrink-0 text-center mr-1 font-mono tracking-tighter">{parsed.bet}</span>
-                                    <span className="text-red-600 font-bold w-[50px] shrink-0 text-right mr-2">{parsed.win}</span>
-                                    <span className="text-gray-500 truncate">{parsed.rest}</span>
+                                <div key={i} className="flex items-center text-[11px] md:text-sm text-gray-800 leading-none">
+                                    <span className="font-bold w-[75px] md:w-[90px] shrink-0 truncate mr-1 font-mono tracking-tight">{parsed.head}</span>
+                                    <span className="text-gray-500 w-[45px] shrink-0 text-center mr-1 font-mono tracking-tighter text-[10px] md:text-xs bg-gray-50 rounded-sm py-0.5">{parsed.bet}</span>
+                                    <span className="text-red-600 font-black w-[60px] shrink-0 text-right mr-2 font-mono text-[12px] md:text-[15px]">{parsed.win}</span>
+                                    <span className="text-gray-400 text-[9px] md:text-[10px] truncate uppercase font-medium">{parsed.rest}</span>
                                 </div>
                             );
                         }
@@ -393,7 +390,7 @@ const ClientLedger: React.FC = () => {
 
                     <div className="flex w-full items-start">
                         <div className="text-sm md:text-xl font-bold uppercase tracking-wide text-gray-600 min-w-[20px] md:min-w-[32px] shrink-0 text-center leading-tight">
-                            {r.typeLabel}
+                            {r.typeLabel === '中' ? '' : r.typeLabel}
                         </div>
                         <div className="flex-1 px-1.5 min-w-0">
                             {r.typeLabel === '中' 
