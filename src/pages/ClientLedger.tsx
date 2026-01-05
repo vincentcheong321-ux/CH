@@ -623,22 +623,31 @@ const ClientLedger: React.FC = () => {
                     >
                         <Plus size={10} className="mr-1" /> New
                     </button>
-
-                    {/* Desktop Clear Panel 1 Button */}
-                    {activeColumn === 'col1' && col1Ledger.processed.length > 0 && (
-                        <button 
-                            onClick={handleClearPanel1}
-                            className="w-full flex items-center justify-center py-2 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-all text-red-600 text-[10px] font-bold uppercase mt-6 shadow-sm"
-                        >
-                            <Trash size={12} className="mr-1.5" /> Clear All P1
-                        </button>
-                    )}
                 </div>
             </aside>
 
             {/* Main Content Area */}
             <div className="flex-1 w-full min-w-0">
                 
+                {/* Panel Selector Central - WITH CLEAR BUTTON */}
+                <div className="no-print mb-6 flex flex-col items-center space-y-4">
+                    <div className="bg-white rounded-xl p-1 shadow-md border border-gray-200 flex w-full md:w-auto overflow-x-auto">
+                        <button onClick={() => setActiveColumn('col1')} className={`flex-1 md:flex-none px-6 py-2.5 text-xs md:text-sm font-black rounded-lg transition-all whitespace-nowrap ${activeColumn === 'col1' ? 'bg-blue-600 text-white shadow-md transform scale-105' : 'text-gray-500 hover:bg-gray-50'}`}>Panel 1</button>
+                        <button onClick={() => setActiveColumn('col2')} className={`flex-1 md:flex-none px-6 py-2.5 text-xs md:text-sm font-black rounded-lg transition-all whitespace-nowrap ${activeColumn === 'col2' ? 'bg-blue-600 text-white shadow-md transform scale-105' : 'text-gray-500 hover:bg-gray-50'}`}>Panel 2</button>
+                        <button onClick={() => setActiveColumn('main')} className={`flex-1 md:flex-none px-6 py-2.5 text-xs md:text-sm font-black rounded-lg transition-all whitespace-nowrap ${activeColumn === 'main' ? 'bg-blue-600 text-white shadow-md transform scale-105' : 'text-gray-500 hover:bg-gray-50'}`}>Main Ledger</button>
+                    </div>
+
+                    {/* NEW: Clear Panel 1 Button Centralized for Visibility */}
+                    {activeColumn === 'col1' && col1Ledger.processed.length > 0 && (
+                        <button 
+                            onClick={handleClearPanel1}
+                            className="flex items-center px-6 py-2 bg-red-50 text-red-600 border-2 border-red-200 rounded-full text-xs font-black uppercase hover:bg-red-600 hover:text-white hover:border-red-600 transition-all shadow-lg active:scale-95 animate-in slide-in-from-top-2"
+                        >
+                            <Trash2 size={14} className="mr-2" /> Clear All Panel 1 Entries
+                        </button>
+                    )}
+                </div>
+
                 {/* Entry Form (Top of ledger content) */}
                 {activeCategory && (
                 <div className="no-print mb-6 bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden animate-in slide-in-from-top-4 duration-300 ring-4 ring-blue-50/50">
@@ -679,26 +688,8 @@ const ClientLedger: React.FC = () => {
                 </div>
                 )}
 
-                {/* Mobile View Controls */}
-                <div className="lg:hidden flex flex-col gap-3 mb-6 no-print">
-                    <div className="flex flex-col gap-2">
-                         <div className="flex bg-white rounded-xl p-1 border border-gray-200 shadow-sm">
-                            <button onClick={() => setActiveColumn('col1')} className={`flex-1 px-3 py-2 text-xs font-bold rounded-lg transition-all ${activeColumn === 'col1' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500'}`}>P1</button>
-                            <button onClick={() => setActiveColumn('col2')} className={`flex-1 px-3 py-2 text-xs font-bold rounded-lg transition-all ${activeColumn === 'col2' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500'}`}>P2</button>
-                            <button onClick={() => setActiveColumn('main')} className={`flex-1 px-3 py-2 text-xs font-bold rounded-lg transition-all ${activeColumn === 'main' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500'}`}>Main</button>
-                        </div>
-                        
-                        {/* Mobile Clear Panel 1 Button */}
-                        {activeColumn === 'col1' && col1Ledger.processed.length > 0 && (
-                            <button 
-                                onClick={handleClearPanel1}
-                                className="w-full flex items-center justify-center py-2 bg-red-50 border border-red-200 rounded-xl text-red-600 text-xs font-bold uppercase shadow-sm"
-                            >
-                                <Trash size={14} className="mr-2" /> Clear All P1
-                            </button>
-                        )}
-                    </div>
-                    
+                {/* Mobile Quick Category Access */}
+                <div className="lg:hidden mb-6 no-print">
                     {!activeCategory && (
                         <div className="grid grid-cols-3 gap-2">
                              <button onClick={handleQuickEntry} className="flex items-center justify-center p-2 bg-indigo-50 border border-indigo-200 rounded-xl text-indigo-700 text-xs font-bold"><Zap size={14} className="mr-1" /> Quick</button>
