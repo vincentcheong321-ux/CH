@@ -1,3 +1,4 @@
+
 import { Client, LedgerRecord, AssetRecord, TransactionCategory, DrawBalance, SaleRecord, CashAdvanceRecord } from '../types';
 import { supabase } from '../supabaseClient';
 
@@ -284,12 +285,18 @@ export const saveLedgerRecord = async (record: Omit<LedgerRecord, 'id'>): Promis
 export const updateLedgerRecord = async (id: string, updates: Partial<LedgerRecord>) => {
     if (supabase) {
         if (id.startsWith('sale_') || id.startsWith('adv_') || id.startsWith('draw_') || id.startsWith('cred_')) return;
+        
+        // Fetch existing to preserve typeLabel
+        const { data: existing } = await supabase.from('financial_journal').select('data').eq('id', id).maybeSingle();
+        const existingData = existing?.data || {};
+
         let signedAmount = updates.operation === 'add' ? updates.amount! : (updates.operation === 'subtract' ? -updates.amount! : 0);
         await supabase.from('financial_journal').update({
             amount: signedAmount,
             data: { 
+                ...existingData,
                 description: updates.description, 
-                typeLabel: updates.typeLabel, 
+                typeLabel: updates.typeLabel || existingData.typeLabel, 
                 operation: updates.operation, 
                 column: updates.column,
                 sortWeight: (updates as any).sortWeight || 0

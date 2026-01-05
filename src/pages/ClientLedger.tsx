@@ -326,7 +326,7 @@ const ClientLedger: React.FC = () => {
               const posMatch = restVal.match(/\((.)\)$/);
               if (posMatch) {
                   pos = posMatch[1];
-                  type = restVal.replace(/\s*\‍(.\‍)$/, '').trim();
+                  type = restVal.replace(/\s*\‍(.\‍)$/, '').replace(/\(|\)/g, '').trim();
               } else {
                   type = restVal;
               }
@@ -363,6 +363,7 @@ const ClientLedger: React.FC = () => {
     await updateLedgerRecord(editingRecord.id, { 
         amount: editingRecord.amount, 
         description: finalDesc, 
+        typeLabel: editingRecord.typeLabel, // Explicitly pass typeLabel
         operation: editingRecord.operation, 
         date: editingRecord.date, 
         isVisible: editingRecord.isVisible, 
@@ -405,25 +406,21 @@ const ClientLedger: React.FC = () => {
         <div className="flex flex-col w-full min-w-0 pt-0.5 overflow-visible">
             <div className="flex items-start gap-1">
                 {dateStr && <span className="text-[10px] md:text-[11px] font-mono text-gray-400 shrink-0 select-none pt-1 w-[32px] text-left">{dateStr}</span>}
-                <div className="flex flex-col w-full min-w-0 gap-1.5 overflow-visible">
-                    {parsedLines.map((line, i) => {
-                        const isTop3 = ['头','二','三','1','2','3'].includes(line.pos);
-                        return (
-                            <div key={i} className="flex items-center text-[10px] md:text-sm text-gray-800 leading-none py-0.5 w-full relative h-6">
-                                {line.pos && (
-                                    <div className={`
-                                        w-4 h-4 md:w-5 md:h-5 rounded-full flex items-center justify-center text-[9px] md:text-[10px] font-bold mr-2 shadow-sm shrink-0
-                                        ${isTop3 ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' : 'bg-blue-50 text-blue-700 border border-blue-100'}
-                                    `}>
-                                        {line.pos}
-                                    </div>
-                                )}
-                                <span className="font-bold w-[65px] md:w-[85px] shrink-0 truncate mr-1 font-mono tracking-tight uppercase">{line.sides} {line.number}</span>
-                                <span className="text-gray-500 w-[55px] md:w-[65px] shrink-0 text-center mr-2 font-mono tracking-tighter text-[9px] md:text-xs bg-gray-50 rounded-sm py-0.5 border border-gray-100">{line.big} - {line.small}</span>
-                                <span className="text-gray-400 text-[8px] md:text-[10px] uppercase font-bold flex-1 truncate tracking-wide pr-1">{line.type}</span>
-                            </div>
-                        );
-                    })}
+                <div className="flex flex-col w-full min-w-0 gap-1 overflow-visible">
+                    {parsedLines.map((line, i) => (
+                        <div key={i} className="flex items-center text-[11px] md:text-sm text-gray-800 leading-none py-1 w-full relative h-6 font-mono whitespace-nowrap">
+                            <span className="font-bold w-[35px] md:w-[45px] shrink-0 text-gray-600 uppercase">{line.sides}</span>
+                            <span className="font-bold w-[45px] md:w-[55px] shrink-0 text-gray-900 tracking-wider">{line.number}</span>
+                            <span className="text-gray-400 w-[65px] md:w-[85px] shrink-0 text-center text-[9px] md:text-xs font-bold px-1">
+                                {line.big} - {line.small}
+                            </span>
+                            <span className="text-gray-400 text-[9px] md:text-[10px] uppercase font-bold w-[35px] md:w-[45px] shrink-0 truncate">{line.type}</span>
+                            <span className="text-gray-500 text-[9px] md:text-[10px] w-[25px] md:w-[35px] shrink-0 text-center">{line.pos}</span>
+                            <span className="text-red-600 font-black flex-1 text-right text-[12px] md:text-[16px] pr-2 overflow-hidden truncate">
+                                {parseFloat(line.win) > 0 ? parseFloat(line.win).toLocaleString() : ''}
+                            </span>
+                        </div>
+                    ))}
                 </div>
             </div>
         </div>
@@ -450,24 +447,23 @@ const ClientLedger: React.FC = () => {
                     
                     return (
                     <div key={r.id} className={`group flex items-start py-1 relative gap-1 md:gap-2 w-full ${!r.isVisible ? 'opacity-30 grayscale no-print' : ''}`}>
-                        {/* Actions Overlay */}
                         <div className="no-print opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1 absolute -left-10 md:-left-12 top-0.5 z-40 bg-white shadow-sm rounded border border-gray-100 p-1">
                             <button onClick={() => startEditing(r)} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Pencil size={12} /></button>
                             <button onClick={() => requestDeleteRecord(r.id)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 size={12} /></button>
                         </div>
 
-                        <div className="flex w-full items-start relative z-10 overflow-hidden min-h-[24px]">
+                        <div className="flex w-full items-start relative z-10 min-h-[24px]">
                             <div className="text-sm md:text-xl font-bold uppercase tracking-wide text-gray-600 min-w-[20px] md:min-w-[32px] shrink-0 text-center leading-tight pt-0.5">
                                 {hideLabel ? '' : r.typeLabel}
                             </div>
-                            <div className="flex-1 px-1.5 min-w-0 overflow-visible">
+                            <div className="flex-1 px-1 md:px-2 min-w-0 overflow-visible">
                                 {isWinning 
                                     ? renderWinningContent(r.description) 
                                     : renderFormattedDescription(r.description)
                                 }
                             </div>
                             
-                            <div className={`text-base md:text-2xl font-mono font-bold shrink-0 min-w-[110px] md:w-[150px] text-right leading-none pl-2 pt-0.5 ${
+                            <div className={`text-base md:text-2xl font-mono font-bold shrink-0 w-[110px] md:w-[160px] text-right leading-none pl-2 pt-0.5 ${
                                 r.operation === 'add' ? 'text-green-700' : 
                                 r.operation === 'subtract' ? (isMain ? 'text-red-700' : 'text-gray-900') : 
                                 'text-gray-600'
