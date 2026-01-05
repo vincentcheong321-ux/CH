@@ -453,8 +453,9 @@ const ClientLedger: React.FC = () => {
                             <div className="text-gray-300 font-light px-0.5 shrink-0">-</div>
 
                             {/* Win Amount - Stick to details, bold red */}
+                            {/* FIX: Remove commas before parsing to avoid truncation of amounts >= 1,000 */}
                             <div className="text-red-600 font-black text-lg md:text-xl tracking-tighter shrink-0">
-                                {parseFloat(line.win) > 0 ? parseFloat(line.win).toLocaleString() : ''}
+                                {parseFloat(line.win.replace(/,/g, '')) > 0 ? parseFloat(line.win.replace(/,/g, '')).toLocaleString() : ''}
                             </div>
                         </div>
                     </div>
