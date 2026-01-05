@@ -293,27 +293,30 @@ const ClientLedger: React.FC = () => {
       }
   };
 
-  // Unified Winner Parser for Editor
+  // Unified Winner Parser for Editor and Viewer
   const parseAllWinningDetails = (desc: string) => {
       const safeDesc = desc || '';
       const dateMatch = safeDesc.match(/^(\d{1,2}[\/\.]\d{1,2})\s+(.*)/);
       const dateStr = dateMatch ? dateMatch[1] : '';
       const content = dateMatch ? dateMatch[2] : safeDesc;
+      
+      // Split entries by semicolon
       const lines = content.split(/;\s*/).filter(Boolean);
 
       const parsedLines: WinningLineData[] = lines.map(line => {
-          const parts = line.split(/\s+-\s+/);
+          // Splitting by ' - ' dash (robust to multiple spaces)
+          const parts = line.split('-').map(p => p.trim());
           let sides = '', num = '', big = '0', small = '0', win = '0', type = '', pos = '';
           
           if (parts.length >= 4) {
-              const headPart = parts[0].trim();
+              const headPart = parts[0];
               const headSplit = headPart.split(/\s+/);
               sides = headSplit[0] || '';
               num = headSplit[1] || '';
               big = parts[1] || '0';
               small = parts[2] || '0';
               
-              const tail = parts[3].trim();
+              const tail = parts[3];
               const tailSplit = tail.split(/\s+(.+)/);
               win = tailSplit[0] || '0';
               let restVal = tailSplit[1] || '';
@@ -324,6 +327,9 @@ const ClientLedger: React.FC = () => {
               } else {
                   type = restVal;
               }
+          } else {
+              // Fallback for non-standard lines
+              num = line;
           }
           return { sides, number: num, big, small, win, type, pos };
       });
@@ -413,9 +419,7 @@ const ClientLedger: React.FC = () => {
                                 <span className="font-bold w-[75px] md:w-[90px] shrink-0 truncate mr-1 font-mono tracking-tight uppercase">{line.sides} {line.number}</span>
                                 <span className="text-gray-500 w-[60px] shrink-0 text-center mr-2 font-mono tracking-tighter text-[10px] md:text-xs bg-gray-50 rounded-sm py-0.5 border border-gray-100">{line.big} - {line.small}</span>
                                 <span className="text-gray-400 text-[9px] md:text-[10px] truncate uppercase font-bold mr-auto tracking-wide">{line.type}</span>
-                                <span className="text-red-600 font-black shrink-0 text-right font-mono text-[14px] md:text-[18px] ml-2 tracking-tight">
-                                    {line.win}
-                                </span>
+                                {/* Total win amount for this row is intentionally hidden here because it's in the amount column */}
                             </div>
                         );
                     })}
