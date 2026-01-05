@@ -293,40 +293,6 @@ const ClientLedger: React.FC = () => {
       }
   };
 
-  const handleUpdateRecord = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingRecord) return;
-    
-    let finalDesc = editingRecord.description;
-    if (editingRecord.typeLabel === '中') {
-        const assembledLines = editWinLines.map(l => `${l.sides} ${l.number} - ${l.big} - ${l.small} - ${l.win} ${l.type} (${l.pos})`).join('; ');
-        finalDesc = `${editWinDate} ${assembledLines}`.trim();
-    }
-
-    await updateLedgerRecord(editingRecord.id, { 
-        amount: editingRecord.amount, 
-        description: finalDesc, 
-        operation: editingRecord.operation, 
-        date: editingRecord.date, 
-        isVisible: editingRecord.isVisible, 
-        column: editingRecord.column 
-    });
-    loadRecords();
-    setEditingRecord(null);
-  };
-
-  const calculateColumn = (columnKey: LedgerColumn) => {
-      const colRecords = filteredRecords.filter(r => r.column === columnKey);
-      const processed = colRecords.map(r => ({ ...r, netChange: getNetAmount(r) }));
-      const visibleProcessed = processed.filter(r => r.isVisible);
-      const finalBalance = visibleProcessed.reduce((acc, curr) => acc + curr.netChange, 0);
-      return { processed, finalBalance };
-  };
-
-  const mainLedger = useMemo(() => calculateColumn('main'), [filteredRecords]);
-  const col1Ledger = useMemo(() => calculateColumn('col1'), [filteredRecords]);
-  const col2Ledger = useMemo(() => calculateColumn('col2'), [filteredRecords]);
-
   // Unified Winner Parser for Editor
   const parseAllWinningDetails = (desc: string) => {
       const safeDesc = desc || '';
@@ -369,9 +335,46 @@ const ClientLedger: React.FC = () => {
           const { dateStr, parsedLines } = parseAllWinningDetails(record.description);
           setEditWinDate(dateStr);
           setEditWinLines(parsedLines.length > 0 ? parsedLines : [{ sides: '', number: '', big: '0', small: '0', win: '0', type: 'ibox', pos: '头' }]);
+      } else {
+          setEditWinDate('');
+          setEditWinLines([]);
       }
       setEditingRecord(record);
   };
+
+  const handleUpdateRecord = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRecord) return;
+    
+    let finalDesc = editingRecord.description;
+    if (editingRecord.typeLabel === '中') {
+        const assembledLines = editWinLines.map(l => `${l.sides} ${l.number} - ${l.big} - ${l.small} - ${l.win} ${l.type} (${l.pos})`).join('; ');
+        finalDesc = `${editWinDate} ${assembledLines}`.trim();
+    }
+
+    await updateLedgerRecord(editingRecord.id, { 
+        amount: editingRecord.amount, 
+        description: finalDesc, 
+        operation: editingRecord.operation, 
+        date: editingRecord.date, 
+        isVisible: editingRecord.isVisible, 
+        column: editingRecord.column 
+    });
+    loadRecords();
+    setEditingRecord(null);
+  };
+
+  const calculateColumn = (columnKey: LedgerColumn) => {
+      const colRecords = filteredRecords.filter(r => r.column === columnKey);
+      const processed = colRecords.map(r => ({ ...r, netChange: getNetAmount(r) }));
+      const visibleProcessed = processed.filter(r => r.isVisible);
+      const finalBalance = visibleProcessed.reduce((acc, curr) => acc + curr.netChange, 0);
+      return { processed, finalBalance };
+  };
+
+  const mainLedger = useMemo(() => calculateColumn('main'), [filteredRecords]);
+  const col1Ledger = useMemo(() => calculateColumn('col1'), [filteredRecords]);
+  const col2Ledger = useMemo(() => calculateColumn('col2'), [filteredRecords]);
 
   const renderFormattedDescription = (text: string | undefined) => {
     if (!text) return null;
@@ -438,7 +441,8 @@ const ClientLedger: React.FC = () => {
           <div className="flex flex-col space-y-0.5 w-full">
                 {data.processed.map((r) => {
                     const isWinning = r.typeLabel === '中';
-                    const isPanelWin = isWinning && columnType !== 'main';
+                    // User Request: will not show 中 in panel 1 col1, only show in right main column
+                    const hideLabel = isWinning && columnType === 'col1';
                     
                     return (
                     <div key={r.id} className={`group flex items-start py-1 relative gap-1 md:gap-2 w-full ${!r.isVisible ? 'opacity-30 grayscale no-print' : ''}`}>
@@ -449,7 +453,7 @@ const ClientLedger: React.FC = () => {
 
                         <div className="flex w-full items-start">
                             <div className="text-sm md:text-xl font-bold uppercase tracking-wide text-gray-600 min-w-[20px] md:min-w-[32px] shrink-0 text-center leading-tight pt-0.5">
-                                {isPanelWin ? '' : r.typeLabel}
+                                {hideLabel ? '' : r.typeLabel}
                             </div>
                             <div className="flex-1 px-1.5 min-w-0 overflow-hidden">
                                 {isWinning 
