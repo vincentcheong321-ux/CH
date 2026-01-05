@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Printer, Trash2, Plus, Minus, Pencil, X, Check, AlertTriangle, ExternalLink, GripHorizontal, Hash, Zap, ChevronLeft, ChevronRight, ImageDown } from 'lucide-react';
@@ -415,29 +414,29 @@ const ClientLedger: React.FC = () => {
             
             <div className="flex flex-col w-full min-w-0 gap-0.5 overflow-visible">
                 {parsedLines.map((line, i) => (
-                    <div key={i} className="grid grid-cols-[24px_34px_40px_28px_20px_1fr] gap-0.5 items-center text-[12px] md:text-[13px] leading-none py-0.5 w-full whitespace-nowrap">
+                    <div key={i} className="flex items-center gap-1 text-[12px] md:text-[13px] leading-none py-0.5 w-full whitespace-nowrap">
                         {/* Sides */}
-                        <div className="font-extrabold text-gray-800 uppercase tracking-tighter text-left">
+                        <div className="w-[24px] font-extrabold text-gray-800 uppercase tracking-tighter text-left shrink-0">
                             {line.sides}
                         </div>
                         
                         {/* Number */}
-                        <div className="font-black text-gray-900 tracking-tighter text-center">
+                        <div className="w-[34px] font-black text-gray-900 tracking-tighter text-center shrink-0">
                             {line.number}
                         </div>
                         
                         {/* Bet (Big-Small) */}
-                        <div className="text-gray-500 font-bold text-[10px] md:text-[11px] text-center tracking-tighter">
+                        <div className="w-[40px] text-gray-500 font-bold text-[10px] md:text-[11px] text-center tracking-tighter shrink-0">
                             {line.big}-{line.small}
                         </div>
                         
                         {/* Type */}
-                        <div className="text-gray-400 text-[9px] md:text-[10px] uppercase font-bold text-center truncate">
+                        <div className="w-[28px] text-gray-400 text-[9px] md:text-[10px] uppercase font-bold text-center truncate shrink-0">
                             {line.type}
                         </div>
                         
                         {/* Position in Circle */}
-                        <div className="flex justify-center">
+                        <div className="w-[20px] flex justify-center shrink-0">
                             {line.pos && (
                                 <div className="w-4 h-4 rounded-full border border-gray-900 flex items-center justify-center bg-white shadow-sm">
                                     <span className="text-[9px] font-black text-gray-900 leading-none scale-90">
@@ -447,8 +446,11 @@ const ClientLedger: React.FC = () => {
                             )}
                         </div>
 
+                        {/* Dash Separator */}
+                        <div className="text-gray-300 px-1 font-light shrink-0">-</div>
+
                         {/* Win Amount */}
-                        <div className="text-red-600 font-black text-right truncate text-base md:text-lg tracking-tighter">
+                        <div className="text-red-600 font-black text-base md:text-lg tracking-tighter shrink-0">
                             {parseFloat(line.win) > 0 ? parseFloat(line.win).toLocaleString() : ''}
                         </div>
                     </div>
