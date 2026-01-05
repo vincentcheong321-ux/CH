@@ -301,7 +301,8 @@ const ClientLedger: React.FC = () => {
   const col2Ledger = useMemo(() => calculateColumn('col2'), [filteredRecords]);
 
   // Standard formatter for regular descriptions
-  const renderFormattedDescription = (text: string | undefined) => {
+  // Explicitly accepts string to avoid type errors, caller must ensure string
+  const renderFormattedDescription = (text: string) => {
     if (!text) return null;
     const dateMatch = text.match(/^(\d{1,2}\/\d{1,2})\s+(.*)/);
     if (dateMatch) {
@@ -361,8 +362,9 @@ const ClientLedger: React.FC = () => {
     return { valid: false, text: line };
   };
 
-  const renderWinningContent = (description: string | undefined) => {
-    const safeDesc = description || '';
+  // Explicitly accepts string to avoid type errors
+  const renderWinningContent = (description: string) => {
+    const safeDesc = description;
     const dateMatch = safeDesc.match(/^(\d{1,2}[\/\.]\d{1,2})\s+(.*)/);
     const date = dateMatch ? dateMatch[1] : '';
     const content = dateMatch ? dateMatch[2] : safeDesc;

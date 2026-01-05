@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Calculator, Trophy, Plus, Trash2, Save, User, CheckCircle, Calendar, Layers, RefreshCw } from 'lucide-react';
@@ -356,7 +355,7 @@ const WinCalculator: React.FC = () => {
         }, {} as Record<string, WinningEntry & { big: number; small: number; win: number }>);
 
         const description = Object.values(groupedMap)
-            .map(e => {
+            .map((e: WinningEntry & { big: number; small: number; win: number }) => {
                 const typeStr = e.playType === 'Box' ? 'ibox' : e.playType === 'Pau' ? '包' : '';
                 const winStr = Math.floor(e.win).toLocaleString();
                 const sidesStr = e.sides.join('');
@@ -503,8 +502,8 @@ const WinCalculator: React.FC = () => {
         const dateStr = selectedDate;
         let weekNum = 1;
         const foundWeek = Object.keys(weeks).find(w => weeks[parseInt(w)].some(day => 
-            `${day.getFullYear()}-${String(day.getMonth()+1).padStart(2,'0')}-${String(day.getDate()).padStart(2,'0')}` === dateStr
-        ));
+            `${day.getFullYear()}-${String(day.getMonth()+1).padStart(2,'0')}-${String(day.getDate()).padStart(2,'0')}` === dateStr)
+        );
         if (foundWeek) weekNum = parseInt(foundWeek);
         return { year: y, month: m, week: weekNum };
     }, [selectedDate]);
