@@ -452,40 +452,76 @@ export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: 
 // --- SPECIAL CARRY FORWARD LOGIC ---
 export const generateSpecialCarryForward = async (clientId: string, clientCode: string, targetDate: string): Promise<number> => {
     if (!supabase) return 0;
+    
+    // Lookback constraint (safety net)
     const lookbackDate = new Date(targetDate);
     lookbackDate.setDate(lookbackDate.getDate() - 90);
     const lookbackStr = lookbackDate.toISOString().split('T')[0];
 
-    const { data: recentRecords } = await supabase.from('financial_journal').select('*').eq('client_id', clientId).lt('entry_date', targetDate).gte('entry_date', lookbackStr);
+    // 1. Find the latest "Checkpoint" (Carry Forward) date within the lookback period
+    // This prevents fetching duplicates from older periods that were already carried forward.
+    const { data: snapshotCheck } = await supabase.from('financial_journal')
+       .select('entry_date')
+       .eq('client_id', clientId)
+       .lt('entry_date', targetDate)
+       .gte('entry_date', lookbackStr)
+       .contains('data', { column: 'col1', isCarryForward: true })
+       .order('entry_date', { ascending: false })
+       .limit(1);
+
+    let queryStartDate = lookbackStr;
+    if (snapshotCheck && snapshotCheck.length > 0) {
+        queryStartDate = snapshotCheck[0].entry_date;
+    }
+
+    // 2. Fetch records from the Checkpoint onwards
+    const { data: recentRecords } = await supabase.from('financial_journal')
+        .select('*')
+        .eq('client_id', clientId)
+        .lt('entry_date', targetDate)
+        .gte('entry_date', queryStartDate);
+
     if (!recentRecords || recentRecords.length === 0) return 0;
 
     const col1Records = recentRecords.filter(r => r.data?.column === 'col1').map(mapJournalToLedgerRecord);
     if (col1Records.length === 0) return 0;
 
+    // 3. Sort and Pick Latest 5
+    // sortLedgerRecords sorts by Date ASC (Oldest -> Newest)
     const sorted = sortLedgerRecords(col1Records);
+    
     let rowsToCopy: LedgerRecord[] = [];
     const code = clientCode.toUpperCase();
 
     if (code === 'Z21') {
         rowsToCopy = sorted.slice(-4).map((r, i) => i === 0 ? { ...r, operation: 'none' as const } : r);
     } else if (code === 'C19') {
-        // REQUIREMENT: C19 copies the latest 5 records
-        // `sorted` is sorted ASC by date (oldest to newest), so slice(-5) gives newest 5
+        // C19: Latest 5
         rowsToCopy = sorted.slice(-5);
     } else {
         return 0;
     }
 
+    // 4. Insert New Records
     const sum = rowsToCopy.reduce((acc, r) => acc + getNetAmount(r), 0);
     let weightIdx = 0;
     for (const r of rowsToCopy) {
         let signedAmount = r.operation === 'add' ? r.amount : (r.operation === 'subtract' ? -r.amount : r.amount);
-        const { data: dupes } = await supabase.from('financial_journal').select('id').eq('client_id', clientId).eq('entry_date', targetDate).contains('data', { description: r.description, column: 'col1', sortWeight: weightIdx }); 
+        
+        // Idempotency check: Don't insert if already exists for THIS target date
+        const { data: dupes } = await supabase.from('financial_journal')
+            .select('id')
+            .eq('client_id', clientId)
+            .eq('entry_date', targetDate)
+            .contains('data', { description: r.description, column: 'col1', sortWeight: weightIdx }); 
+            
         if (!dupes || dupes.length === 0) {
             await supabase.from('financial_journal').insert({
                 client_id: clientId, entry_date: targetDate, entry_type: 'MANUAL', amount: signedAmount,
                 data: { description: r.description, typeLabel: r.typeLabel, operation: r.operation, column: 'col1', isCarryForward: true, sortWeight: weightIdx }
             });
+            
+            // Z21 Panel 2 logic preservation
             if (code === 'Z21' && weightIdx === 0) {
                  const { data: dupesP2 } = await supabase.from('financial_journal').select('id').eq('client_id', clientId).eq('entry_date', targetDate).contains('data', { description: r.description, column: 'col2' });
                  if (!dupesP2 || dupesP2.length === 0) {
