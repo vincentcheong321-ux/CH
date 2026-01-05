@@ -349,15 +349,15 @@ const ClientLedger: React.FC = () => {
         <div className="flex flex-col w-full min-w-0 pt-0.5">
             <div className="flex items-start gap-1">
                 {date && <span className="text-[10px] md:text-[11px] font-mono text-gray-400 shrink-0 select-none pt-0.5 w-[32px] text-left">{date}</span>}
-                <div className="flex flex-col w-full min-w-0 gap-1">
+                <div className="flex flex-col w-full min-w-0 gap-1.5">
                     {lines.map((line, i) => {
                         const parsed = parseWinningLine(line);
                         if (parsed.valid) {
                             return (
                                 <div key={i} className="flex items-center text-[11px] md:text-sm text-gray-800 leading-none">
-                                    <span className="font-bold w-[75px] md:w-[90px] shrink-0 truncate mr-1 font-mono tracking-tight">{parsed.head}</span>
-                                    <span className="text-gray-500 w-[45px] shrink-0 text-center mr-1 font-mono tracking-tighter text-[10px] md:text-xs bg-gray-50 rounded-sm py-0.5">{parsed.bet}</span>
-                                    <span className="text-red-600 font-black w-[60px] shrink-0 text-right mr-2 font-mono text-[12px] md:text-[15px]">{parsed.win}</span>
+                                    <span className="font-bold w-[90px] md:w-[110px] shrink-0 truncate mr-2 font-mono tracking-tight">{parsed.head}</span>
+                                    <span className="text-gray-500 w-[50px] shrink-0 text-center mr-2 font-mono tracking-tighter text-[10px] md:text-xs bg-gray-50 rounded-sm py-0.5">{parsed.bet}</span>
+                                    <span className="text-red-600 font-black w-[70px] shrink-0 text-right mr-3 font-mono text-[12px] md:text-[15px]">{parsed.win}</span>
                                     <span className="text-gray-400 text-[9px] md:text-[10px] truncate uppercase font-medium">{parsed.rest}</span>
                                 </div>
                             );
@@ -370,13 +370,16 @@ const ClientLedger: React.FC = () => {
     );
   };
 
-  const LedgerColumnView = ({ data, footerLabel = "收" }: { data: ReturnType<typeof calculateColumn>, footerLabel?: string }) => {
+  const LedgerColumnView = ({ data, footerLabel = "收", columnType }: { data: ReturnType<typeof calculateColumn>, footerLabel?: string, columnType: LedgerColumn }) => {
       if (data.processed.length === 0) return <div className="flex-1 min-h-[50px]" />;
       const isMain = footerLabel === '欠';
       const hasCalculableRecords = data.processed.some(r => r.isVisible && r.operation !== 'none');
       const isNegative = data.finalBalance < 0;
+      
       let displayLabel = footerLabel;
-      if (isNegative && (footerLabel === '收' || footerLabel === '欠')) displayLabel = '补';
+      if (isNegative && (footerLabel === '收' || footerLabel === '欠')) {
+          displayLabel = columnType === 'main' ? '补' : '';
+      }
       
       return (
       <div className="flex flex-col w-full px-1">
@@ -390,7 +393,7 @@ const ClientLedger: React.FC = () => {
 
                     <div className="flex w-full items-start">
                         <div className="text-sm md:text-xl font-bold uppercase tracking-wide text-gray-600 min-w-[20px] md:min-w-[32px] shrink-0 text-center leading-tight">
-                            {r.typeLabel === '中' ? '' : r.typeLabel}
+                            {r.typeLabel === '中' && columnType !== 'main' ? '' : r.typeLabel}
                         </div>
                         <div className="flex-1 px-1.5 min-w-0">
                             {r.typeLabel === '中' 
@@ -398,7 +401,7 @@ const ClientLedger: React.FC = () => {
                                 : renderFormattedDescription(r.description)
                             }
                         </div>
-                        <div className={`text-base md:text-2xl font-mono font-bold shrink-0 min-w-[90px] md:min-w-[150px] text-right leading-none ${
+                        <div className={`text-base md:text-2xl font-mono font-bold shrink-0 min-w-[120px] md:min-w-[160px] text-right leading-none pl-2 ${
                             r.operation === 'add' ? 'text-green-700' : 
                             r.operation === 'subtract' ? (isMain ? 'text-red-700' : 'text-gray-900') : 
                             'text-gray-600'
@@ -413,7 +416,7 @@ const ClientLedger: React.FC = () => {
           {hasCalculableRecords && (
             <div className="mt-3 pt-1.5 flex flex-col items-end w-full border-t-2 border-gray-900">
                 <div className="flex items-center gap-1 md:gap-4 justify-end w-full">
-                    <span className="text-sm md:text-xl font-bold text-gray-900 uppercase">{displayLabel}</span>
+                    {displayLabel && <span className="text-sm md:text-xl font-bold text-gray-900 uppercase">{displayLabel}</span>}
                     <span className={`text-lg md:text-3xl font-mono font-bold min-w-[110px] md:min-w-[170px] text-right ${data.finalBalance >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
                         {data.finalBalance < 0 ? `(${Math.abs(data.finalBalance).toLocaleString(undefined, {minimumFractionDigits: 2})})` : data.finalBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}
                     </span>
@@ -566,15 +569,15 @@ const ClientLedger: React.FC = () => {
 
                     <div className="flex flex-col md:flex-row w-full min-h-[400px] relative" ref={containerRef}>
                         <div className={`relative flex flex-col p-1 md:p-2 border-r border-transparent group ${activeColumn === 'col1' ? 'block w-full md:flex md:w-auto' : 'hidden md:flex'}`} style={{ width: window.innerWidth >= 768 ? `${colWidths[0]}%` : undefined }}>
-                            <LedgerColumnView data={col1Ledger} footerLabel="收"/>
+                            <LedgerColumnView data={col1Ledger} footerLabel="收" columnType="col1"/>
                             <div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print hidden md:flex" onMouseDown={(e) => startResizeCol(0, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div>
                         </div>
                         <div className={`relative flex flex-col p-1 md:p-2 border-r border-transparent group ${activeColumn === 'col2' ? 'block w-full md:flex md:w-auto' : 'hidden md:flex'}`} style={{ width: window.innerWidth >= 768 ? `${colWidths[1]}%` : undefined }}>
-                            <LedgerColumnView data={col2Ledger} footerLabel="收"/>
+                            <LedgerColumnView data={col2Ledger} footerLabel="收" columnType="col2"/>
                             <div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print hidden md:flex" onMouseDown={(e) => startResizeCol(1, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div>
                         </div>
                         <div className={`relative flex flex-col p-1 md:p-2 bg-gray-50/30 ${activeColumn === 'main' ? 'block w-full md:flex md:w-auto' : 'hidden md:flex'}`} style={{ width: window.innerWidth >= 768 ? `${colWidths[2]}%` : undefined }}>
-                            <LedgerColumnView data={mainLedger} footerLabel="欠"/>
+                            <LedgerColumnView data={mainLedger} footerLabel="欠" columnType="main"/>
                         </div>
                     </div>
 
