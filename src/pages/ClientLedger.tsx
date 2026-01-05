@@ -211,7 +211,7 @@ const ClientLedger: React.FC = () => {
     if (isNaN(val)) return;
     let op = activeCategory.label === '' ? currentOperation : activeCategory.operation;
     if (activeColumn === 'col1' && activeCategory.label === '') op = 'none';
-    const entryDate = `${currentDate.getFullYear()}-${String(currentDate.getMonth()+1).padStart(2,'0')}-${String(currentDate.getDate()).padStart(2,'0')}`;
+    const entryDate = `${currentDate.getFullYear()}-${String(currentMonth+1).padStart(2,'0')}-${String(currentDate.getDate()).padStart(2,'0')}`;
     const newRecord: Omit<LedgerRecord, 'id'> = {
       clientId: id, date: entryDate, description: description, typeLabel: activeCategory.label, amount: val, operation: op, column: activeColumn, isVisible: isVisible
     };
@@ -298,7 +298,6 @@ const ClientLedger: React.FC = () => {
       }
   };
 
-  // Improved Winner Parser to handle: [SIDES] [NUMBER] [BIG] - [SMALL] [TYPE] [POS] - [WIN]
   const parseAllWinningDetails = (desc: string) => {
       const safeDesc = desc || '';
       const dateMatch = safeDesc.match(/^(\d{1,2}[\/\.]\d{1,2})\s+(.*)/);
@@ -312,7 +311,6 @@ const ClientLedger: React.FC = () => {
           let sides = '', num = '', big = '0', small = '0', win = '0', type = '', pos = '';
           
           if (parts.length >= 3) {
-              // Parts: ["SIDES NUMBER BIG", "SMALL TYPE POS", "WIN"]
               const head = parts[0].split(/\s+/).filter(Boolean);
               if (head.length >= 3) {
                   sides = head[0]; num = head[1]; big = head[2];
@@ -331,7 +329,6 @@ const ClientLedger: React.FC = () => {
 
               win = parts[2];
           } else if (parts.length === 2) {
-               // Fallback for older format: ["INFO", "WIN"]
                const head = parts[0].split(/\s+/).filter(Boolean);
                sides = head[0] || '';
                num = head[1] || '';
@@ -410,34 +407,34 @@ const ClientLedger: React.FC = () => {
     
     return (
         <div className="flex flex-col w-full min-w-0 pt-0.5 overflow-visible font-mono">
-            {/* Date on Top - Positioned like the screenshot */}
+            {/* Date on Top */}
             {dateStr && (
-                <div className="text-[11px] md:text-[13px] text-gray-400 select-none pb-0.5 mb-1 pl-[45px] md:pl-[65px]">
+                <div className="text-[11px] md:text-[12px] text-gray-400 select-none pb-0.5 mb-1 pl-8 md:pl-12">
                     {dateStr}
                 </div>
             )}
             <div className="flex flex-col w-full min-w-0 gap-1.5 overflow-visible">
                 {parsedLines.map((line, i) => (
-                    <div key={i} className="flex items-center text-[12px] md:text-sm text-gray-800 leading-none py-1 w-full relative h-6 whitespace-nowrap overflow-visible">
-                        <span className="font-bold w-[40px] md:w-[50px] shrink-0 text-gray-600 uppercase text-left">{line.sides}</span>
-                        <span className="font-bold w-[50px] md:w-[65px] shrink-0 text-gray-900 tracking-wider text-left">{line.number}</span>
-                        <span className="text-gray-400 w-[65px] md:w-[85px] shrink-0 text-center text-[10px] md:text-xs font-bold px-1">
+                    <div key={i} className="flex items-center text-[11px] md:text-[13px] text-gray-800 leading-none py-1 w-full relative h-6 whitespace-nowrap overflow-visible">
+                        <span className="font-bold w-[35px] md:w-[45px] shrink-0 text-gray-800 uppercase text-left">{line.sides}</span>
+                        <span className="font-bold w-[45px] md:w-[60px] shrink-0 text-gray-900 tracking-wider text-left">{line.number}</span>
+                        <span className="text-gray-400 w-[55px] md:w-[70px] shrink-0 text-center text-[10px] md:text-[11px] font-bold px-1">
                             {line.big} - {line.small}
                         </span>
-                        <span className="text-gray-400 text-[10px] md:text-[11px] uppercase font-bold w-[40px] md:w-[50px] shrink-0 truncate text-left">{line.type}</span>
+                        <span className="text-gray-400 text-[9px] md:text-[10px] uppercase font-bold w-[35px] md:w-[45px] shrink-0 truncate text-left">{line.type}</span>
                         
-                        {/* Position with badge styling ("Logo") */}
-                        <div className="w-[30px] md:w-[40px] shrink-0 flex justify-center">
+                        {/* Position Logo/Badge */}
+                        <div className="w-[30px] md:w-[35px] shrink-0 flex justify-center">
                             {line.pos && (
-                                <span className="px-1 py-0.5 rounded border border-gray-300 bg-gray-50 text-[10px] md:text-[11px] font-bold text-gray-700 leading-none">
+                                <span className="px-1 py-0.5 rounded border border-gray-400 bg-white text-[10px] md:text-[11px] font-bold text-gray-800 leading-none shadow-sm min-w-[18px] text-center">
                                     {line.pos}
                                 </span>
                             )}
                         </div>
 
-                        {/* Hyphen and Amount alignment */}
-                        <span className="text-gray-400 px-2">-</span>
-                        <span className="text-red-600 font-black flex-1 text-right text-[13px] md:text-[18px] pr-2 overflow-hidden truncate">
+                        <span className="text-gray-300 px-1 font-light">-</span>
+                        
+                        <span className="text-red-600 font-black flex-1 text-right text-[12px] md:text-[16px] pr-1 overflow-hidden truncate">
                             {parseFloat(line.win) > 0 ? parseFloat(line.win).toLocaleString() : ''}
                         </span>
                     </div>
@@ -495,7 +492,7 @@ const ClientLedger: React.FC = () => {
                                     {r.operation === 'none' ? r.amount.toLocaleString(undefined, {minimumFractionDigits: 2}) : Math.abs(r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2})}
                                 </div>
                             ) : (
-                                <div className="shrink-0 w-[110px] md:w-[160px]" />
+                                <div className="shrink-0 w-[100px] md:w-[130px]" />
                             )}
                         </div>
                     </div>
