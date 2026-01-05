@@ -456,25 +456,24 @@ const ClientLedger: React.FC = () => {
         {/* Input Controls */}
         <div className="no-print mb-6 md:mb-8 space-y-4">
             
-            {/* Panel Selector (Restored Top Position) */}
-            <div className="flex justify-start items-center space-x-3 overflow-x-auto no-scrollbar pb-2 md:pb-0">
-                <span className="text-xs font-bold text-gray-400 uppercase hidden md:inline-block mr-1">View Panel:</span>
-                <div className="flex bg-white rounded-full p-1 border border-gray-200 shadow-sm">
+            {/* Panel Selector (Mobile Only Horizontal) */}
+            <div className="flex md:hidden justify-center items-center space-x-3 overflow-x-auto no-scrollbar pb-2">
+                <div className="flex bg-white rounded-full p-1 border border-gray-200 shadow-sm w-full">
                     <button 
                         onClick={() => setActiveColumn('col1')} 
-                        className={`px-3 py-1.5 text-xs font-bold rounded-full transition-all whitespace-nowrap ${activeColumn === 'col1' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+                        className={`flex-1 px-3 py-1.5 text-xs font-bold rounded-full transition-all whitespace-nowrap ${activeColumn === 'col1' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
                     >
                         Panel 1
                     </button>
                     <button 
                         onClick={() => setActiveColumn('col2')} 
-                        className={`px-3 py-1.5 text-xs font-bold rounded-full transition-all whitespace-nowrap ${activeColumn === 'col2' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+                        className={`flex-1 px-3 py-1.5 text-xs font-bold rounded-full transition-all whitespace-nowrap ${activeColumn === 'col2' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
                     >
                         Panel 2
                     </button>
                     <button 
                         onClick={() => setActiveColumn('main')} 
-                        className={`px-3 py-1.5 text-xs font-bold rounded-full transition-all whitespace-nowrap ${activeColumn === 'main' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+                        className={`flex-1 px-3 py-1.5 text-xs font-bold rounded-full transition-all whitespace-nowrap ${activeColumn === 'main' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
                     >
                         Main
                     </button>
@@ -542,62 +541,89 @@ const ClientLedger: React.FC = () => {
             )}
         </div>
 
-        {/* Ledger Display Area */}
-        <div id="printable-area" className="relative max-w-5xl mx-auto">
-            <div className="bg-white border border-gray-200 shadow-sm min-h-[600px] relative text-lg font-serif">
-                
-                {/* Resizer Top */}
-                <div style={{ height: `${verticalPadding.top}px` }} className="relative group w-full no-print-bg">
-                    <div className="absolute bottom-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResizeVertical('top', e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div>
-                </div>
-                
-                {/* Header */}
-                <div className="px-4 md:px-8 pb-2 md:pb-4 flex justify-between items-end mb-2 md:mb-4">
-                    <div>
-                        <h2 className="text-2xl md:text-4xl font-bold text-gray-900 uppercase tracking-widest">{client.name}</h2>
-                        {client.code && <p className="text-gray-600 mt-1 font-mono text-sm md:text-xl">{client.code}</p>}
-                    </div>
-                    {/* Mobile Only: Show current active panel indicator */}
-                    <div className="md:hidden text-right">
-                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Viewing</span>
-                        <div className="text-sm font-bold text-blue-600 uppercase">{activeColumn === 'main' ? 'Main Ledger' : activeColumn === 'col1' ? 'Panel 1' : 'Panel 2'}</div>
-                    </div>
-                </div>
+        {/* Layout Container for Desktop Sidebar + Ledger */}
+        <div className="flex flex-col md:flex-row gap-4 items-start relative">
+            
+            {/* Desktop Vertical Panel Selector Sidebar */}
+            <div className="hidden md:flex flex-col gap-2 no-print sticky top-24 z-10 w-24 shrink-0">
+                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 pl-1">Panels</div>
+                <button 
+                    onClick={() => setActiveColumn('col1')} 
+                    className={`px-3 py-2 text-[10px] font-bold rounded-lg text-left transition-all border ${activeColumn === 'col1' ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'}`}
+                >
+                    Panel 1
+                </button>
+                <button 
+                    onClick={() => setActiveColumn('col2')} 
+                    className={`px-3 py-2 text-[10px] font-bold rounded-lg text-left transition-all border ${activeColumn === 'col2' ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'}`}
+                >
+                    Panel 2
+                </button>
+                <button 
+                    onClick={() => setActiveColumn('main')} 
+                    className={`px-3 py-2 text-[10px] font-bold rounded-lg text-left transition-all border ${activeColumn === 'main' ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'}`}
+                >
+                    Main
+                </button>
+            </div>
 
-                {/* Ledger Content - Responsive Layout */}
-                <div className="flex flex-col md:flex-row w-full min-h-[400px] relative" ref={containerRef}>
-                    {/* Mobile Logic: On small screens, hide columns that are not active. On desktop (md), show all with set widths. */}
+            {/* Ledger Display Area */}
+            <div id="printable-area" className="flex-1 w-full min-w-0">
+                <div className="bg-white border border-gray-200 shadow-sm min-h-[600px] relative text-lg font-serif">
                     
-                    {/* Column 1 */}
-                    <div 
-                        className={`relative flex flex-col p-1 md:p-2 border-r border-transparent group ${activeColumn === 'col1' ? 'block w-full' : 'hidden md:flex'}`}
-                        style={{ width: window.innerWidth >= 768 ? `${colWidths[0]}%` : undefined }}
-                    >
-                        <LedgerColumnView data={col1Ledger} footerLabel="收"/>
-                        <div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print hidden md:flex" onMouseDown={(e) => startResizeCol(0, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div>
+                    {/* Resizer Top */}
+                    <div style={{ height: `${verticalPadding.top}px` }} className="relative group w-full no-print-bg">
+                        <div className="absolute bottom-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResizeVertical('top', e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div>
+                    </div>
+                    
+                    {/* Header */}
+                    <div className="px-4 md:px-8 pb-2 md:pb-4 flex justify-between items-end mb-2 md:mb-4">
+                        <div>
+                            <h2 className="text-2xl md:text-4xl font-bold text-gray-900 uppercase tracking-widest">{client.name}</h2>
+                            {client.code && <p className="text-gray-600 mt-1 font-mono text-sm md:text-xl">{client.code}</p>}
+                        </div>
+                        {/* Mobile Only: Show current active panel indicator */}
+                        <div className="md:hidden text-right">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Viewing</span>
+                            <div className="text-sm font-bold text-blue-600 uppercase">{activeColumn === 'main' ? 'Main Ledger' : activeColumn === 'col1' ? 'Panel 1' : 'Panel 2'}</div>
+                        </div>
                     </div>
 
-                    {/* Column 2 */}
-                    <div 
-                        className={`relative flex flex-col p-1 md:p-2 border-r border-transparent group ${activeColumn === 'col2' ? 'block w-full' : 'hidden md:flex'}`}
-                        style={{ width: window.innerWidth >= 768 ? `${colWidths[1]}%` : undefined }}
-                    >
-                        <LedgerColumnView data={col2Ledger} footerLabel="收"/>
-                        <div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print hidden md:flex" onMouseDown={(e) => startResizeCol(1, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div>
+                    {/* Ledger Content - Responsive Layout */}
+                    <div className="flex flex-col md:flex-row w-full min-h-[400px] relative" ref={containerRef}>
+                        {/* Mobile Logic: On small screens, hide columns that are not active. On desktop (md), show all with set widths. */}
+                        
+                        {/* Column 1 */}
+                        <div 
+                            className={`relative flex flex-col p-1 md:p-2 border-r border-transparent group ${activeColumn === 'col1' ? 'block w-full' : 'hidden md:flex'}`}
+                            style={{ width: window.innerWidth >= 768 ? `${colWidths[0]}%` : undefined }}
+                        >
+                            <LedgerColumnView data={col1Ledger} footerLabel="收"/>
+                            <div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print hidden md:flex" onMouseDown={(e) => startResizeCol(0, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div>
+                        </div>
+
+                        {/* Column 2 */}
+                        <div 
+                            className={`relative flex flex-col p-1 md:p-2 border-r border-transparent group ${activeColumn === 'col2' ? 'block w-full' : 'hidden md:flex'}`}
+                            style={{ width: window.innerWidth >= 768 ? `${colWidths[1]}%` : undefined }}
+                        >
+                            <LedgerColumnView data={col2Ledger} footerLabel="收"/>
+                            <div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print hidden md:flex" onMouseDown={(e) => startResizeCol(1, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div>
+                        </div>
+
+                        {/* Main Column */}
+                        <div 
+                            className={`relative flex flex-col p-1 md:p-2 bg-gray-50/30 ${activeColumn === 'main' ? 'block w-full' : 'hidden md:flex'}`}
+                            style={{ width: window.innerWidth >= 768 ? `${colWidths[2]}%` : undefined }}
+                        >
+                            <LedgerColumnView data={mainLedger} footerLabel="欠"/>
+                        </div>
                     </div>
 
-                    {/* Main Column */}
-                    <div 
-                        className={`relative flex flex-col p-1 md:p-2 bg-gray-50/30 ${activeColumn === 'main' ? 'block w-full' : 'hidden md:flex'}`}
-                        style={{ width: window.innerWidth >= 768 ? `${colWidths[2]}%` : undefined }}
-                    >
-                        <LedgerColumnView data={mainLedger} footerLabel="欠"/>
+                    {/* Resizer Bottom */}
+                    <div style={{ height: `${verticalPadding.bottom}px` }} className="relative group w-full mt-auto no-print-bg">
+                        <div className="absolute top-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResizeVertical('bottom', e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div>
                     </div>
-                </div>
-
-                {/* Resizer Bottom */}
-                <div style={{ height: `${verticalPadding.bottom}px` }} className="relative group w-full mt-auto no-print-bg">
-                    <div className="absolute top-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResizeVertical('bottom', e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div>
                 </div>
             </div>
         </div>
