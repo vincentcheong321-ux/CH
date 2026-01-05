@@ -147,7 +147,7 @@ const ClientLedger: React.FC = () => {
         const diffX = e.clientX - startX;
         const diffPercent = (diffX / containerWidth) * 100;
         const newWidths = [...startWidths];
-        if (newWidths[index] + diffPercent < 5 || newWidths[index + 1] - diffPercent < 5) return;
+        if (newWidths[index] + diffPercent < 10 || newWidths[index + 1] - diffPercent < 10) return;
         newWidths[index] += diffPercent;
         newWidths[index + 1] -= diffPercent;
         setColWidths(newWidths);
@@ -552,10 +552,6 @@ const ClientLedger: React.FC = () => {
                  <button onClick={handlePrevMonth} disabled={currentYear === 2025 && currentMonth === 0} className="p-1 hover:bg-white rounded disabled:opacity-30"><ChevronLeft size={16}/></button>
                  <span className="px-2 text-xs font-bold w-20 text-center">{MONTH_NAMES[currentMonth].slice(0,3)} {currentYear}</span>
                  <button onClick={handleNextMonth} disabled={currentYear === 2026 && currentMonth === 11} className="p-1 hover:bg-white rounded disabled:opacity-30"><ChevronRight size={16}/></button>
-             </div>
-             <div className="text-right mr-2">
-                <p className={`text-sm md:text-lg font-bold leading-tight ${totalOwed >= 0 ? 'text-green-600' : 'text-red-600'}`}>${Math.abs(totalOwed).toLocaleString()}</p>
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{totalOwed >= 0 ? 'OWES' : 'CREDIT'}</p>
              </div>
              <div className="flex space-x-2">
                  <button onClick={openNewTab} className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-50 shadow-sm hidden md:block" title="Open in New Tab"><ExternalLink size={18} /></button>

@@ -255,10 +255,10 @@ const DrawReport: React.FC = () => {
                   if (codeUpper === 'Z21' || codeUpper === 'C19') {
                       const specialBalance = await generateSpecialCarryForward(client.id, codeUpper, selectedDate);
                       
-                      // REQUIREMENT: C19 bring forward ONLY in panel 1, do NOT show in 上欠
+                      // REQUIREMENT: C19 bring forward ONLY in panel 1, do NOT show in 上欠 (main ledger)
                       if (codeUpper === 'C19') {
                           newBalances[client.id] = '0.00';
-                          // SKIP saveDrawBalance for C19 to prevent main ledger entry
+                          // For C19, we skip saving a Draw Balance entry to keep the main ledger clean
                       } else {
                           newBalances[client.id] = specialBalance.toFixed(2);
                           await saveDrawBalance(selectedDate, client.id, specialBalance);
