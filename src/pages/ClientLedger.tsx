@@ -368,31 +368,47 @@ const ClientLedger: React.FC = () => {
       if (isNegative && (footerLabel === '收' || footerLabel === '欠')) displayLabel = '补';
       
       return (
-      <div className="flex flex-col items-center">
-          <div className="flex flex-col space-y-0.5 w-fit items-end">
+      <div className="flex flex-col w-full px-2">
+          <div className="flex flex-col space-y-0.5 w-full">
                 {data.processed.map((r) => (
-                <div key={r.id} className={`group flex justify-end items-center py-0.5 relative gap-1 md:gap-2 ${!r.isVisible ? 'opacity-30 grayscale no-print' : ''}`}>
-                    <div className="no-print opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1 absolute -left-16 z-10 bg-white shadow-sm rounded border border-gray-100 p-1">
+                <div key={r.id} className={`group flex items-start py-0.5 relative gap-2 w-full ${!r.isVisible ? 'opacity-30 grayscale no-print' : ''}`}>
+                    {/* Action buttons */}
+                    <div className="no-print opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1 absolute -left-12 top-0 z-10 bg-white shadow-sm rounded border border-gray-100 p-1">
                         <button onClick={() => setEditingRecord(r)} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Pencil size={12} /></button>
                         <button onClick={() => requestDeleteRecord(r.id)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 size={12} /></button>
                     </div>
-                    <div className="text-sm md:text-xl font-bold uppercase tracking-wide text-gray-600">{r.typeLabel}</div>
-                    {r.description && <div className="text-xs md:text-sm text-gray-600 font-medium mr-1 md:mr-2 max-w-[100px] md:max-w-[150px] truncate">{r.description}</div>}
-                    <div className={`text-base md:text-2xl font-mono font-bold w-20 md:w-36 text-right ${
-                        r.operation === 'add' ? 'text-green-700' : 
-                        r.operation === 'subtract' ? (isMain ? 'text-red-700' : 'text-gray-900') : 
-                        'text-gray-600'
-                    }`}>
-                        {r.operation === 'none' ? r.amount.toLocaleString(undefined, {minimumFractionDigits: 2}) : Math.abs(r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2})}
+
+                    {/* Table-like row layout */}
+                    <div className="flex w-full items-baseline">
+                        {/* Label (e.g. 中) */}
+                        <div className="text-sm md:text-xl font-bold uppercase tracking-wide text-gray-600 min-w-[24px] md:min-w-[40px] shrink-0">
+                            {r.typeLabel}
+                        </div>
+                        
+                        {/* Description (In-between, flexible space) */}
+                        <div className="flex-1 text-[10px] md:text-sm text-gray-600 font-medium px-1 leading-tight break-words min-w-0">
+                            {r.description}
+                        </div>
+
+                        {/* Amount (Far right) */}
+                        <div className={`text-base md:text-2xl font-mono font-bold shrink-0 min-w-[80px] md:min-w-[140px] text-right ${
+                            r.operation === 'add' ? 'text-green-700' : 
+                            r.operation === 'subtract' ? (isMain ? 'text-red-700' : 'text-gray-900') : 
+                            'text-gray-600'
+                        }`}>
+                            {r.operation === 'none' ? r.amount.toLocaleString(undefined, {minimumFractionDigits: 2}) : Math.abs(r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                        </div>
                     </div>
                 </div>
             ))}
           </div>
+
+          {/* Column Footer Total */}
           {hasCalculableRecords && (
-            <div className="mt-2 pt-1 flex flex-col items-end w-fit border-t-2 border-gray-900">
-                <div className="flex items-center gap-1 md:gap-2 justify-end">
+            <div className="mt-2 pt-1 flex flex-col items-end w-full border-t-2 border-gray-900">
+                <div className="flex items-center gap-1 md:gap-4 justify-end w-full">
                     <span className="text-sm md:text-xl font-bold text-gray-900 uppercase">{displayLabel}</span>
-                    <span className={`text-lg md:text-3xl font-mono font-bold w-24 md:w-40 text-right ${data.finalBalance >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
+                    <span className={`text-lg md:text-3xl font-mono font-bold min-w-[100px] md:min-w-[160px] text-right ${data.finalBalance >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
                         {data.finalBalance < 0 ? `(${Math.abs(data.finalBalance).toLocaleString(undefined, {minimumFractionDigits: 2})})` : data.finalBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}
                     </span>
                 </div>
