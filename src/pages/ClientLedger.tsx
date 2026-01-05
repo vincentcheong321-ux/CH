@@ -209,7 +209,7 @@ const ClientLedger: React.FC = () => {
     const val = parseFloat(amount);
     if (isNaN(val)) return;
     let op = activeCategory.label === '' ? currentOperation : activeCategory.operation;
-    if (activeColumn === 'col1' && activeCategory.label === '') op = 'none';
+
     const entryDate = `${currentDate.getFullYear()}-${String(currentDate.getMonth()+1).padStart(2,'0')}-${String(currentDate.getDate()).padStart(2,'0')}`;
     const newRecord: Omit<LedgerRecord, 'id'> = {
       clientId: id, date: entryDate, description: description, typeLabel: activeCategory.label, amount: val, operation: op, column: activeColumn, isVisible: isVisible
@@ -419,42 +419,45 @@ const ClientLedger: React.FC = () => {
                         
                         {/* Row 1: Sides (if present) - Separate line for compactness */}
                         {line.sides && (
-                             <div className="text-[11px] font-extrabold text-gray-800 uppercase tracking-tight leading-none pl-1">
+                             <div className="text-[11px] font-extrabold text-gray-800 uppercase tracking-tight leading-none pl-1 mb-0.5">
                                 {line.sides}
                              </div>
                         )}
 
                         {/* Row 2: Details + Amount - Flex to stick amount to details with min-w-max to prevent truncation */}
-                        <div className="flex items-center gap-1 text-[13px] md:text-[15px] leading-none py-0.5 w-full whitespace-nowrap pl-1 min-w-max">
+                        {/* Using fixed widths for columns to ensure alignment across multiple lines */}
+                        <div className="flex items-center text-[13px] md:text-[15px] leading-none py-0.5 w-full whitespace-nowrap pl-1 min-w-max">
                             {/* Number */}
-                            <div className="font-black text-gray-900 tracking-tighter shrink-0">
+                            <div className="font-black text-gray-900 tracking-tighter shrink-0 w-[34px] md:w-[44px]">
                                 {line.number}
                             </div>
                             
                             {/* Bet */}
-                            <div className="text-gray-500 font-bold text-[10px] md:text-[12px] tracking-tighter shrink-0">
+                            <div className="text-gray-500 font-bold text-[10px] md:text-[12px] tracking-tighter shrink-0 w-[38px] md:w-[50px] text-center">
                                 {line.big}-{line.small}
                             </div>
                             
                             {/* Type */}
-                            <div className="text-gray-400 text-[10px] md:text-[11px] uppercase font-bold shrink-0">
+                            <div className="text-gray-400 text-[10px] md:text-[11px] uppercase font-bold shrink-0 w-[32px] md:w-[42px] text-center">
                                 {line.type}
                             </div>
                             
                             {/* Position */}
-                            {line.pos && (
-                                <div className="w-4 h-4 rounded-full border border-gray-900 flex items-center justify-center bg-white shadow-sm shrink-0">
-                                    <span className="text-[9px] font-black text-gray-900 leading-none scale-90">
-                                        {line.pos}
-                                    </span>
-                                </div>
-                            )}
+                            <div className="w-[20px] flex justify-center shrink-0">
+                                {line.pos && (
+                                    <div className="w-4 h-4 rounded-full border border-gray-900 flex items-center justify-center bg-white shadow-sm">
+                                        <span className="text-[9px] font-black text-gray-900 leading-none scale-90">
+                                            {line.pos}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
 
-                            <div className="text-gray-300 font-light px-0.5 shrink-0">-</div>
+                            <div className="text-gray-300 font-light px-1 shrink-0">-</div>
 
                             {/* Win Amount - Stick to details, bold red */}
                             {/* FIX: Remove commas before parsing to avoid truncation of amounts >= 1,000 */}
-                            <div className="text-red-600 font-black text-lg md:text-xl tracking-tighter shrink-0">
+                            <div className="text-red-600 font-black text-lg md:text-xl tracking-tighter shrink-0 ml-1">
                                 {parseFloat(line.win.replace(/,/g, '')) > 0 ? parseFloat(line.win.replace(/,/g, '')).toLocaleString() : ''}
                             </div>
                         </div>
@@ -634,13 +637,11 @@ const ClientLedger: React.FC = () => {
                 <form onSubmit={handleSubmit} className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                 {activeCategory.label === '' && (
                     <div className="md:col-span-2">
-                        {activeColumn === 'col1' ? <div className="bg-gray-100 text-gray-600 p-2 rounded-lg text-center font-bold text-sm mb-2 border border-gray-200">(Ø) Note Only Mode (No Calculation)</div> : (
-                            <div className="flex space-x-2 mb-2">
-                                <button type="button" onClick={() => setCurrentOperation('add')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${currentOperation === 'add' ? 'bg-green-100 text-green-800 ring-2 ring-green-500' : 'bg-gray-100 text-gray-500'}`}>(+) Add</button>
-                                <button type="button" onClick={() => setCurrentOperation('subtract')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${currentOperation === 'subtract' ? 'bg-red-100 text-red-800 ring-2 ring-red-500' : 'bg-gray-100 text-gray-500'}`}>(-) Deduct</button>
-                                <button type="button" onClick={() => setCurrentOperation('none')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${currentOperation === 'none' ? 'bg-gray-200 text-gray-800 ring-2 ring-gray-500' : 'bg-gray-100 text-gray-500'}`}>(Ø) Note</button>
-                            </div>
-                        )}
+                        <div className="flex space-x-2 mb-2">
+                            <button type="button" onClick={() => setCurrentOperation('add')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${currentOperation === 'add' ? 'bg-green-100 text-green-800 ring-2 ring-green-500' : 'bg-gray-100 text-gray-500'}`}>(+) Add</button>
+                            <button type="button" onClick={() => setCurrentOperation('subtract')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${currentOperation === 'subtract' ? 'bg-red-100 text-red-800 ring-2 ring-red-500' : 'bg-gray-100 text-gray-500'}`}>(-) Deduct</button>
+                            <button type="button" onClick={() => setCurrentOperation('none')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${currentOperation === 'none' ? 'bg-gray-200 text-gray-800 ring-2 ring-gray-500' : 'bg-gray-100 text-gray-500'}`}>(Ø) Note</button>
+                        </div>
                     </div>
                 )}
                 <div className="md:col-span-2">
@@ -652,7 +653,7 @@ const ClientLedger: React.FC = () => {
                     <input type="text" value={description} onChange={e => setDescription(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"/>
                 </div>
                 <div className="flex items-end">
-                    <button type="submit" className={`w-full py-3 rounded-lg text-white font-bold shadow-md active:scale-95 transition-transform ${activeCategory.label === '' ? (activeColumn === 'col1' ? 'bg-gray-600' : currentOperation === 'add' ? 'bg-green-600' : currentOperation === 'subtract' ? 'bg-red-600' : 'bg-gray-600') : (activeCategory.operation === 'add' ? 'bg-green-600' : activeCategory.operation === 'subtract' ? 'bg-red-600' : 'bg-gray-600')}`}>{activeCategory.label === '' ? 'Add & Continue' : `Confirm ${activeCategory.label}`}</button>
+                    <button type="submit" className={`w-full py-3 rounded-lg text-white font-bold shadow-md active:scale-95 transition-transform ${activeCategory.label === '' ? (currentOperation === 'add' ? 'bg-green-600' : currentOperation === 'subtract' ? 'bg-red-600' : 'bg-gray-600') : (activeCategory.operation === 'add' ? 'bg-green-600' : activeCategory.operation === 'subtract' ? 'bg-red-600' : 'bg-gray-600')}`}>{activeCategory.label === '' ? 'Add & Continue' : `Confirm ${activeCategory.label}`}</button>
                 </div>
                 </form>
             </div>
@@ -721,7 +722,7 @@ const ClientLedger: React.FC = () => {
 
       {confirmModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4 no-print font-sans">
-              <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 animate-in fade-in zoom-in duration-200">
+              <div className="bg-white rounded-xl shadow-xl w-full max-sm p-6 animate-in fade-in zoom-in duration-200">
                   <div className={`flex items-center justify-center w-12 h-12 rounded-full mb-4 mx-auto ${confirmModal.type === 'PRINT_ERROR' ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'}`}>{confirmModal.type === 'PRINT_ERROR' ? <Printer size={24} /> : <AlertTriangle size={24} />}</div>
                   <h3 className="text-xl font-bold text-center text-gray-900 mb-2">{confirmModal.title}</h3>
                   <p className="text-center text-gray-500 mb-6">{confirmModal.message}</p>
