@@ -357,12 +357,14 @@ export const saveDrawBalance = async (date: string, clientId: string, balance: n
 
 /**
  * Calculates the total balance for a client as of a specific time.
- * This logic matches the header logic in ClientLedger.tsx to ensure tallying.
+ * @param excludeWins If true, ignores '中' records from Panel 1 (useful for carry-forward logic)
  */
-const calculateBalanceForRecords = (records: LedgerRecord[], clientCode: string): number => {
+const calculateBalanceForRecords = (records: LedgerRecord[], clientCode: string, excludeWins = false): number => {
     if (records.length === 0) return 0;
     
-    // Sort descending by date and creation time to find the latest "state"
+    const codeUpper = clientCode.toUpperCase();
+
+    // Sort descending by date and creation time to find the latest snapshot
     const sorted = [...records].sort((a,b) => b.date.localeCompare(a.date) || (b.createdAt || '').localeCompare(a.createdAt || ''));
     
     // 1. Identify the starting snapshot (the last DRAW record in Main)
@@ -383,14 +385,23 @@ const calculateBalanceForRecords = (records: LedgerRecord[], clientCode: string)
     }
 
     // 3. PRIORITY LOGIC (Matches UI Header)
+    
+    // Rule: C19 ignores Panel 1 for its "Total Balance" header/summary (Main Ledger starts fresh at 0)
+    if (codeUpper === 'C19') {
+        const mainRecords = periodRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
+        return mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
+    }
+
     // Rule: If Col1 has data, its total defines the client balance.
     const col1Records = periodRecords.filter(r => r.column === 'col1' && r.isVisible);
     if (col1Records.length > 0) {
-        return col1Records.reduce((acc, r) => acc + getNetAmount(r), 0);
+        // APPLY EXCLUSION RULE: "if happen to have 中 in panel 1, do not bring that amount to 上欠"
+        const filteredCol1 = excludeWins ? col1Records.filter(r => r.typeLabel !== '中') : col1Records;
+        return filteredCol1.reduce((acc, r) => acc + getNetAmount(r), 0);
     }
 
     // Rule: C06 uses Col2
-    if (clientCode === 'C06') {
+    if (codeUpper === 'C06') {
         const col2Records = periodRecords.filter(r => r.column === 'col2' && r.isVisible);
         if (col2Records.length > 0) return col2Records.reduce((acc, r) => acc + getNetAmount(r), 0);
     }
@@ -404,7 +415,8 @@ export const fetchClientTotalBalance = async (clientId: string): Promise<number>
     const records = await getLedgerRecords(clientId);
     const clients = await getClients();
     const client = clients.find(c => c.id === clientId);
-    return calculateBalanceForRecords(records, (client?.code || '').toUpperCase());
+    // Real-time fetching uses full calculation (include wins)
+    return calculateBalanceForRecords(records, (client?.code || '').toUpperCase(), false);
 };
 
 export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: Client[]): Promise<Record<string, number>> => {
@@ -418,7 +430,8 @@ export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: 
 
     clients?.forEach(client => {
         const clientRecs = allRecords.filter(r => r.clientId === client.id);
-        balances[client.id] = calculateBalanceForRecords(clientRecs, (client.code || '').toUpperCase());
+        // Generation fetching EXCLUDES wins from Panel 1 per requirement
+        balances[client.id] = calculateBalanceForRecords(clientRecs, (client.code || '').toUpperCase(), true);
     });
 
     return balances;
@@ -439,9 +452,16 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
 
     const sorted = sortLedgerRecords(col1Records);
     let rowsToCopy: LedgerRecord[] = [];
-    if (clientCode.toUpperCase() === 'Z21') rowsToCopy = sorted.slice(-4).map((r, i) => i === 0 ? { ...r, operation: 'none' as const } : r);
-    else if (clientCode.toUpperCase() === 'C19') rowsToCopy = sorted.slice(-6);
-    else return 0;
+    const code = clientCode.toUpperCase();
+
+    if (code === 'Z21') {
+        rowsToCopy = sorted.slice(-4).map((r, i) => i === 0 ? { ...r, operation: 'none' as const } : r);
+    } else if (code === 'C19') {
+        // REQUIREMENT: C19 copies the latest 5 records
+        rowsToCopy = sorted.slice(-5);
+    } else {
+        return 0;
+    }
 
     const sum = rowsToCopy.reduce((acc, r) => acc + getNetAmount(r), 0);
     let weightIdx = 0;
@@ -453,7 +473,7 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
                 client_id: clientId, entry_date: targetDate, entry_type: 'MANUAL', amount: signedAmount,
                 data: { description: r.description, typeLabel: r.typeLabel, operation: r.operation, column: 'col1', isCarryForward: true, sortWeight: weightIdx }
             });
-            if (clientCode.toUpperCase() === 'Z21' && weightIdx === 0) {
+            if (code === 'Z21' && weightIdx === 0) {
                  const { data: dupesP2 } = await supabase.from('financial_journal').select('id').eq('client_id', clientId).eq('entry_date', targetDate).contains('data', { description: r.description, column: 'col2' });
                  if (!dupesP2 || dupesP2.length === 0) {
                      await supabase.from('financial_journal').insert({
