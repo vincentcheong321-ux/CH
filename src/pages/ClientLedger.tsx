@@ -318,21 +318,44 @@ const ClientLedger: React.FC = () => {
   // Special formatter for Winning descriptions
   const parseWinningLine = (line: string) => {
     const parts = line.split(/\s+-\s+/);
+    let head = '', bet = '', win = '', rest = '', position = '';
     
-    if (parts.length >= 4) {
-        const [head, big, small, tail] = parts;
+    // Helper to extract position from tail string like "1,833 ibox (头)"
+    const processTail = (tail: string) => {
         const tailSplit = tail.trim().split(/\s+(.+)/);
-        const win = tailSplit[0];
-        const rest = tailSplit[1] || '';
-        return { valid: true, head, bet: `${big}/${small}`, win, rest };
+        const winVal = tailSplit[0];
+        let restVal = tailSplit[1] || '';
+        
+        // Extract (X) at the end
+        const posMatch = restVal.match(/\((.)\)$/);
+        let posVal = '';
+        if (posMatch) {
+            posVal = posMatch[1];
+            restVal = restVal.replace(/\s*\‍(.\‍)$/, '').trim();
+        }
+        return { win: winVal, rest: restVal, position: posVal };
+    };
+
+    if (parts.length >= 4) {
+        const [h, big, small, tail] = parts;
+        head = h;
+        bet = `${big}/${small}`;
+        const processed = processTail(tail);
+        win = processed.win;
+        rest = processed.rest;
+        position = processed.position;
+        return { valid: true, head, bet, win, rest, position };
     }
     
     if (parts.length === 3) {
-        const [head, bet, tail] = parts;
-        const tailSplit = tail.trim().split(/\s+(.+)/);
-        const win = tailSplit[0];
-        const rest = tailSplit[1] || '';
-        return { valid: true, head, bet, win, rest };
+        const [h, b, tail] = parts;
+        head = h;
+        bet = b;
+        const processed = processTail(tail);
+        win = processed.win;
+        rest = processed.rest;
+        position = processed.position;
+        return { valid: true, head, bet, win, rest, position };
     }
     
     return { valid: false, text: line };
@@ -348,17 +371,33 @@ const ClientLedger: React.FC = () => {
     return (
         <div className="flex flex-col w-full min-w-0 pt-0.5">
             <div className="flex items-start gap-1">
-                {date && <span className="text-[10px] md:text-[11px] font-mono text-gray-400 shrink-0 select-none pt-0.5 w-[32px] text-left">{date}</span>}
+                {date && <span className="text-[10px] md:text-[11px] font-mono text-gray-400 shrink-0 select-none pt-1 w-[32px] text-left">{date}</span>}
                 <div className="flex flex-col w-full min-w-0 gap-1.5">
                     {lines.map((line, i) => {
                         const parsed = parseWinningLine(line);
                         if (parsed.valid) {
+                            const isTop3 = ['头','二','三','1','2','3'].includes(parsed.position);
                             return (
-                                <div key={i} className="flex items-center text-[11px] md:text-sm text-gray-800 leading-none">
-                                    <span className="font-bold w-[90px] md:w-[110px] shrink-0 truncate mr-2 font-mono tracking-tight">{parsed.head}</span>
-                                    <span className="text-gray-500 w-[50px] shrink-0 text-center mr-2 font-mono tracking-tighter text-[10px] md:text-xs bg-gray-50 rounded-sm py-0.5">{parsed.bet}</span>
-                                    <span className="text-red-600 font-black w-[70px] shrink-0 text-right mr-3 font-mono text-[12px] md:text-[15px]">{parsed.win}</span>
-                                    <span className="text-gray-400 text-[9px] md:text-[10px] truncate uppercase font-medium">{parsed.rest}</span>
+                                <div key={i} className="flex items-center text-[11px] md:text-sm text-gray-800 leading-none py-0.5">
+                                    {/* Logo Badge */}
+                                    {parsed.position && (
+                                        <div className={`
+                                            w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold mr-2 shadow-sm shrink-0
+                                            ${isTop3 ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' : 'bg-blue-50 text-blue-700 border border-blue-100'}
+                                        `}>
+                                            {parsed.position}
+                                        </div>
+                                    )}
+                                    
+                                    <span className="font-bold w-[75px] md:w-[90px] shrink-0 truncate mr-1 font-mono tracking-tight">{parsed.head}</span>
+                                    <span className="text-gray-500 w-[45px] shrink-0 text-center mr-2 font-mono tracking-tighter text-[10px] md:text-xs bg-gray-50 rounded-sm py-0.5 border border-gray-100">{parsed.bet}</span>
+                                    
+                                    <span className="text-gray-400 text-[9px] md:text-[10px] truncate uppercase font-bold mr-auto tracking-wide">{parsed.rest}</span>
+
+                                    {/* Win Amount inside the row */}
+                                    <span className="text-red-600 font-black shrink-0 text-right font-mono text-[14px] md:text-[18px] ml-2 tracking-tight">
+                                        {parsed.win}
+                                    </span>
                                 </div>
                             );
                         }
@@ -384,33 +423,40 @@ const ClientLedger: React.FC = () => {
       return (
       <div className="flex flex-col w-full px-1">
           <div className="flex flex-col space-y-0.5 w-full">
-                {data.processed.map((r) => (
-                <div key={r.id} className={`group flex items-start py-1 relative gap-1 md:gap-2 w-full ${!r.isVisible ? 'opacity-30 grayscale no-print' : ''}`}>
-                    <div className="no-print opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1 absolute -left-10 md:-left-12 top-0.5 z-10 bg-white shadow-sm rounded border border-gray-100 p-1">
-                        <button onClick={() => setEditingRecord(r)} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Pencil size={12} /></button>
-                        <button onClick={() => requestDeleteRecord(r.id)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 size={12} /></button>
-                    </div>
+                {data.processed.map((r) => {
+                    const isWinning = r.typeLabel === '中';
+                    const isPanelWin = isWinning && columnType !== 'main';
+                    
+                    return (
+                    <div key={r.id} className={`group flex items-start py-1 relative gap-1 md:gap-2 w-full ${!r.isVisible ? 'opacity-30 grayscale no-print' : ''}`}>
+                        <div className="no-print opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1 absolute -left-10 md:-left-12 top-0.5 z-10 bg-white shadow-sm rounded border border-gray-100 p-1">
+                            <button onClick={() => setEditingRecord(r)} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Pencil size={12} /></button>
+                            <button onClick={() => requestDeleteRecord(r.id)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 size={12} /></button>
+                        </div>
 
-                    <div className="flex w-full items-start">
-                        <div className="text-sm md:text-xl font-bold uppercase tracking-wide text-gray-600 min-w-[20px] md:min-w-[32px] shrink-0 text-center leading-tight">
-                            {r.typeLabel === '中' && columnType !== 'main' ? '' : r.typeLabel}
-                        </div>
-                        <div className="flex-1 px-1.5 min-w-0">
-                            {r.typeLabel === '中' 
-                                ? renderWinningContent(r.description) 
-                                : renderFormattedDescription(r.description)
-                            }
-                        </div>
-                        <div className={`text-base md:text-2xl font-mono font-bold shrink-0 min-w-[120px] md:min-w-[160px] text-right leading-none pl-2 ${
-                            r.operation === 'add' ? 'text-green-700' : 
-                            r.operation === 'subtract' ? (isMain ? 'text-red-700' : 'text-gray-900') : 
-                            'text-gray-600'
-                        }`}>
-                            {r.operation === 'none' ? r.amount.toLocaleString(undefined, {minimumFractionDigits: 2}) : Math.abs(r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                        <div className="flex w-full items-start">
+                            <div className="text-sm md:text-xl font-bold uppercase tracking-wide text-gray-600 min-w-[20px] md:min-w-[32px] shrink-0 text-center leading-tight pt-0.5">
+                                {isPanelWin ? '' : r.typeLabel}
+                            </div>
+                            <div className="flex-1 px-1.5 min-w-0">
+                                {isWinning 
+                                    ? renderWinningContent(r.description) 
+                                    : renderFormattedDescription(r.description)
+                                }
+                            </div>
+                            
+                            {!isPanelWin && (
+                                <div className={`text-base md:text-2xl font-mono font-bold shrink-0 min-w-[120px] md:min-w-[160px] text-right leading-none pl-2 pt-0.5 ${
+                                    r.operation === 'add' ? 'text-green-700' : 
+                                    r.operation === 'subtract' ? (isMain ? 'text-red-700' : 'text-gray-900') : 
+                                    'text-gray-600'
+                                }`}>
+                                    {r.operation === 'none' ? r.amount.toLocaleString(undefined, {minimumFractionDigits: 2}) : Math.abs(r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                </div>
+                            )}
                         </div>
                     </div>
-                </div>
-            ))}
+                )})}
           </div>
 
           {hasCalculableRecords && (
