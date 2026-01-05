@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Printer, Trash2, Plus, Minus, Pencil, X, Check, AlertTriangle, ExternalLink, GripHorizontal, Hash, Zap, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Printer, Trash2, Plus, Minus, Pencil, X, Check, AlertTriangle, ExternalLink, GripHorizontal, Hash, Zap, ChevronLeft, ChevronRight, ImageDown } from 'lucide-react';
+import html2canvas from 'html2canvas';
 import { 
   getClients, 
   getLedgerRecords, 
@@ -140,9 +141,6 @@ const ClientLedger: React.FC = () => {
       const startStr = `${start.getFullYear()}-${String(start.getMonth()+1).padStart(2,'0')}-${String(start.getDate()).padStart(2,'0')}`;
       const endStr = `${end.getFullYear()}-${String(end.getMonth()+1).padStart(2,'0')}-${String(end.getDate()).padStart(2,'0')}`;
 
-      // Filter: Included if date is within week range
-      // NOTE: We should check if users want to see ALL history or just this week. 
-      // Based on the week selector presence, week view is likely desired.
       return records.filter(r => r.date >= startStr && r.date <= endStr);
   }, [records, weeksData, selectedWeekNum]);
 
@@ -223,7 +221,6 @@ const ClientLedger: React.FC = () => {
     let op = activeCategory.label === '' ? currentOperation : activeCategory.operation;
     if (activeColumn === 'col1' && activeCategory.label === '') op = 'none';
 
-    // Use currently selected date for the new record
     const entryDate = `${currentDate.getFullYear()}-${String(currentDate.getMonth()+1).padStart(2,'0')}-${String(currentDate.getDate()).padStart(2,'0')}`;
 
     const newRecord: Omit<LedgerRecord, 'id'> = {
@@ -308,6 +305,32 @@ const ClientLedger: React.FC = () => {
   const handlePrint = () => window.print();
   const openNewTab = () => window.open(window.location.href, '_blank');
 
+  const handleDownloadImage = async () => {
+      const element = document.getElementById('printable-area');
+      if (element) {
+          try {
+              const canvas = await html2canvas(element, {
+                  scale: 2,
+                  backgroundColor: '#ffffff',
+                  useCORS: true,
+                  logging: false
+              });
+              const link = document.createElement('a');
+              link.download = `${client?.name || 'ledger'}_statement.png`;
+              link.href = canvas.toDataURL('image/png');
+              link.click();
+          } catch (error) {
+              console.error("Image capture failed", error);
+              setConfirmModal({
+                  isOpen: true,
+                  type: 'PRINT_ERROR',
+                  title: 'Image Error',
+                  message: 'Failed to generate image. Please try again.'
+              });
+          }
+      }
+  };
+
   const handleUpdateRecord = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editingRecord) {
@@ -325,7 +348,6 @@ const ClientLedger: React.FC = () => {
   };
 
   const calculateColumn = (columnKey: LedgerColumn) => {
-      // Only process filtered records for display
       const colRecords = filteredRecords.filter(r => r.column === columnKey);
       const processed = colRecords.map(r => ({ ...r, netChange: getNetAmount(r) }));
       const visibleProcessed = processed.filter(r => r.isVisible);
@@ -404,8 +426,9 @@ const ClientLedger: React.FC = () => {
                 </p>
                 <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{totalOwed >= 0 ? 'OWES' : 'CREDIT'}</p>
              </div>
-             <div className="flex space-x-2">
-                 <button onClick={openNewTab} className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-50 shadow-sm hidden md:block"><ExternalLink size={18} /></button>
+             <div className="hidden md:flex space-x-2">
+                 <button onClick={openNewTab} className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-50 shadow-sm" title="Open in New Tab"><ExternalLink size={18} /></button>
+                 <button onClick={handleDownloadImage} className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-50 shadow-sm" title="Download as Image"><ImageDown size={18} /></button>
                  <button onClick={handlePrint} className="bg-gray-800 text-white px-3 py-2 rounded-lg hover:bg-gray-900 shadow-sm"><Printer size={18} /></button>
              </div>
           </div>
@@ -431,7 +454,7 @@ const ClientLedger: React.FC = () => {
 
       <div className="max-w-5xl mx-auto px-2 md:px-8 py-4 md:py-6">
         <div className="no-print mb-6 md:mb-8 space-y-4">
-            <div className="flex justify-center">
+            <div className="flex justify-start">
                 <div className="bg-white rounded-lg p-1 shadow-sm border border-gray-200 flex w-full md:w-auto overflow-x-auto">
                     <button onClick={() => setActiveColumn('col1')} className={`flex-1 md:flex-none px-3 py-2 text-xs md:text-sm font-bold rounded-md transition-all whitespace-nowrap ${activeColumn === 'col1' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-50'}`}>Panel 1</button>
                     <button onClick={() => setActiveColumn('col2')} className={`flex-1 md:flex-none px-3 py-2 text-xs md:text-sm font-bold rounded-md transition-all whitespace-nowrap ${activeColumn === 'col2' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-50'}`}>Panel 2</button>
