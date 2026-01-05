@@ -1,3 +1,4 @@
+
 import { Client, LedgerRecord, AssetRecord, TransactionCategory, DrawBalance, SaleRecord, CashAdvanceRecord } from '../types';
 import { supabase } from '../supabaseClient';
 
@@ -496,6 +497,29 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
         }
         weightIdx++;
     }
+
+    // NEW RULE: For C19, bring the Panel 1 summary total to the main ledger as an '上欠' (DRAW) record
+    if (clientCode.toUpperCase() === 'C19') {
+        const { data: existingDraw } = await supabase.from('financial_journal')
+            .select('id')
+            .eq('client_id', clientId)
+            .eq('entry_date', targetDate)
+            .eq('entry_type', 'DRAW')
+            .maybeSingle();
+        
+        if (existingDraw) {
+            await supabase.from('financial_journal').update({ amount: sum }).eq('id', existingDraw.id);
+        } else {
+            await supabase.from('financial_journal').insert({
+                client_id: clientId,
+                entry_date: targetDate,
+                entry_type: 'DRAW',
+                amount: sum,
+                data: {}
+            });
+        }
+    }
+
     return sum;
 };
 

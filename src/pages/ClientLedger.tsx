@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Printer, Trash2, Plus, Minus, Pencil, X, Check, AlertTriangle, ExternalLink, GripHorizontal, Hash, Zap, ChevronLeft, ChevronRight, ImageDown } from 'lucide-react';
@@ -197,8 +198,8 @@ const ClientLedger: React.FC = () => {
   const handleQuickEntry = () => {
       const quickCat: TransactionCategory = { id: 'quick_entry', label: '', operation: 'add', color: 'bg-blue-600 text-white' };
       setActiveCategory(quickCat);
-      // Quick entry now defaults to 'add' for all panels, including Panel 1
-      setCurrentOperation('add');
+      // Quick entry now defaults to 'none' for Panel 1, and 'add' for others
+      setCurrentOperation(activeColumn === 'col1' ? 'none' : 'add');
       setAmount('');
       setDescription('');
   };
@@ -211,6 +212,11 @@ const ClientLedger: React.FC = () => {
     
     // Determine Operation: Use current toggle selection for Quick Entry (unnamed) buttons
     let op = activeCategory.label === '' ? currentOperation : activeCategory.operation;
+    
+    // RE-RESTRICT: Panel 1 Quick Entry MUST be 'none'
+    if (activeColumn === 'col1' && activeCategory.label === '') {
+        op = 'none';
+    }
 
     const entryDate = `${currentDate.getFullYear()}-${String(currentDate.getMonth()+1).padStart(2,'0')}-${String(currentDate.getDate()).padStart(2,'0')}`;
     const newRecord: Omit<LedgerRecord, 'id'> = {
@@ -408,7 +414,6 @@ const ClientLedger: React.FC = () => {
     
     return (
         <div className="flex flex-col w-full min-w-0 pt-0.5 overflow-visible font-mono">
-            {/* Header Line with Date (only once) */}
             {dateStr && (
                 <div className="text-[10px] md:text-[11px] text-gray-400 select-none pb-0.5 pl-1 font-bold">
                     {dateStr}
@@ -418,33 +423,21 @@ const ClientLedger: React.FC = () => {
             <div className="flex flex-col w-full min-w-0 gap-1 overflow-visible">
                 {parsedLines.map((line, i) => (
                     <div key={i} className="flex flex-col w-full bg-white/50 rounded-sm">
-                        
-                        {/* Row 1: Sides (if present) - Separate line for compactness */}
                         {line.sides && (
                              <div className="text-[11px] font-extrabold text-gray-800 uppercase tracking-tight leading-none pl-1 mb-0.5">
                                 {line.sides}
                              </div>
                         )}
-
-                        {/* Row 2: Details + Amount - Flex to stick amount to details with min-w-max to prevent truncation */}
-                        {/* Using fixed widths for columns to ensure alignment across multiple lines */}
                         <div className="flex items-center text-[13px] md:text-[15px] leading-none py-0.5 w-full whitespace-nowrap pl-1 min-w-max">
-                            {/* Number */}
                             <div className="font-black text-gray-900 tracking-tighter shrink-0 w-[34px] md:w-[44px]">
                                 {line.number}
                             </div>
-                            
-                            {/* Bet */}
                             <div className="text-gray-500 font-bold text-[10px] md:text-[12px] tracking-tighter shrink-0 w-[38px] md:w-[50px] text-center">
                                 {line.big}-{line.small}
                             </div>
-                            
-                            {/* Type */}
                             <div className="text-gray-400 text-[10px] md:text-[11px] uppercase font-bold shrink-0 w-[32px] md:w-[42px] text-center">
                                 {line.type}
                             </div>
-                            
-                            {/* Position */}
                             <div className="w-[20px] flex justify-center shrink-0">
                                 {line.pos && (
                                     <div className="w-4 h-4 rounded-full border border-gray-900 flex items-center justify-center bg-white shadow-sm">
@@ -454,11 +447,7 @@ const ClientLedger: React.FC = () => {
                                     </div>
                                 )}
                             </div>
-
                             <div className="text-gray-300 font-light px-1 shrink-0">-</div>
-
-                            {/* Win Amount - Stick to details, bold red */}
-                            {/* FIX: Remove commas before parsing to avoid truncation of amounts >= 1,000 */}
                             <div className="text-red-600 font-black text-lg md:text-xl tracking-tighter shrink-0 ml-1">
                                 {parseFloat(line.win.replace(/,/g, '')) > 0 ? parseFloat(line.win.replace(/,/g, '')).toLocaleString() : ''}
                             </div>
@@ -486,13 +475,8 @@ const ClientLedger: React.FC = () => {
           <div className="flex flex-col space-y-0.5 w-full">
                 {data.processed.map((r) => {
                     const isWinning = r.typeLabel === '中';
-                    // PANEL 1: Shift content left by hiding the type label column for winning records
                     const hideLabel = isWinning && columnType === 'col1';
-                    
-                    // MAIN PANEL: Strictly hide description for winning records
                     const showDescription = !(isWinning && columnType === 'main');
-                    
-                    // PANEL 1: Redundant amount column hidden for winners because win info is in description
                     const showAmountColumn = !(isWinning && columnType === 'col1');
                     
                     return (
@@ -501,9 +485,7 @@ const ClientLedger: React.FC = () => {
                             <button onClick={() => startEditing(r)} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Pencil size={12} /></button>
                             <button onClick={() => requestDeleteRecord(r.id)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 size={12} /></button>
                         </div>
-
                         <div className="flex w-full items-start relative z-10 min-h-[24px]">
-                            {/* Shift to far left if label hidden */}
                             <div className={`${hideLabel ? 'w-0 overflow-hidden' : 'w-[20px] md:w-[32px]'} text-sm md:text-xl font-bold uppercase tracking-wide text-gray-600 shrink-0 text-center leading-tight pt-0.5`}>
                                 {hideLabel ? '' : r.typeLabel}
                             </div>
@@ -514,7 +496,6 @@ const ClientLedger: React.FC = () => {
                                         : renderFormattedDescription(r.description)
                                 ) : null}
                             </div>
-                            
                             {showAmountColumn ? (
                                 <div className={`text-base md:text-2xl font-mono font-bold shrink-0 w-[110px] md:w-[160px] text-right leading-none pl-2 pt-0.5 ${
                                     r.operation === 'add' ? 'text-green-700' : 
@@ -530,7 +511,6 @@ const ClientLedger: React.FC = () => {
                     </div>
                 )})}
           </div>
-
           {hasCalculableRecords && (
             <div className="mt-3 pt-1.5 flex flex-col items-end w-full border-t-2 border-gray-900">
                 <div className="flex items-center gap-1 md:gap-4 justify-end w-full">
@@ -569,10 +549,7 @@ const ClientLedger: React.FC = () => {
                  <span className="px-2 text-xs font-bold w-20 text-center">{MONTH_NAMES[currentMonth].slice(0,3)} {currentYear}</span>
                  <button onClick={handleNextMonth} disabled={currentYear === 2026 && currentMonth === 11} className="p-1 hover:bg-white rounded disabled:opacity-30"><ChevronRight size={16}/></button>
              </div>
-             <div className="text-right mr-2">
-                <p className={`text-sm md:text-lg font-bold leading-tight ${totalOwed >= 0 ? 'text-green-600' : 'text-red-600'}`}>${Math.abs(totalOwed).toLocaleString()}</p>
-                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{totalOwed >= 0 ? 'OWES' : 'CREDIT'}</p>
-             </div>
+             {/* Removed total balance section from header */}
              <div className="flex space-x-2">
                  <button onClick={openNewTab} className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-50 shadow-sm hidden md:block" title="Open in New Tab"><ExternalLink size={18} /></button>
                  <button onClick={handleDownloadImage} className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-50 shadow-sm hidden md:block" title="Download as Image"><ImageDown size={18} /></button>
@@ -639,11 +616,15 @@ const ClientLedger: React.FC = () => {
                 <form onSubmit={handleSubmit} className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                 {activeCategory.label === '' && (
                     <div className="md:col-span-2">
-                        <div className="flex space-x-2 mb-2">
-                            <button type="button" onClick={() => setCurrentOperation('add')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${currentOperation === 'add' ? 'bg-green-100 text-green-800 ring-2 ring-green-500' : 'bg-gray-100 text-gray-500'}`}>(+) Add</button>
-                            <button type="button" onClick={() => setCurrentOperation('subtract')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${currentOperation === 'subtract' ? 'bg-red-100 text-red-800 ring-2 ring-red-500' : 'bg-gray-100 text-gray-500'}`}>(-) Deduct</button>
-                            <button type="button" onClick={() => setCurrentOperation('none')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${currentOperation === 'none' ? 'bg-gray-200 text-gray-800 ring-2 ring-gray-500' : 'bg-gray-100 text-gray-500'}`}>(Ø) Note</button>
-                        </div>
+                        {activeColumn === 'col1' ? (
+                            <div className="bg-gray-100 text-gray-600 p-2 rounded-lg text-center font-bold text-sm mb-2 border border-gray-200">(Ø) Note Mode (No Calculation)</div>
+                        ) : (
+                            <div className="flex space-x-2 mb-2">
+                                <button type="button" onClick={() => setCurrentOperation('add')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${currentOperation === 'add' ? 'bg-green-100 text-green-800 ring-2 ring-green-500' : 'bg-gray-100 text-gray-500'}`}>(+) Add</button>
+                                <button type="button" onClick={() => setCurrentOperation('subtract')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${currentOperation === 'subtract' ? 'bg-red-100 text-red-800 ring-2 ring-red-500' : 'bg-gray-100 text-gray-500'}`}>(-) Deduct</button>
+                                <button type="button" onClick={() => setCurrentOperation('none')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${currentOperation === 'none' ? 'bg-gray-200 text-gray-800 ring-2 ring-gray-500' : 'bg-gray-100 text-gray-500'}`}>(Ø) Note</button>
+                            </div>
+                        )}
                     </div>
                 )}
                 <div className="md:col-span-2">
@@ -655,7 +636,7 @@ const ClientLedger: React.FC = () => {
                     <input type="text" value={description} onChange={e => setDescription(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"/>
                 </div>
                 <div className="flex items-end">
-                    <button type="submit" className={`w-full py-3 rounded-lg text-white font-bold shadow-md active:scale-95 transition-transform ${activeCategory.label === '' ? (currentOperation === 'add' ? 'bg-green-600' : currentOperation === 'subtract' ? 'bg-red-600' : 'bg-gray-600') : (activeCategory.operation === 'add' ? 'bg-green-600' : activeCategory.operation === 'subtract' ? 'bg-red-600' : 'bg-gray-600')}`}>{activeCategory.label === '' ? 'Add & Continue' : `Confirm ${activeCategory.label}`}</button>
+                    <button type="submit" className={`w-full py-3 rounded-lg text-white font-bold shadow-md active:scale-95 transition-transform ${activeCategory.label === '' ? (activeColumn === 'col1' ? 'bg-gray-600' : currentOperation === 'add' ? 'bg-green-600' : currentOperation === 'subtract' ? 'bg-red-600' : 'bg-gray-600') : (activeCategory.operation === 'add' ? 'bg-green-600' : activeCategory.operation === 'subtract' ? 'bg-red-600' : 'bg-gray-600')}`}>{activeCategory.label === '' ? 'Add & Continue' : `Confirm ${activeCategory.label}`}</button>
                 </div>
                 </form>
             </div>
@@ -724,7 +705,7 @@ const ClientLedger: React.FC = () => {
 
       {confirmModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4 no-print font-sans">
-              <div className="bg-white rounded-xl shadow-xl w-full max-sm p-6 animate-in fade-in zoom-in duration-200">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-xs p-6 animate-in fade-in zoom-in duration-200">
                   <div className={`flex items-center justify-center w-12 h-12 rounded-full mb-4 mx-auto ${confirmModal.type === 'PRINT_ERROR' ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'}`}>{confirmModal.type === 'PRINT_ERROR' ? <Printer size={24} /> : <AlertTriangle size={24} />}</div>
                   <h3 className="text-xl font-bold text-center text-gray-900 mb-2">{confirmModal.title}</h3>
                   <p className="text-center text-gray-500 mb-6">{confirmModal.message}</p>
