@@ -425,19 +425,19 @@ const ClientLedger: React.FC = () => {
                         )}
 
                         {/* Row 2: Details + Amount - Flex to stick amount to details */}
-                        <div className="flex items-center gap-1.5 text-[13px] md:text-[15px] leading-none py-0.5 w-full whitespace-nowrap pl-1">
+                        <div className="flex items-center gap-1 text-[13px] md:text-[15px] leading-none py-0.5 w-full whitespace-nowrap pl-1 min-w-max">
                             {/* Number */}
-                            <div className="font-black text-gray-900 tracking-tighter">
+                            <div className="font-black text-gray-900 tracking-tighter shrink-0">
                                 {line.number}
                             </div>
                             
                             {/* Bet */}
-                            <div className="text-gray-500 font-bold text-[10px] md:text-[12px] tracking-tighter">
+                            <div className="text-gray-500 font-bold text-[10px] md:text-[12px] tracking-tighter shrink-0">
                                 {line.big}-{line.small}
                             </div>
                             
                             {/* Type */}
-                            <div className="text-gray-400 text-[10px] md:text-[11px] uppercase font-bold">
+                            <div className="text-gray-400 text-[10px] md:text-[11px] uppercase font-bold shrink-0">
                                 {line.type}
                             </div>
                             
@@ -450,10 +450,10 @@ const ClientLedger: React.FC = () => {
                                 </div>
                             )}
 
-                            <div className="text-gray-300 font-light px-0.5">-</div>
+                            <div className="text-gray-300 font-light px-0.5 shrink-0">-</div>
 
                             {/* Win Amount - Stick to details, bold red */}
-                            <div className="text-red-600 font-black text-lg md:text-xl tracking-tighter">
+                            <div className="text-red-600 font-black text-lg md:text-xl tracking-tighter shrink-0">
                                 {parseFloat(line.win) > 0 ? parseFloat(line.win).toLocaleString() : ''}
                             </div>
                         </div>
