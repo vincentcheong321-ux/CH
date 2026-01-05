@@ -366,13 +366,13 @@ const ClientLedger: React.FC = () => {
     const dateMatch = text.match(/^(\d{1,2}\/\d{1,2})\s+(.*)/);
     if (dateMatch) {
         return (
-            <div className="flex items-baseline gap-1.5 min-w-0">
-                <span className="text-[9px] md:text-[11px] font-mono text-gray-400 shrink-0 leading-none py-0.5 border-r border-gray-200 pr-1.5">{dateMatch[1]}</span>
-                <span className="truncate leading-tight">{dateMatch[2]}</span>
+            <div className="flex items-baseline w-full">
+                <span className="text-[10px] md:text-[13px] font-mono text-gray-400 shrink-0 w-[40px] md:w-[50px]">{dateMatch[1]}</span>
+                <span className="text-[11px] md:text-[16px] text-gray-700 font-bold leading-tight min-w-0 flex-1 truncate">{dateMatch[2]}</span>
             </div>
         );
     }
-    return <span className="truncate leading-tight">{text}</span>;
+    return <span className="text-[11px] md:text-[16px] text-gray-700 font-bold leading-tight break-words">{text}</span>;
   };
 
   const LedgerColumnView = ({ data, footerLabel = "收" }: { data: ReturnType<typeof calculateColumn>, footerLabel?: string }) => {
@@ -384,20 +384,20 @@ const ClientLedger: React.FC = () => {
       if (isNegative && (footerLabel === '收' || footerLabel === '欠')) displayLabel = '补';
       
       return (
-      <div className="flex flex-col w-full px-2">
+      <div className="flex flex-col w-full px-1">
           <div className="flex flex-col space-y-0.5 w-full">
                 {data.processed.map((r) => (
-                <div key={r.id} className={`group flex items-start py-0.5 relative gap-2 w-full ${!r.isVisible ? 'opacity-30 grayscale no-print' : ''}`}>
-                    <div className="no-print opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1 absolute -left-12 top-0 z-10 bg-white shadow-sm rounded border border-gray-100 p-1">
+                <div key={r.id} className={`group flex items-start py-0.5 relative gap-1 md:gap-2 w-full ${!r.isVisible ? 'opacity-30 grayscale no-print' : ''}`}>
+                    <div className="no-print opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1 absolute -left-10 md:-left-12 top-0 z-10 bg-white shadow-sm rounded border border-gray-100 p-1">
                         <button onClick={() => setEditingRecord(r)} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Pencil size={12} /></button>
                         <button onClick={() => requestDeleteRecord(r.id)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 size={12} /></button>
                     </div>
 
                     <div className="flex w-full items-baseline">
-                        <div className="text-sm md:text-xl font-bold uppercase tracking-wide text-gray-600 min-w-[24px] md:min-w-[40px] shrink-0">
+                        <div className="text-sm md:text-xl font-bold uppercase tracking-wide text-gray-600 min-w-[20px] md:min-w-[32px] shrink-0 text-center">
                             {r.typeLabel}
                         </div>
-                        <div className="flex-1 text-[10px] md:text-sm text-gray-600 font-medium px-1 leading-tight min-w-0 overflow-hidden">
+                        <div className="flex-1 px-1 min-w-0 overflow-hidden">
                             {renderFormattedDescription(r.description)}
                         </div>
                         <div className={`text-base md:text-2xl font-mono font-bold shrink-0 min-w-[80px] md:min-w-[140px] text-right ${
@@ -463,6 +463,7 @@ const ClientLedger: React.FC = () => {
           </div>
         </div>
         
+        {/* Week Selector Bar */}
         <div className="bg-gray-50 border-b border-gray-200 px-4 py-2 flex justify-start md:justify-center space-x-2 overflow-x-auto no-scrollbar">
              {sortedWeekKeys.map(wk => {
                 const days = weeksData[Number(wk)];
@@ -481,7 +482,10 @@ const ClientLedger: React.FC = () => {
       </div>
 
       <div className="max-w-5xl mx-auto px-2 md:px-8 py-4 md:py-6">
+        {/* Input Controls */}
         <div className="no-print mb-6 md:mb-8 space-y-4">
+            
+            {/* Panel Selector (Mobile Only Horizontal) */}
             <div className="flex md:hidden justify-center items-center space-x-3 overflow-x-auto no-scrollbar pb-2">
                 <div className="flex bg-white rounded-full p-1 border border-gray-200 shadow-sm w-full">
                     <button 
@@ -566,7 +570,10 @@ const ClientLedger: React.FC = () => {
             )}
         </div>
 
+        {/* Layout Container for Desktop Sidebar + Ledger */}
         <div className="flex flex-col md:flex-row gap-4 items-start relative">
+            
+            {/* Desktop Vertical Panel Selector Sidebar */}
             <div className="hidden md:flex flex-col gap-2 no-print sticky top-24 z-30 w-24 shrink-0">
                 <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 pl-1">Panels</div>
                 <button 
@@ -589,24 +596,31 @@ const ClientLedger: React.FC = () => {
                 </button>
             </div>
 
+            {/* Ledger Display Area */}
             <div id="printable-area" className="flex-1 w-full min-w-0">
                 <div className="bg-white border border-gray-200 shadow-sm min-h-[600px] relative text-lg font-serif">
+                    
+                    {/* Resizer Top */}
                     <div style={{ height: `${verticalPadding.top}px` }} className="relative group w-full no-print-bg">
                         <div className="absolute bottom-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResizeVertical('top', e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div>
                     </div>
                     
+                    {/* Header */}
                     <div className="px-4 md:px-8 pb-2 md:pb-4 flex justify-between items-end mb-2 md:mb-4">
                         <div>
                             <h2 className="text-2xl md:text-4xl font-bold text-gray-900 uppercase tracking-widest">{client.name}</h2>
                             {client.code && <p className="text-gray-600 mt-1 font-mono text-sm md:text-xl">{client.code}</p>}
                         </div>
+                        {/* Mobile Only: Show current active panel indicator */}
                         <div className="md:hidden text-right">
                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Viewing</span>
                             <div className="text-sm font-bold text-blue-600 uppercase">{activeColumn === 'main' ? 'Main Ledger' : activeColumn === 'col1' ? 'Panel 1' : 'Panel 2'}</div>
                         </div>
                     </div>
 
+                    {/* Ledger Content - Responsive Layout */}
                     <div className="flex flex-col md:flex-row w-full min-h-[400px] relative" ref={containerRef}>
+                        {/* Column 1 */}
                         <div 
                             className={`relative flex flex-col p-1 md:p-2 border-r border-transparent group ${activeColumn === 'col1' ? 'block w-full md:flex md:w-auto' : 'hidden md:flex'}`}
                             style={{ width: window.innerWidth >= 768 ? `${colWidths[0]}%` : undefined }}
@@ -615,6 +629,7 @@ const ClientLedger: React.FC = () => {
                             <div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print hidden md:flex" onMouseDown={(e) => startResizeCol(0, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div>
                         </div>
 
+                        {/* Column 2 */}
                         <div 
                             className={`relative flex flex-col p-1 md:p-2 border-r border-transparent group ${activeColumn === 'col2' ? 'block w-full md:flex md:w-auto' : 'hidden md:flex'}`}
                             style={{ width: window.innerWidth >= 768 ? `${colWidths[1]}%` : undefined }}
@@ -623,6 +638,7 @@ const ClientLedger: React.FC = () => {
                             <div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print hidden md:flex" onMouseDown={(e) => startResizeCol(1, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div>
                         </div>
 
+                        {/* Main Column */}
                         <div 
                             className={`relative flex flex-col p-1 md:p-2 bg-gray-50/30 ${activeColumn === 'main' ? 'block w-full md:flex md:w-auto' : 'hidden md:flex'}`}
                             style={{ width: window.innerWidth >= 768 ? `${colWidths[2]}%` : undefined }}
@@ -631,6 +647,7 @@ const ClientLedger: React.FC = () => {
                         </div>
                     </div>
 
+                    {/* Resizer Bottom */}
                     <div style={{ height: `${verticalPadding.bottom}px` }} className="relative group w-full mt-auto no-print-bg">
                         <div className="absolute top-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResizeVertical('bottom', e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div>
                     </div>
