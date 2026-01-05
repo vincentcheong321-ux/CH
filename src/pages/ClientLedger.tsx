@@ -406,24 +406,24 @@ const ClientLedger: React.FC = () => {
     
     return (
         <div className="flex flex-col w-full min-w-0 pt-0.5 overflow-visible font-mono">
-            {/* Date on Top - Centered above row details */}
+            {/* Date on Top */}
             {dateStr && (
-                <div className="text-[11px] md:text-[13px] text-gray-400 select-none pb-0.5 mb-1 pl-4 md:pl-6">
+                <div className="text-[11px] md:text-[13px] text-gray-400 select-none pb-0.5 mb-1 pl-2 md:pl-4">
                     {dateStr}
                 </div>
             )}
             
-            <div className="flex flex-col w-full min-w-0 gap-1.5 overflow-visible">
+            <div className="flex flex-col w-full min-w-0 gap-1 overflow-visible">
                 {parsedLines.map((line, i) => (
-                    <div key={i} className="flex items-center gap-1.5 md:gap-3 text-[11px] md:text-[15px] text-gray-800 leading-none py-0.5 w-full whitespace-nowrap">
+                    <div key={i} className="flex items-center gap-1.5 md:gap-4 text-[11px] md:text-[16px] text-gray-800 leading-none py-0.5 w-full whitespace-nowrap">
                         <span className="font-bold text-gray-800 uppercase w-[30px] md:w-[38px] shrink-0 text-left">{line.sides}</span>
-                        <span className="font-bold text-gray-900 tracking-wider w-[42px] md:w-[52px] shrink-0 text-center">{line.number}</span>
-                        <span className="text-gray-400 text-center text-[10px] md:text-[12px] font-bold w-[50px] md:w-[65px] shrink-0">
+                        <span className="font-bold text-gray-900 tracking-wider w-[44px] md:w-[54px] shrink-0 text-center">{line.number}</span>
+                        <span className="text-gray-400 text-center text-[10px] md:text-[12px] font-bold w-[45px] md:w-[60px] shrink-0">
                             {line.big}-{line.small}
                         </span>
                         <span className="text-gray-400 text-[10px] md:text-[11px] uppercase font-bold w-[35px] md:w-[45px] shrink-0 text-center truncate">{line.type}</span>
                         
-                        <div className="w-[28px] md:w-[32px] shrink-0 flex justify-center">
+                        <div className="w-[24px] md:w-[28px] shrink-0 flex justify-center">
                             {line.pos && (
                                 <span className="px-1.5 py-0.5 rounded border border-gray-600 bg-white text-[11px] md:text-[13px] font-black text-gray-900 leading-none shadow-sm min-w-[20px] text-center">
                                     {line.pos}
@@ -431,9 +431,9 @@ const ClientLedger: React.FC = () => {
                             )}
                         </div>
 
-                        {/* Significantly increased win amount space */}
-                        <div className="flex items-center justify-end flex-1 min-w-0 pr-1">
-                            <span className="text-gray-400 px-1 font-light">-</span>
+                        {/* Spacious area for Win Amount - Shifted to ensure no truncation */}
+                        <div className="flex items-center justify-end flex-1 min-w-[60px] md:min-w-[100px] pr-1">
+                            <span className="text-gray-300 px-1 font-light">-</span>
                             <span className="text-red-600 font-black text-right truncate">
                                 {parseFloat(line.win) > 0 ? parseFloat(line.win).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 }) : ''}
                             </span>
@@ -461,13 +461,13 @@ const ClientLedger: React.FC = () => {
           <div className="flex flex-col space-y-0.5 w-full">
                 {data.processed.map((r) => {
                     const isWinning = r.typeLabel === '中';
-                    // Maximize space for winning records on Panel 1 by hiding the type label
+                    // PANEL 1: Shift content left by hiding the type label column for winning records
                     const hideLabel = isWinning && columnType === 'col1';
                     
-                    // Main Panel (Panel 3) hides description for winnings entirely
+                    // MAIN PANEL: Strictly hide description for winning records
                     const showDescription = !(isWinning && columnType === 'main');
                     
-                    // Col 1 Panel hides amount column for winnings since it's redundant (all info in description block)
+                    // PANEL 1: Redundant amount column hidden for winners because win info is in description
                     const showAmountColumn = !(isWinning && columnType === 'col1');
                     
                     return (
@@ -478,7 +478,7 @@ const ClientLedger: React.FC = () => {
                         </div>
 
                         <div className="flex w-full items-start relative z-10 min-h-[24px]">
-                            {/* Width reduced/hidden to push content left */}
+                            {/* Shift to far left if label hidden */}
                             <div className={`${hideLabel ? 'w-0 overflow-hidden' : 'w-[20px] md:w-[32px]'} text-sm md:text-xl font-bold uppercase tracking-wide text-gray-600 shrink-0 text-center leading-tight pt-0.5`}>
                                 {hideLabel ? '' : r.typeLabel}
                             </div>
