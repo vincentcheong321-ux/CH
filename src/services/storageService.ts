@@ -387,17 +387,28 @@ const calculateBalanceForRecords = (records: LedgerRecord[], clientCode: string,
     // 3. PRIORITY LOGIC (Matches UI Header)
     
     // Rule: C19 ignores Panel 1 for its "Total Balance" header/summary (Main Ledger starts fresh at 0)
+    // C19 special carry-forward rows in Panel 1 are display-only and shouldn't affect the net balance tally.
     if (codeUpper === 'C19') {
         const mainRecords = periodRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
         return mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
     }
 
-    // Rule: If Col1 has data, its total defines the client balance.
+    // Rule: Check Panel 1
     const col1Records = periodRecords.filter(r => r.column === 'col1' && r.isVisible);
-    if (col1Records.length > 0) {
-        // APPLY EXCLUSION RULE: "if happen to have 中 in panel 1, do not bring that amount to 上欠"
-        const filteredCol1 = excludeWins ? col1Records.filter(r => r.typeLabel !== '中') : col1Records;
-        return filteredCol1.reduce((acc, r) => acc + getNetAmount(r), 0);
+    
+    // CHECK: Does Panel 1 have "Real" transactions (Non-Wins)?
+    // If Panel 1 has ONLY wins, we treat it as "Display Only" for wins, and rely on Main Ledger for the actual balance 
+    // (since wins are double-posted to Main Ledger).
+    // If Panel 1 has other stuff (like manual entries, sales), we assume Panel 1 is the Master Ledger.
+    const col1HasNonWins = col1Records.some(r => r.typeLabel !== '中');
+
+    if (col1HasNonWins) {
+        // Panel 1 is Master.
+        // User says "if happen to have 中 in panel 1, please do not bring that amount to 上欠".
+        // This implies for Carry Forward (when excludeWins is true), we exclude the win amount from the sum.
+        // If excludeWins is false (live view), we include everything in Panel 1.
+        const recsToSum = excludeWins ? col1Records.filter(r => r.typeLabel !== '中') : col1Records;
+        return recsToSum.reduce((acc, r) => acc + getNetAmount(r), 0);
     }
 
     // Rule: C06 uses Col2
@@ -407,6 +418,7 @@ const calculateBalanceForRecords = (records: LedgerRecord[], clientCode: string,
     }
 
     // Default: Main Ledger
+    // If Panel 1 was empty OR only had Wins, we fall here.
     const mainRecords = periodRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
     return mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
 };
@@ -458,6 +470,7 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
         rowsToCopy = sorted.slice(-4).map((r, i) => i === 0 ? { ...r, operation: 'none' as const } : r);
     } else if (code === 'C19') {
         // REQUIREMENT: C19 copies the latest 5 records
+        // `sorted` is sorted ASC by date (oldest to newest), so slice(-5) gives newest 5
         rowsToCopy = sorted.slice(-5);
     } else {
         return 0;
