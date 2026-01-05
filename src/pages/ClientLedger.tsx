@@ -54,11 +54,10 @@ const ClientLedger: React.FC = () => {
   const [editingRecord, setEditingRecord] = useState<LedgerRecord | null>(null);
   const [draggedCatIndex, setDraggedCatIndex] = useState<number | null>(null);
 
-  // Structured Edit State for Winnings
   const [editWinDate, setEditWinDate] = useState('');
   const [editWinLines, setEditWinLines] = useState<WinningLineData[]>([]);
 
-  const [colWidths, setColWidths] = useState<number[]>([33.33, 33.33, 33.34]);
+  const [colWidths, setColWidths] = useState<number[]>([35, 30, 35]);
   const [verticalPadding, setVerticalPadding] = useState<{top: number, bottom: number}>({ top: 40, bottom: 40 });
   const containerRef = useRef<HTMLDivElement>(null);
   const dragInfo = useRef<{ 
@@ -149,7 +148,7 @@ const ClientLedger: React.FC = () => {
         const diffX = e.clientX - startX;
         const diffPercent = (diffX / containerWidth) * 100;
         const newWidths = [...startWidths];
-        if (newWidths[index] + diffPercent < 10 || newWidths[index + 1] - diffPercent < 10) return;
+        if (newWidths[index] + diffPercent < 5 || newWidths[index + 1] - diffPercent < 5) return;
         newWidths[index] += diffPercent;
         newWidths[index + 1] -= diffPercent;
         setColWidths(newWidths);
@@ -211,7 +210,7 @@ const ClientLedger: React.FC = () => {
     if (isNaN(val)) return;
     let op = activeCategory.label === '' ? currentOperation : activeCategory.operation;
     if (activeColumn === 'col1' && activeCategory.label === '') op = 'none';
-    const entryDate = `${currentDate.getFullYear()}-${String(currentMonth+1).padStart(2,'0')}-${String(currentDate.getDate()).padStart(2,'0')}`;
+    const entryDate = `${currentDate.getFullYear()}-${String(currentDate.getMonth()+1).padStart(2,'0')}-${String(currentDate.getDate()).padStart(2,'0')}`;
     const newRecord: Omit<LedgerRecord, 'id'> = {
       clientId: id, date: entryDate, description: description, typeLabel: activeCategory.label, amount: val, operation: op, column: activeColumn, isVisible: isVisible
     };
@@ -409,32 +408,32 @@ const ClientLedger: React.FC = () => {
         <div className="flex flex-col w-full min-w-0 pt-0.5 overflow-visible font-mono">
             {/* Date on Top */}
             {dateStr && (
-                <div className="text-[11px] md:text-[12px] text-gray-400 select-none pb-0.5 mb-1 pl-8 md:pl-12">
+                <div className="text-[11px] md:text-[13px] text-gray-400 select-none pb-0.5 mb-1 pl-12 md:pl-16">
                     {dateStr}
                 </div>
             )}
             <div className="flex flex-col w-full min-w-0 gap-1.5 overflow-visible">
                 {parsedLines.map((line, i) => (
-                    <div key={i} className="flex items-center text-[11px] md:text-[13px] text-gray-800 leading-none py-1 w-full relative h-6 whitespace-nowrap overflow-visible">
-                        <span className="font-bold w-[35px] md:w-[45px] shrink-0 text-gray-800 uppercase text-left">{line.sides}</span>
-                        <span className="font-bold w-[45px] md:w-[60px] shrink-0 text-gray-900 tracking-wider text-left">{line.number}</span>
-                        <span className="text-gray-400 w-[55px] md:w-[70px] shrink-0 text-center text-[10px] md:text-[11px] font-bold px-1">
+                    <div key={i} className="flex items-center text-[11px] md:text-[15px] text-gray-800 leading-none py-1 w-full relative h-6 whitespace-nowrap overflow-visible">
+                        <span className="font-bold w-[40px] md:w-[50px] shrink-0 text-gray-800 uppercase text-left">{line.sides}</span>
+                        <span className="font-bold w-[50px] md:w-[65px] shrink-0 text-gray-900 tracking-wider text-left">{line.number}</span>
+                        <span className="text-gray-400 w-[60px] md:w-[75px] shrink-0 text-center text-[10px] md:text-[12px] font-bold px-1">
                             {line.big} - {line.small}
                         </span>
-                        <span className="text-gray-400 text-[9px] md:text-[10px] uppercase font-bold w-[35px] md:w-[45px] shrink-0 truncate text-left">{line.type}</span>
+                        <span className="text-gray-400 text-[10px] md:text-[11px] uppercase font-bold w-[40px] md:w-[50px] shrink-0 truncate text-left">{line.type}</span>
                         
-                        {/* Position Logo/Badge */}
-                        <div className="w-[30px] md:w-[35px] shrink-0 flex justify-center">
+                        {/* Position Logo/Badge Styled precisely like a distinct logo */}
+                        <div className="w-[30px] md:w-[40px] shrink-0 flex justify-center">
                             {line.pos && (
-                                <span className="px-1 py-0.5 rounded border border-gray-400 bg-white text-[10px] md:text-[11px] font-bold text-gray-800 leading-none shadow-sm min-w-[18px] text-center">
+                                <span className="px-1.5 py-0.5 rounded border border-gray-600 bg-white text-[11px] md:text-[13px] font-black text-gray-900 leading-none shadow-sm min-w-[20px] text-center transform scale-110">
                                     {line.pos}
                                 </span>
                             )}
                         </div>
 
-                        <span className="text-gray-300 px-1 font-light">-</span>
+                        <span className="text-gray-400 px-1 font-light mx-1">-</span>
                         
-                        <span className="text-red-600 font-black flex-1 text-right text-[12px] md:text-[16px] pr-1 overflow-hidden truncate">
+                        <span className="text-red-600 font-black flex-1 text-right text-[13px] md:text-[20px] pr-1 overflow-hidden truncate">
                             {parseFloat(line.win) > 0 ? parseFloat(line.win).toLocaleString() : ''}
                         </span>
                     </div>
@@ -492,7 +491,7 @@ const ClientLedger: React.FC = () => {
                                     {r.operation === 'none' ? r.amount.toLocaleString(undefined, {minimumFractionDigits: 2}) : Math.abs(r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2})}
                                 </div>
                             ) : (
-                                <div className="shrink-0 w-[100px] md:w-[130px]" />
+                                <div className="shrink-0 w-[10px] md:w-[20px]" />
                             )}
                         </div>
                     </div>
