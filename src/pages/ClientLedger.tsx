@@ -401,44 +401,57 @@ const ClientLedger: React.FC = () => {
     return <span className="text-[11px] md:text-[16px] text-gray-700 font-bold leading-tight truncate">{text}</span>;
   };
 
-  const renderWinningContent = (description: string | undefined) => {
+  const renderWinningContent = (description: string | undefined, totalAmount: number, showTotal: boolean) => {
     const { dateStr, parsedLines } = parseAllWinningDetails(description || '');
     
     return (
         <div className="flex flex-col w-full min-w-0 pt-0.5 overflow-visible font-mono">
-            {/* Date on Top */}
+            {/* Date on Top - Centered above row details */}
             {dateStr && (
-                <div className="text-[11px] md:text-[13px] text-gray-400 select-none pb-0.5 mb-1 pl-12 md:pl-16">
+                <div className="text-[11px] md:text-[13px] text-gray-400 select-none pb-0.5 mb-1 pl-10 md:pl-12">
                     {dateStr}
                 </div>
             )}
-            <div className="flex flex-col w-full min-w-0 gap-1.5 overflow-visible">
+            
+            {/* Tighter Row Breakdown */}
+            <div className="flex flex-col w-full min-w-0 gap-1 overflow-visible">
                 {parsedLines.map((line, i) => (
-                    <div key={i} className="flex items-center text-[11px] md:text-[15px] text-gray-800 leading-none py-1 w-full relative h-6 whitespace-nowrap overflow-visible">
-                        <span className="font-bold w-[40px] md:w-[50px] shrink-0 text-gray-800 uppercase text-left">{line.sides}</span>
-                        <span className="font-bold w-[50px] md:w-[65px] shrink-0 text-gray-900 tracking-wider text-left">{line.number}</span>
-                        <span className="text-gray-400 w-[60px] md:w-[75px] shrink-0 text-center text-[10px] md:text-[12px] font-bold px-1">
-                            {line.big} - {line.small}
+                    <div key={i} className="flex items-center gap-1.5 md:gap-2 text-[11px] md:text-[14px] text-gray-800 leading-none py-0.5 w-full whitespace-nowrap">
+                        <span className="font-bold text-gray-800 uppercase w-[30px] md:w-[36px] shrink-0 text-left">{line.sides}</span>
+                        <span className="font-bold text-gray-900 tracking-tighter w-[40px] md:w-[48px] shrink-0 text-center">{line.number}</span>
+                        <span className="text-gray-400 text-center text-[9px] md:text-[11px] font-bold w-[50px] md:w-[60px] shrink-0">
+                            {line.big}-{line.small}
                         </span>
-                        <span className="text-gray-400 text-[10px] md:text-[11px] uppercase font-bold w-[40px] md:w-[50px] shrink-0 truncate text-left">{line.type}</span>
+                        <span className="text-gray-400 text-[9px] md:text-[10px] uppercase font-bold w-[32px] md:w-[40px] shrink-0 text-center truncate">{line.type}</span>
                         
-                        {/* Position Logo/Badge Styled precisely like a distinct logo */}
-                        <div className="w-[30px] md:w-[40px] shrink-0 flex justify-center">
+                        {/* Position Badge - Styled like a distinct logo */}
+                        <div className="w-[28px] md:w-[32px] shrink-0 flex justify-center">
                             {line.pos && (
-                                <span className="px-1.5 py-0.5 rounded border border-gray-600 bg-white text-[11px] md:text-[13px] font-black text-gray-900 leading-none shadow-sm min-w-[20px] text-center transform scale-110">
+                                <span className="px-1 py-0.5 rounded border-2 border-gray-900 bg-white text-[10px] md:text-[12px] font-black text-gray-900 leading-none shadow-sm min-w-[20px] text-center">
                                     {line.pos}
                                 </span>
                             )}
                         </div>
 
-                        <span className="text-gray-400 px-1 font-light mx-1">-</span>
-                        
-                        <span className="text-red-600 font-black flex-1 text-right text-[13px] md:text-[20px] pr-1 overflow-hidden truncate">
-                            {parseFloat(line.win) > 0 ? parseFloat(line.win).toLocaleString() : ''}
-                        </span>
+                        {/* Amount alignment closer to logo */}
+                        <div className="flex items-center justify-end flex-1 min-w-0">
+                            <span className="text-gray-300 px-1 font-light">-</span>
+                            <span className="text-red-600 font-black text-right truncate">
+                                {parseFloat(line.win) > 0 ? parseFloat(line.win).toLocaleString() : ''}
+                            </span>
+                        </div>
                     </div>
                 ))}
             </div>
+
+            {/* Total display inside block for col1 winners */}
+            {showTotal && (
+                <div className="mt-2 border-t border-black pt-1 flex justify-center w-full">
+                    <span className="text-xl md:text-3xl font-mono font-bold text-red-600 tracking-tight">
+                        {totalAmount.toLocaleString(undefined, {minimumFractionDigits: 2})}
+                    </span>
+                </div>
+            )}
         </div>
     );
   };
@@ -475,10 +488,10 @@ const ClientLedger: React.FC = () => {
                                 {hideLabel ? '' : r.typeLabel}
                             </div>
                             <div className="flex-1 px-1 md:px-2 min-w-0 overflow-visible">
-                                {showDescription && (
-                                    isWinning 
-                                        ? renderWinningContent(r.description) 
-                                        : renderFormattedDescription(r.description)
+                                {isWinning && columnType === 'col1' ? (
+                                    renderWinningContent(r.description, r.amount, true)
+                                ) : (
+                                    isWinning ? renderWinningContent(r.description, r.amount, false) : renderFormattedDescription(r.description)
                                 )}
                             </div>
                             
@@ -491,7 +504,7 @@ const ClientLedger: React.FC = () => {
                                     {r.operation === 'none' ? r.amount.toLocaleString(undefined, {minimumFractionDigits: 2}) : Math.abs(r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2})}
                                 </div>
                             ) : (
-                                <div className="shrink-0 w-[10px] md:w-[20px]" />
+                                <div className="shrink-0 w-0" />
                             )}
                         </div>
                     </div>
