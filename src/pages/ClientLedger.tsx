@@ -393,57 +393,46 @@ const ClientLedger: React.FC = () => {
     if (dateMatch) {
         return (
             <div className="flex items-start w-full whitespace-nowrap">
-                <span className="text-[10px] md:text-[13px] font-mono text-gray-400 shrink-0 w-[32px] md:w-[42px]">{dateMatch[1]}</span>
-                <span className="text-[11px] md:text-[15px] text-gray-700 font-bold leading-tight flex-1 truncate">{dateMatch[2]}</span>
+                <span className="text-[10px] md:text-[13px] font-mono text-gray-400 shrink-0 w-[36px] md:w-[46px]">{dateMatch[1]}</span>
+                <span className="text-[11px] md:text-[16px] text-gray-700 font-bold leading-tight flex-1 truncate">{dateMatch[2]}</span>
             </div>
         );
     }
-    return <span className="text-[11px] md:text-[15px] text-gray-700 font-bold leading-tight truncate">{text}</span>;
+    return <span className="text-[11px] md:text-[16px] text-gray-700 font-bold leading-tight truncate">{text}</span>;
   };
 
-  // Simplified description for Main Ledger winners
-  const renderSimpleWinningDescription = (description: string | undefined) => {
-    const { dateStr, parsedLines } = parseAllWinningDetails(description || '');
-    const summary = parsedLines.map(l => `${l.sides} ${l.number}-${l.small || l.big}`).join('; ');
-    return (
-        <div className="flex items-start w-full whitespace-nowrap font-mono">
-            <span className="text-[10px] md:text-[13px] text-gray-400 shrink-0 w-[32px] md:w-[42px]">{dateStr}</span>
-            <span className="text-[11px] md:text-[15px] text-gray-700 font-bold leading-tight flex-1 truncate">{summary}</span>
-        </div>
-    );
-  };
-
-  const renderWinningContent = (description: string | undefined) => {
+  const renderWinningContent = (description: string | undefined, totalAmount: number, showTotal: boolean) => {
     const { dateStr, parsedLines } = parseAllWinningDetails(description || '');
     
     return (
         <div className="flex flex-col w-full min-w-0 pt-0.5 overflow-visible font-mono">
+            {/* Date on Top */}
             {dateStr && (
-                <div className="text-[10px] md:text-[12px] text-gray-400 select-none pb-0.5 mb-1 pl-8 md:pl-10">
+                <div className="text-[11px] md:text-[13px] text-gray-400 select-none pb-0.5 mb-1 pl-12 md:pl-16">
                     {dateStr}
                 </div>
             )}
             
-            <div className="flex flex-col w-full min-w-0 gap-0.5 overflow-visible">
+            <div className="flex flex-col w-full min-w-0 gap-1.5 overflow-visible">
                 {parsedLines.map((line, i) => (
-                    <div key={i} className="flex items-center gap-1 text-[11px] md:text-[13px] text-gray-800 leading-none py-0.5 w-full whitespace-nowrap">
-                        <span className="font-bold text-gray-800 uppercase w-[28px] md:w-[32px] shrink-0 text-left">{line.sides}</span>
-                        <span className="font-bold text-gray-900 tracking-tighter w-[38px] md:w-[44px] shrink-0 text-center">{line.number}</span>
-                        <span className="text-gray-400 text-center text-[9px] md:text-[10px] font-bold w-[45px] md:w-[50px] shrink-0">
+                    <div key={i} className="grid grid-cols-[35px_50px_60px_40px_30px_auto] gap-1 items-center text-[11px] md:text-[15px] text-gray-800 leading-none py-0.5 w-full whitespace-nowrap">
+                        <span className="font-bold text-gray-800 uppercase text-left">{line.sides}</span>
+                        <span className="font-bold text-gray-900 tracking-wider text-center">{line.number}</span>
+                        <span className="text-gray-400 text-center text-[10px] md:text-[12px] font-bold">
                             {line.big}-{line.small}
                         </span>
-                        <span className="text-gray-400 text-[9px] font-bold w-[30px] md:w-[35px] shrink-0 text-center truncate">{line.type}</span>
+                        <span className="text-gray-400 text-[10px] md:text-[11px] uppercase font-bold text-center truncate">{line.type}</span>
                         
-                        <div className="w-[24px] md:w-[28px] shrink-0 flex justify-center">
+                        <div className="flex justify-center">
                             {line.pos && (
-                                <span className="px-1 py-0.5 rounded border-2 border-gray-900 bg-white text-[9px] md:text-[11px] font-black text-gray-900 leading-none shadow-sm min-w-[18px] text-center">
+                                <span className="px-1.5 py-0.5 rounded border border-gray-600 bg-white text-[11px] md:text-[13px] font-black text-gray-900 leading-none shadow-sm min-w-[20px] text-center">
                                     {line.pos}
                                 </span>
                             )}
                         </div>
 
-                        <div className="flex items-center justify-end flex-1 min-w-0">
-                            <span className="text-gray-300 px-1 font-light">-</span>
+                        <div className="flex items-center justify-end">
+                            <span className="text-gray-400 px-1 font-light mx-1">-</span>
                             <span className="text-red-600 font-black text-right truncate">
                                 {parseFloat(line.win) > 0 ? parseFloat(line.win).toLocaleString() : ''}
                             </span>
@@ -451,6 +440,14 @@ const ClientLedger: React.FC = () => {
                     </div>
                 ))}
             </div>
+
+            {showTotal && (
+                <div className="mt-2 border-t border-black pt-1 flex justify-center w-full">
+                    <span className="text-xl md:text-4xl font-mono font-bold text-red-600 tracking-tight">
+                        {totalAmount.toLocaleString(undefined, {minimumFractionDigits: 3})}
+                    </span>
+                </div>
+            )}
         </div>
     );
   };
@@ -471,11 +468,13 @@ const ClientLedger: React.FC = () => {
           <div className="flex flex-col space-y-0.5 w-full">
                 {data.processed.map((r) => {
                     const isWinning = r.typeLabel === '中';
-                    const isCol1 = columnType === 'col1';
+                    const hideLabel = isWinning && columnType === 'col1';
                     
-                    // Specific Logic for Winner Rows
-                    const hideLabel = isWinning && isCol1;
-                    const showAmountColumn = !(isWinning && isCol1);
+                    // Main Panel (Panel 3) hides description for winnings entirely
+                    const showDescription = !(isWinning && columnType === 'main');
+                    
+                    // Col 1 Panel hides amount column for winnings since we show total in description
+                    const showAmountColumn = !(isWinning && columnType === 'col1');
                     
                     return (
                     <div key={r.id} className={`group flex items-start py-1 relative gap-1 md:gap-2 w-full ${!r.isVisible ? 'opacity-30 grayscale no-print' : ''}`}>
@@ -489,10 +488,11 @@ const ClientLedger: React.FC = () => {
                                 {hideLabel ? '' : r.typeLabel}
                             </div>
                             <div className="flex-1 px-1 md:px-2 min-w-0 overflow-visible">
-                                {isWinning 
-                                    ? (isCol1 ? renderWinningContent(r.description) : renderSimpleWinningDescription(r.description))
-                                    : renderFormattedDescription(r.description)
-                                }
+                                {showDescription ? (
+                                    isWinning 
+                                        ? renderWinningContent(r.description, r.amount, columnType === 'col1') 
+                                        : renderFormattedDescription(r.description)
+                                ) : null}
                             </div>
                             
                             {showAmountColumn ? (
