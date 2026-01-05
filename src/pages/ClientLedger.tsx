@@ -328,7 +328,7 @@ const ClientLedger: React.FC = () => {
                   pos = posMatch[1];
                   type = restVal.replace(/\s*\‍(.\‍)$/, '').replace(/\(|\)/g, '').trim();
               } else {
-                  type = restVal;
+                  type = restVal.replace(/\(|\)/g, '').trim();
               }
           } else {
               num = line;
@@ -363,7 +363,7 @@ const ClientLedger: React.FC = () => {
     await updateLedgerRecord(editingRecord.id, { 
         amount: editingRecord.amount, 
         description: finalDesc, 
-        typeLabel: editingRecord.typeLabel, // Explicitly pass typeLabel
+        typeLabel: editingRecord.typeLabel,
         operation: editingRecord.operation, 
         date: editingRecord.date, 
         isVisible: editingRecord.isVisible, 
@@ -390,13 +390,13 @@ const ClientLedger: React.FC = () => {
     const dateMatch = text.match(/^(\d{1,2}\/\d{1,2})\s+(.*)/);
     if (dateMatch) {
         return (
-            <div className="flex items-start w-full">
+            <div className="flex items-start w-full whitespace-nowrap">
                 <span className="text-[10px] md:text-[13px] font-mono text-gray-400 shrink-0 w-[36px] md:w-[46px]">{dateMatch[1]}</span>
-                <span className="text-[11px] md:text-[16px] text-gray-700 font-bold leading-tight break-words flex-1 whitespace-normal">{dateMatch[2]}</span>
+                <span className="text-[11px] md:text-[16px] text-gray-700 font-bold leading-tight flex-1 truncate">{dateMatch[2]}</span>
             </div>
         );
     }
-    return <span className="text-[11px] md:text-[16px] text-gray-700 font-bold leading-tight break-words whitespace-normal">{text}</span>;
+    return <span className="text-[11px] md:text-[16px] text-gray-700 font-bold leading-tight truncate">{text}</span>;
   };
 
   const renderWinningContent = (description: string | undefined) => {
@@ -408,7 +408,7 @@ const ClientLedger: React.FC = () => {
                 {dateStr && <span className="text-[10px] md:text-[11px] font-mono text-gray-400 shrink-0 select-none pt-1 w-[32px] text-left">{dateStr}</span>}
                 <div className="flex flex-col w-full min-w-0 gap-1 overflow-visible">
                     {parsedLines.map((line, i) => (
-                        <div key={i} className="flex items-center text-[11px] md:text-sm text-gray-800 leading-none py-1 w-full relative h-6 font-mono whitespace-nowrap">
+                        <div key={i} className="flex items-center text-[11px] md:text-sm text-gray-800 leading-none py-1 w-full relative h-6 font-mono whitespace-nowrap overflow-visible">
                             <span className="font-bold w-[35px] md:w-[45px] shrink-0 text-gray-600 uppercase">{line.sides}</span>
                             <span className="font-bold w-[45px] md:w-[55px] shrink-0 text-gray-900 tracking-wider">{line.number}</span>
                             <span className="text-gray-400 w-[65px] md:w-[85px] shrink-0 text-center text-[9px] md:text-xs font-bold px-1">
@@ -429,7 +429,7 @@ const ClientLedger: React.FC = () => {
 
   const LedgerColumnView = ({ data, footerLabel = "收", columnType }: { data: ReturnType<typeof calculateColumn>, footerLabel?: string, columnType: LedgerColumn }) => {
       if (data.processed.length === 0) return <div className="flex-1 min-h-[50px]" />;
-      const isMain = footerLabel === '欠';
+      const isMain = footerLabel === '欠' || columnType === 'main';
       const hasCalculableRecords = data.processed.some(r => r.isVisible && r.operation !== 'none');
       const isNegative = data.finalBalance < 0;
       
@@ -444,6 +444,8 @@ const ClientLedger: React.FC = () => {
                 {data.processed.map((r) => {
                     const isWinning = r.typeLabel === '中';
                     const hideLabel = isWinning && columnType === 'col1';
+                    // User Request: Column 3 (main) shows amount only, hide win description details
+                    const showDescription = !(isWinning && columnType === 'main');
                     
                     return (
                     <div key={r.id} className={`group flex items-start py-1 relative gap-1 md:gap-2 w-full ${!r.isVisible ? 'opacity-30 grayscale no-print' : ''}`}>
@@ -457,10 +459,11 @@ const ClientLedger: React.FC = () => {
                                 {hideLabel ? '' : r.typeLabel}
                             </div>
                             <div className="flex-1 px-1 md:px-2 min-w-0 overflow-visible">
-                                {isWinning 
-                                    ? renderWinningContent(r.description) 
-                                    : renderFormattedDescription(r.description)
-                                }
+                                {showDescription && (
+                                    isWinning 
+                                        ? renderWinningContent(r.description) 
+                                        : renderFormattedDescription(r.description)
+                                )}
                             </div>
                             
                             <div className={`text-base md:text-2xl font-mono font-bold shrink-0 w-[110px] md:w-[160px] text-right leading-none pl-2 pt-0.5 ${
