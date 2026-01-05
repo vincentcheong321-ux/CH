@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Printer, Trash2, Plus, Minus, Pencil, X, Check, AlertTriangle, ExternalLink, GripHorizontal, Hash, Zap, ChevronLeft, ChevronRight, ImageDown } from 'lucide-react';
+import { ArrowLeft, Printer, Trash2, Plus, Minus, Pencil, X, Check, AlertTriangle, ExternalLink, GripHorizontal, Hash, Zap, ChevronLeft, ChevronRight, ImageDown, Columns, Layout } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { 
   getClients, 
@@ -426,9 +426,9 @@ const ClientLedger: React.FC = () => {
                 </p>
                 <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{totalOwed >= 0 ? 'OWES' : 'CREDIT'}</p>
              </div>
-             <div className="hidden md:flex space-x-2">
-                 <button onClick={openNewTab} className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-50 shadow-sm" title="Open in New Tab"><ExternalLink size={18} /></button>
-                 <button onClick={handleDownloadImage} className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-50 shadow-sm" title="Download as Image"><ImageDown size={18} /></button>
+             <div className="flex space-x-2">
+                 <button onClick={openNewTab} className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-50 shadow-sm hidden md:block" title="Open in New Tab"><ExternalLink size={18} /></button>
+                 <button onClick={handleDownloadImage} className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-50 shadow-sm hidden md:block" title="Download as Image"><ImageDown size={18} /></button>
                  <button onClick={handlePrint} className="bg-gray-800 text-white px-3 py-2 rounded-lg hover:bg-gray-900 shadow-sm"><Printer size={18} /></button>
              </div>
           </div>
@@ -453,12 +453,31 @@ const ClientLedger: React.FC = () => {
       </div>
 
       <div className="max-w-5xl mx-auto px-2 md:px-8 py-4 md:py-6">
+        {/* Input Controls */}
         <div className="no-print mb-6 md:mb-8 space-y-4">
-            <div className="flex justify-start">
-                <div className="bg-white rounded-lg p-1 shadow-sm border border-gray-200 flex w-full md:w-auto overflow-x-auto">
-                    <button onClick={() => setActiveColumn('col1')} className={`flex-1 md:flex-none px-3 py-2 text-xs md:text-sm font-bold rounded-md transition-all whitespace-nowrap ${activeColumn === 'col1' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-50'}`}>Panel 1</button>
-                    <button onClick={() => setActiveColumn('col2')} className={`flex-1 md:flex-none px-3 py-2 text-xs md:text-sm font-bold rounded-md transition-all whitespace-nowrap ${activeColumn === 'col2' ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-50'}`}>Panel 2</button>
-                    <button onClick={() => setActiveColumn('main')} className={`flex-1 md:flex-none px-3 py-2 text-xs md:text-sm font-bold rounded-md transition-all whitespace-nowrap ${activeColumn === 'main' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}>Main Ledger</button>
+            
+            {/* Panel Selector (Mobile Horizontal Only) */}
+            <div className="flex md:hidden justify-start items-center space-x-3 overflow-x-auto no-scrollbar pb-2">
+                <span className="text-xs font-bold text-gray-400 uppercase mr-1">View Panel:</span>
+                <div className="flex bg-white rounded-full p-1 border border-gray-200 shadow-sm">
+                    <button 
+                        onClick={() => setActiveColumn('col1')} 
+                        className={`px-3 py-1.5 text-xs font-bold rounded-full transition-all whitespace-nowrap ${activeColumn === 'col1' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+                    >
+                        Panel 1
+                    </button>
+                    <button 
+                        onClick={() => setActiveColumn('col2')} 
+                        className={`px-3 py-1.5 text-xs font-bold rounded-full transition-all whitespace-nowrap ${activeColumn === 'col2' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+                    >
+                        Panel 2
+                    </button>
+                    <button 
+                        onClick={() => setActiveColumn('main')} 
+                        className={`px-3 py-1.5 text-xs font-bold rounded-full transition-all whitespace-nowrap ${activeColumn === 'main' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
+                    >
+                        Main
+                    </button>
                 </div>
             </div>
 
@@ -523,24 +542,89 @@ const ClientLedger: React.FC = () => {
             )}
         </div>
 
-        <div id="printable-area" className="relative max-w-5xl mx-auto">
-            <div className="bg-white border border-gray-200 shadow-sm min-h-[600px] relative text-lg font-serif">
-                <div style={{ height: `${verticalPadding.top}px` }} className="relative group w-full no-print-bg">
-                    <div className="absolute bottom-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResizeVertical('top', e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div>
-                </div>
-                <div className="px-4 md:px-8 pb-2 md:pb-4 flex justify-between items-end mb-2 md:mb-4">
-                    <div>
-                        <h2 className="text-2xl md:text-4xl font-bold text-gray-900 uppercase tracking-widest">{client.name}</h2>
-                        {client.code && <p className="text-gray-600 mt-1 font-mono text-sm md:text-xl">{client.code}</p>}
+        {/* Ledger Layout Area (Desktop Split) */}
+        <div className="flex flex-col md:flex-row gap-4 items-start">
+            
+            {/* Desktop Side Panel Selector */}
+            <div className="hidden md:flex flex-col gap-2 no-print sticky top-24 z-10 min-w-[90px]">
+                <span className="text-[10px] font-bold text-gray-400 uppercase mb-1 tracking-widest pl-1">Panels</span>
+                <button 
+                    onClick={() => setActiveColumn('col1')} 
+                    className={`px-3 py-2 text-[10px] font-bold rounded-lg text-left transition-all border ${activeColumn === 'col1' ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'}`}
+                >
+                    Panel 1
+                </button>
+                <button 
+                    onClick={() => setActiveColumn('col2')} 
+                    className={`px-3 py-2 text-[10px] font-bold rounded-lg text-left transition-all border ${activeColumn === 'col2' ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'}`}
+                >
+                    Panel 2
+                </button>
+                <button 
+                    onClick={() => setActiveColumn('main')} 
+                    className={`px-3 py-2 text-[10px] font-bold rounded-lg text-left transition-all border ${activeColumn === 'main' ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'}`}
+                >
+                    Main
+                </button>
+            </div>
+
+            {/* Ledger Display Area */}
+            <div id="printable-area" className="relative w-full flex-1 min-w-0">
+                <div className="bg-white border border-gray-200 shadow-sm min-h-[600px] relative text-lg font-serif">
+                    
+                    {/* Resizer Top */}
+                    <div style={{ height: `${verticalPadding.top}px` }} className="relative group w-full no-print-bg">
+                        <div className="absolute bottom-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResizeVertical('top', e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div>
                     </div>
-                </div>
-                <div className="flex w-full min-h-[400px] relative" ref={containerRef}>
-                    <div style={{ width: `${colWidths[0]}%` }} className="relative flex flex-col p-1 md:p-2 border-r border-transparent group"><LedgerColumnView data={col1Ledger} footerLabel="收"/><div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print" onMouseDown={(e) => startResizeCol(0, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div></div>
-                    <div style={{ width: `${colWidths[1]}%` }} className="relative flex flex-col p-1 md:p-2 border-r border-transparent group"><LedgerColumnView data={col2Ledger} footerLabel="收"/><div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print" onMouseDown={(e) => startResizeCol(1, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div></div>
-                    <div style={{ width: `${colWidths[2]}%` }} className="relative flex flex-col p-1 md:p-2 bg-gray-50/30"><LedgerColumnView data={mainLedger} footerLabel="欠"/></div>
-                </div>
-                <div style={{ height: `${verticalPadding.bottom}px` }} className="relative group w-full mt-auto no-print-bg">
-                    <div className="absolute top-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResizeVertical('bottom', e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div>
+                    
+                    {/* Header */}
+                    <div className="px-4 md:px-8 pb-2 md:pb-4 flex justify-between items-end mb-2 md:mb-4">
+                        <div>
+                            <h2 className="text-2xl md:text-4xl font-bold text-gray-900 uppercase tracking-widest">{client.name}</h2>
+                            {client.code && <p className="text-gray-600 mt-1 font-mono text-sm md:text-xl">{client.code}</p>}
+                        </div>
+                        {/* Mobile Only: Show current active panel indicator */}
+                        <div className="md:hidden text-right">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Viewing</span>
+                            <div className="text-sm font-bold text-blue-600 uppercase">{activeColumn === 'main' ? 'Main Ledger' : activeColumn === 'col1' ? 'Panel 1' : 'Panel 2'}</div>
+                        </div>
+                    </div>
+
+                    {/* Ledger Content - Responsive Layout */}
+                    <div className="flex flex-col md:flex-row w-full min-h-[400px] relative" ref={containerRef}>
+                        {/* Mobile Logic: On small screens, hide columns that are not active. On desktop (md), show all with set widths. */}
+                        
+                        {/* Column 1 */}
+                        <div 
+                            className={`relative flex flex-col p-1 md:p-2 border-r border-transparent group ${activeColumn === 'col1' ? 'block w-full' : 'hidden md:flex'}`}
+                            style={{ width: window.innerWidth >= 768 ? `${colWidths[0]}%` : undefined }}
+                        >
+                            <LedgerColumnView data={col1Ledger} footerLabel="收"/>
+                            <div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print hidden md:flex" onMouseDown={(e) => startResizeCol(0, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div>
+                        </div>
+
+                        {/* Column 2 */}
+                        <div 
+                            className={`relative flex flex-col p-1 md:p-2 border-r border-transparent group ${activeColumn === 'col2' ? 'block w-full' : 'hidden md:flex'}`}
+                            style={{ width: window.innerWidth >= 768 ? `${colWidths[1]}%` : undefined }}
+                        >
+                            <LedgerColumnView data={col2Ledger} footerLabel="收"/>
+                            <div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print hidden md:flex" onMouseDown={(e) => startResizeCol(1, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div>
+                        </div>
+
+                        {/* Main Column */}
+                        <div 
+                            className={`relative flex flex-col p-1 md:p-2 bg-gray-50/30 ${activeColumn === 'main' ? 'block w-full' : 'hidden md:flex'}`}
+                            style={{ width: window.innerWidth >= 768 ? `${colWidths[2]}%` : undefined }}
+                        >
+                            <LedgerColumnView data={mainLedger} footerLabel="欠"/>
+                        </div>
+                    </div>
+
+                    {/* Resizer Bottom */}
+                    <div style={{ height: `${verticalPadding.bottom}px` }} className="relative group w-full mt-auto no-print-bg">
+                        <div className="absolute top-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResizeVertical('bottom', e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div>
+                    </div>
                 </div>
             </div>
         </div>
