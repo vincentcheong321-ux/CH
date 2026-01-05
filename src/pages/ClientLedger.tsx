@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Printer, Trash2, Plus, Minus, Pencil, X, Check, AlertTriangle, ExternalLink, GripHorizontal, Hash, Zap } from 'lucide-react';
+import { ArrowLeft, Printer, Trash2, Plus, Minus, Pencil, X, Check, AlertTriangle, ExternalLink, GripHorizontal, Hash, Zap, ChevronLeft, ChevronRight, ImageDown } from 'lucide-react';
+import html2canvas from 'html2canvas';
 import { 
   getClients, 
   getLedgerRecords, 
@@ -12,77 +13,51 @@ import {
   saveCategory,
   deleteCategory,
   saveCategoriesOrder,
-  getNetAmount
+  getNetAmount,
+  fetchClientTotalBalance
 } from '../services/storageService';
 import { Client, LedgerRecord, TransactionCategory } from '../types';
+import { useGlobalState } from '../context/GlobalStateContext';
+import { getWeeksForMonth, getWeekRangeString, MONTH_NAMES } from '../utils/reportUtils';
 
 type LedgerColumn = 'main' | 'col1' | 'col2';
 
-const parseAllWinningDetails = (description: string) => {
-    const result = { dateStr: '', parsedLines: [] as any[] };
-    if (!description) return result;
-
-    // Extract date match like "20/05" at start
-    const dateMatch = description.match(/^(\d{1,2}\/\d{1,2})\s+(.*)/);
-    let content = description;
-    if (dateMatch) {
-        result.dateStr = dateMatch[1];
-        content = dateMatch[2];
-    }
-
-    const segments = content.split(';').map(s => s.trim()).filter(s => s);
-    
-    result.parsedLines = segments.map(seg => {
-        const parts = seg.split(/\s+/);
-        // Expecting: [SIDES, NUM, BIG, -, SMALL, (TYPE?), POS, -, WIN]
-        
-        const secondDashIndex = parts.lastIndexOf('-');
-        if (secondDashIndex === -1) return null;
-        
-        const win = parts.slice(secondDashIndex + 1).join('');
-        const pos = parts[secondDashIndex - 1];
-        const small = parts[4];
-        const big = parts[2];
-        const number = parts[1];
-        const sides = parts[0];
-        
-        // If type exists, secondDashIndex is 7. If not, it's 6.
-        let type = '';
-        if (secondDashIndex === 7) {
-            type = parts[5];
-        }
-        
-        return { sides, number, big, small, type, pos, win };
-    }).filter(x => x && x.number && x.win);
-
-    if (result.parsedLines.length === 0) return { dateStr: '', parsedLines: [] };
-    return result;
-};
+interface WinningLineData {
+    sides: string;
+    number: string;
+    big: string;
+    small: string;
+    win: string;
+    type: string;
+    pos: string;
+}
 
 const ClientLedger: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const { currentDate, setCurrentDate } = useGlobalState();
   const [client, setClient] = useState<Client | null>(null);
   const [records, setRecords] = useState<LedgerRecord[]>([]);
   const [categories, setCategories] = useState<TransactionCategory[]>([]);
+  const [totalOwed, setTotalOwed] = useState(0);
   
-  // Input State
   const [activeCategory, setActiveCategory] = useState<TransactionCategory | null>(null);
   const [activeColumn, setActiveColumn] = useState<LedgerColumn>('main');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [isVisible, setIsVisible] = useState(true);
-  
   const [currentOperation, setCurrentOperation] = useState<'add'|'subtract'|'none'>('add');
-  const amountInputRef = useRef<HTMLInputElement>(null);
 
+  const amountInputRef = useRef<HTMLInputElement>(null);
   const [isAddCatModalOpen, setIsAddCatModalOpen] = useState(false);
   const [newCatLabel, setNewCatLabel] = useState('');
   const [newCatOp, setNewCatOp] = useState<'add'|'subtract'|'none'>('subtract');
-
   const [editingRecord, setEditingRecord] = useState<LedgerRecord | null>(null);
   const [draggedCatIndex, setDraggedCatIndex] = useState<number | null>(null);
 
-  const [colWidths, setColWidths] = useState<number[]>([33.33, 33.33, 33.34]);
+  const [editWinDate, setEditWinDate] = useState('');
+  const [editWinLines, setEditWinLines] = useState<WinningLineData[]>([]);
+
+  const [colWidths, setColWidths] = useState<number[]>([35, 30, 35]);
   const [verticalPadding, setVerticalPadding] = useState<{top: number, bottom: number}>({ top: 40, bottom: 40 });
   const containerRef = useRef<HTMLDivElement>(null);
   const dragInfo = useRef<{ 
@@ -95,6 +70,43 @@ const ClientLedger: React.FC = () => {
       containerWidth?: number 
   } | null>(null);
 
+  const currentYear = currentDate.getFullYear();
+  const currentMonth = currentDate.getMonth();
+  const weeksData = useMemo(() => getWeeksForMonth(currentYear, currentMonth), [currentYear, currentMonth]);
+  const sortedWeekKeys = Object.keys(weeksData).map(Number).sort((a,b) => a-b);
+  
+  const selectedWeekNum = useMemo(() => {
+      const todayStr = `${currentYear}-${String(currentMonth+1).padStart(2,'0')}-${String(currentDate.getDate()).padStart(2,'0')}`;
+      const foundWeek = Object.keys(weeksData).find(w => {
+          return weeksData[parseInt(w)].some(d => {
+              const dStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+              return dStr === todayStr;
+          });
+      });
+      return foundWeek ? parseInt(foundWeek) : 1;
+  }, [weeksData, currentDate, currentYear, currentMonth]);
+
+  const handleWeekSelect = (weekNum: number) => {
+      const days = weeksData[weekNum];
+      if (days && days.length > 0) setCurrentDate(new Date(days[0]));
+  };
+
+  const handlePrevMonth = () => {
+      const newDate = new Date(currentDate);
+      newDate.setDate(1);
+      newDate.setMonth(newDate.getMonth() - 1);
+      if (newDate.getFullYear() < 2025) return;
+      setCurrentDate(newDate);
+  };
+
+  const handleNextMonth = () => {
+      const newDate = new Date(currentDate);
+      newDate.setDate(1);
+      newDate.setMonth(newDate.getMonth() + 1);
+      if (newDate.getFullYear() > 2026) return;
+      setCurrentDate(newDate);
+  };
+
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
     type: 'DELETE_RECORD' | 'DELETE_CATEGORY' | 'PRINT_ERROR';
@@ -105,12 +117,9 @@ const ClientLedger: React.FC = () => {
 
   useEffect(() => {
     if (id) {
-        getClients().then(clients => {
-            const found = clients.find(c => c.id === id);
-            setClient(found || null);
-        });
-        loadRecords();
-        setCategories(getCategories());
+      getClients().then(clients => setClient(clients.find(c => c.id === id) || null));
+      loadRecords();
+      setCategories(getCategories());
     }
   }, [id]);
 
@@ -118,32 +127,37 @@ const ClientLedger: React.FC = () => {
     if (id) {
       const recs = await getLedgerRecords(id);
       setRecords(recs);
+      fetchClientTotalBalance(id).then(setTotalOwed);
     }
   };
 
+  const filteredRecords = useMemo(() => {
+      const days = weeksData[selectedWeekNum];
+      if (!days || days.length === 0) return [];
+      const start = days[0];
+      const end = days[days.length - 1];
+      const startStr = `${start.getFullYear()}-${String(start.getMonth()+1).padStart(2,'0')}-${String(start.getDate()).padStart(2,'0')}`;
+      const endStr = `${end.getFullYear()}-${String(end.getMonth()+1).padStart(2,'0')}-${String(end.getDate()).padStart(2,'0')}`;
+      return records.filter(r => r.date >= startStr && r.date <= endStr);
+  }, [records, weeksData, selectedWeekNum]);
+
   const onMouseMove = useCallback((e: MouseEvent) => {
     if (!dragInfo.current) return;
-    
     if (dragInfo.current.type === 'col' && dragInfo.current.index !== undefined && dragInfo.current.startX !== undefined && dragInfo.current.startWidths && dragInfo.current.containerWidth) {
         const { index, startX, startWidths, containerWidth } = dragInfo.current;
         const diffX = e.clientX - startX;
         const diffPercent = (diffX / containerWidth) * 100;
         const newWidths = [...startWidths];
-        if (newWidths[index] + diffPercent < 10 || newWidths[index + 1] - diffPercent < 10) return;
+        if (newWidths[index] + diffPercent < 5 || newWidths[index + 1] - diffPercent < 5) return;
         newWidths[index] += diffPercent;
         newWidths[index + 1] -= diffPercent;
         setColWidths(newWidths);
-    } 
-    else if (dragInfo.current.type === 'top' || dragInfo.current.type === 'bottom') {
+    } else if (dragInfo.current.type === 'top' || dragInfo.current.type === 'bottom') {
         const { startY, startHeight } = dragInfo.current;
         if (startY === undefined || startHeight === undefined) return;
         const diffY = e.clientY - startY;
-        if (dragInfo.current.type === 'top') {
-            const newTop = Math.max(0, startHeight + diffY);
-            setVerticalPadding(prev => ({ ...prev, top: newTop }));
-        } else {
-             setVerticalPadding(prev => ({ ...prev, bottom: Math.max(0, startHeight - diffY) }));
-        }
+        if (dragInfo.current.type === 'top') setVerticalPadding(prev => ({ ...prev, top: Math.max(0, startHeight + diffY) }));
+        else setVerticalPadding(prev => ({ ...prev, bottom: Math.max(0, startHeight - diffY) }));
     }
   }, []);
 
@@ -158,9 +172,7 @@ const ClientLedger: React.FC = () => {
   const startResizeCol = (index: number, e: React.MouseEvent) => {
       e.preventDefault(); e.stopPropagation();
       if (!containerRef.current) return;
-      dragInfo.current = {
-          type: 'col', index, startX: e.clientX, startWidths: [...colWidths], containerWidth: containerRef.current.clientWidth
-      };
+      dragInfo.current = { type: 'col', index, startX: e.clientX, startWidths: [...colWidths], containerWidth: containerRef.current.clientWidth };
       document.addEventListener('mousemove', onMouseMove);
       document.addEventListener('mouseup', onMouseUp);
       document.body.style.cursor = 'col-resize';
@@ -180,14 +192,13 @@ const ClientLedger: React.FC = () => {
     setActiveCategory(cat);
     setCurrentOperation(cat.operation);
     setAmount('');
-    setDescription(''); 
+    setDescription('');
   };
 
   const handleQuickEntry = () => {
       const quickCat: TransactionCategory = { id: 'quick_entry', label: '', operation: 'add', color: 'bg-blue-600 text-white' };
       setActiveCategory(quickCat);
-      if (activeColumn === 'col1') setCurrentOperation('none');
-      else setCurrentOperation('add');
+      setCurrentOperation(activeColumn === 'col1' ? 'none' : 'add');
       setAmount('');
       setDescription('');
   };
@@ -197,32 +208,19 @@ const ClientLedger: React.FC = () => {
     if (!id || !activeCategory || !amount) return;
     const val = parseFloat(amount);
     if (isNaN(val)) return;
-
     let op = activeCategory.label === '' ? currentOperation : activeCategory.operation;
     if (activeColumn === 'col1' && activeCategory.label === '') op = 'none';
-
+    const entryDate = `${currentDate.getFullYear()}-${String(currentDate.getMonth()+1).padStart(2,'0')}-${String(currentDate.getDate()).padStart(2,'0')}`;
     const newRecord: Omit<LedgerRecord, 'id'> = {
-      clientId: id,
-      date: new Date().toISOString().split('T')[0],
-      description: description,
-      typeLabel: activeCategory.label,
-      amount: val,
-      operation: op,
-      column: activeColumn,
-      isVisible: isVisible
+      clientId: id, date: entryDate, description: description, typeLabel: activeCategory.label, amount: val, operation: op, column: activeColumn, isVisible: isVisible
     };
-
-    const saved = await saveLedgerRecord(newRecord);
-    setRecords(prev => [...prev, saved]);
-    
+    await saveLedgerRecord(newRecord);
+    loadRecords();
     if (activeCategory.label.trim() === '') {
-        setAmount('');
-        setDescription(''); 
+        setAmount(''); setDescription('');
         setTimeout(() => { if (amountInputRef.current) amountInputRef.current.focus(); }, 10);
     } else {
-        setAmount('');
-        setDescription('');
-        setActiveCategory(null);
+        setAmount(''); setDescription(''); setActiveCategory(null);
     }
   };
 
@@ -261,18 +259,18 @@ const ClientLedger: React.FC = () => {
 
   const requestDeleteCategory = (e: React.MouseEvent, catId: string) => {
     e.stopPropagation();
-    setConfirmModal({ isOpen: true, type: 'DELETE_CATEGORY', targetId: catId, title: 'Delete Button', message: 'Delete this category button?' });
+    setConfirmModal({ isOpen: true, type: 'DELETE_CATEGORY', targetId: catId, title: 'Delete Button', message: 'Remove this category button?' });
   };
 
   const requestDeleteRecord = (recordId: string) => {
-    setConfirmModal({ isOpen: true, type: 'DELETE_RECORD', targetId: recordId, title: 'Delete Transaction', message: 'Permanently delete this transaction?' });
+    setConfirmModal({ isOpen: true, type: 'DELETE_RECORD', targetId: recordId, title: 'Delete Transaction', message: 'Delete this transaction?' });
   };
 
   const handleConfirmAction = async () => {
       if (!confirmModal) return;
       if (confirmModal.type === 'DELETE_RECORD' && confirmModal.targetId) {
           await deleteLedgerRecord(confirmModal.targetId);
-          setRecords(prev => prev.filter(r => r.id !== confirmModal.targetId));
+          loadRecords();
       } else if (confirmModal.type === 'DELETE_CATEGORY' && confirmModal.targetId) {
           deleteCategory(confirmModal.targetId);
           setCategories(getCategories());
@@ -280,61 +278,183 @@ const ClientLedger: React.FC = () => {
       setConfirmModal(null);
   };
 
+  const handlePrint = () => window.print();
   const openNewTab = () => window.open(window.location.href, '_blank');
-  const handlePrint = () => {
-    if (window.self !== window.top) {
-        setConfirmModal({ isOpen: true, type: 'PRINT_ERROR', title: 'Print Restricted', message: 'Open in new tab to print.' });
-        return;
-    }
-    window.print();
+
+  const handleDownloadImage = async () => {
+      const element = document.getElementById('printable-area');
+      if (element) {
+          try {
+              const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false });
+              const link = document.createElement('a');
+              link.download = `${client?.name || 'ledger'}_statement.png`;
+              link.href = canvas.toDataURL('image/png');
+              link.click();
+          } catch (error) {
+              console.error("Image capture failed", error);
+              setConfirmModal({ isOpen: true, type: 'PRINT_ERROR', title: 'Image Error', message: 'Failed to generate image. Please try again.' });
+          }
+      }
   };
 
-  const handleEditClick = (record: LedgerRecord) => setEditingRecord(record);
+  const parseAllWinningDetails = (desc: string) => {
+      const safeDesc = desc || '';
+      const dateMatch = safeDesc.match(/^(\d{1,2}[\/\.]\d{1,2})\s+(.*)/);
+      const dateStr = dateMatch ? dateMatch[1] : '';
+      const content = dateMatch ? dateMatch[2] : safeDesc;
+      
+      const lines = content.split(/;\s*/).filter(Boolean);
+
+      const parsedLines: WinningLineData[] = lines.map(line => {
+          const parts = line.split('-').map(p => p.trim());
+          let sides = '', num = '', big = '0', small = '0', win = '0', type = '', pos = '';
+          
+          if (parts.length >= 3) {
+              const head = parts[0].split(/\s+/).filter(Boolean);
+              if (head.length >= 3) {
+                  sides = head[0]; num = head[1]; big = head[2];
+              } else if (head.length === 2) {
+                  num = head[0]; big = head[1];
+              }
+
+              const mid = parts[1].split(/\s+/).filter(Boolean);
+              if (mid.length >= 3) {
+                  small = mid[0]; type = mid[1]; pos = mid[2].replace(/\(|\)/g, '');
+              } else if (mid.length === 2) {
+                  small = mid[0]; type = mid[1];
+              } else if (mid.length === 1) {
+                  small = mid[0];
+              }
+
+              win = parts[2];
+          } else if (parts.length === 2) {
+               const head = parts[0].split(/\s+/).filter(Boolean);
+               sides = head[0] || '';
+               num = head[1] || '';
+               win = parts[1];
+          } else {
+              num = line;
+          }
+          return { sides, number: num, big, small, win, type, pos };
+      });
+      return { dateStr, parsedLines };
+  };
+
+  const startEditing = (record: LedgerRecord) => {
+      if (record.typeLabel === '中') {
+          const { dateStr, parsedLines } = parseAllWinningDetails(record.description);
+          setEditWinDate(dateStr);
+          setEditWinLines(parsedLines.length > 0 ? parsedLines : [{ sides: '', number: '', big: '0', small: '0', win: '0', type: 'ibox', pos: '头' }]);
+      } else {
+          setEditWinDate('');
+          setEditWinLines([]);
+      }
+      setEditingRecord(record);
+  };
 
   const handleUpdateRecord = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingRecord) {
-      await updateLedgerRecord(editingRecord.id, editingRecord);
-      // Refresh to ensure sort
-      loadRecords();
-      setEditingRecord(null);
+    if (!editingRecord) return;
+    
+    let finalDesc = editingRecord.description;
+    if (editingRecord.typeLabel === '中') {
+        const assembledLines = editWinLines.map(l => `${l.sides} ${l.number} ${l.big} - ${l.small} ${l.type} ${l.pos} - ${l.win}`).join('; ');
+        finalDesc = `${editWinDate} ${assembledLines}`.trim();
     }
+
+    await updateLedgerRecord(editingRecord.id, { 
+        amount: editingRecord.amount, 
+        description: finalDesc, 
+        typeLabel: editingRecord.typeLabel,
+        operation: editingRecord.operation, 
+        date: editingRecord.date, 
+        isVisible: editingRecord.isVisible, 
+        column: editingRecord.column 
+    });
+    loadRecords();
+    setEditingRecord(null);
   };
 
   const calculateColumn = (columnKey: LedgerColumn) => {
-      const colRecords = records.filter(r => r.column === columnKey);
+      const colRecords = filteredRecords.filter(r => r.column === columnKey);
       const processed = colRecords.map(r => ({ ...r, netChange: getNetAmount(r) }));
       const visibleProcessed = processed.filter(r => r.isVisible);
       const finalBalance = visibleProcessed.reduce((acc, curr) => acc + curr.netChange, 0);
       return { processed, finalBalance };
   };
 
-  const mainLedger = useMemo(() => calculateColumn('main'), [records]);
-  const col1Ledger = useMemo(() => calculateColumn('col1'), [records]);
-  const col2Ledger = useMemo(() => calculateColumn('col2'), [records]);
+  const mainLedger = useMemo(() => calculateColumn('main'), [filteredRecords]);
+  const col1Ledger = useMemo(() => calculateColumn('col1'), [filteredRecords]);
+  const col2Ledger = useMemo(() => calculateColumn('col2'), [filteredRecords]);
 
-  const totalOwed = col1Ledger.processed.length > 0 ? col1Ledger.finalBalance : mainLedger.finalBalance;
+  const renderFormattedDescription = (text: string | undefined) => {
+    if (!text) return null;
+    const dateMatch = text.match(/^(\d{1,2}\/\d{1,2})\s+(.*)/);
+    if (dateMatch) {
+        return (
+            <div className="flex items-start w-full whitespace-nowrap">
+                <span className="text-[10px] md:text-[13px] font-mono text-gray-400 shrink-0 w-[36px] md:w-[46px]">{dateMatch[1]}</span>
+                <span className="text-[11px] md:text-[16px] text-gray-700 font-bold leading-tight flex-1 truncate">{dateMatch[2]}</span>
+            </div>
+        );
+    }
+    return <span className="text-[11px] md:text-[16px] text-gray-700 font-bold leading-tight truncate">{text}</span>;
+  };
 
   const renderWinningContent = (description: string | undefined) => {
     const { dateStr, parsedLines } = parseAllWinningDetails(description || '');
-    if (parsedLines.length === 0) return null;
-
+    
     return (
         <div className="flex flex-col w-full min-w-0 pt-0.5 overflow-visible font-mono">
-            {dateStr && <div className="text-[10px] md:text-[11px] text-gray-400 select-none pb-0.5 pl-1 font-bold">{dateStr}</div>}
+            {/* Header Line with Date (only once) */}
+            {dateStr && (
+                <div className="text-[10px] md:text-[11px] text-gray-400 select-none pb-0.5 pl-1 font-bold">
+                    {dateStr}
+                </div>
+            )}
+            
             <div className="flex flex-col w-full min-w-0 gap-1 overflow-visible">
-                {parsedLines.map((line: any, i: number) => (
+                {parsedLines.map((line, i) => (
                     <div key={i} className="flex flex-col w-full bg-white/50 rounded-sm">
-                        {line.sides && <div className="text-[11px] font-extrabold text-gray-800 uppercase tracking-tight leading-none pl-1 mb-0.5">{line.sides}</div>}
-                        <div className="flex items-center text-[13px] md:text-[15px] leading-none py-0.5 w-full whitespace-nowrap pl-1 min-w-max">
-                            <div className="font-black text-gray-900 tracking-tighter shrink-0 w-[34px] md:w-[44px]">{line.number}</div>
-                            <div className="text-gray-500 font-bold text-[10px] md:text-[12px] tracking-tighter shrink-0 w-[38px] md:w-[50px] text-center">{line.big}-{line.small}</div>
-                            <div className="text-gray-400 text-[10px] md:text-[11px] uppercase font-bold shrink-0 w-[32px] md:w-[42px] text-center">{line.type}</div>
-                            <div className="w-[20px] flex justify-center shrink-0">
-                                {line.pos && <div className="w-4 h-4 rounded-full border border-gray-900 flex items-center justify-center bg-white shadow-sm"><span className="text-[9px] font-black text-gray-900 leading-none scale-90">{line.pos}</span></div>}
+                        
+                        {/* Row 1: Sides (if present) - Separate line for compactness */}
+                        {line.sides && (
+                             <div className="text-[11px] font-extrabold text-gray-800 uppercase tracking-tight leading-none pl-1">
+                                {line.sides}
+                             </div>
+                        )}
+
+                        {/* Row 2: Details + Amount - Flex to stick amount to details with min-w-max to prevent truncation */}
+                        <div className="flex items-center gap-1 text-[13px] md:text-[15px] leading-none py-0.5 w-full whitespace-nowrap pl-1 min-w-max">
+                            {/* Number */}
+                            <div className="font-black text-gray-900 tracking-tighter shrink-0">
+                                {line.number}
                             </div>
-                            <div className="text-gray-300 font-light px-1 shrink-0">-</div>
-                            <div className="text-red-600 font-black text-lg md:text-xl tracking-tighter shrink-0 ml-1">
+                            
+                            {/* Bet */}
+                            <div className="text-gray-500 font-bold text-[10px] md:text-[12px] tracking-tighter shrink-0">
+                                {line.big}-{line.small}
+                            </div>
+                            
+                            {/* Type */}
+                            <div className="text-gray-400 text-[10px] md:text-[11px] uppercase font-bold shrink-0">
+                                {line.type}
+                            </div>
+                            
+                            {/* Position */}
+                            {line.pos && (
+                                <div className="w-4 h-4 rounded-full border border-gray-900 flex items-center justify-center bg-white shadow-sm shrink-0">
+                                    <span className="text-[9px] font-black text-gray-900 leading-none scale-90">
+                                        {line.pos}
+                                    </span>
+                                </div>
+                            )}
+
+                            <div className="text-gray-300 font-light px-0.5 shrink-0">-</div>
+
+                            {/* Win Amount - Stick to details, bold red */}
+                            {/* FIX: Remove commas before parsing to avoid truncation of amounts >= 1,000 */}
+                            <div className="text-red-600 font-black text-lg md:text-xl tracking-tighter shrink-0">
                                 {parseFloat(line.win.replace(/,/g, '')) > 0 ? parseFloat(line.win.replace(/,/g, '')).toLocaleString() : ''}
                             </div>
                         </div>
@@ -345,45 +465,77 @@ const ClientLedger: React.FC = () => {
     );
   };
 
-  const LedgerColumnView = ({ data, footerLabel = "收" }: { data: ReturnType<typeof calculateColumn>, footerLabel?: string }) => {
+  const LedgerColumnView = ({ data, footerLabel = "收", columnType }: { data: ReturnType<typeof calculateColumn>, footerLabel?: string, columnType: LedgerColumn }) => {
       if (data.processed.length === 0) return <div className="flex-1 min-h-[50px]" />;
+      const isMain = footerLabel === '欠' || columnType === 'main';
       const hasCalculableRecords = data.processed.some(r => r.isVisible && r.operation !== 'none');
       const isNegative = data.finalBalance < 0;
+      
       let displayLabel = footerLabel;
-      if (isNegative && (footerLabel === '收' || footerLabel === '欠')) displayLabel = '补';
+      if (isNegative && (footerLabel === '收' || footerLabel === '欠')) {
+          displayLabel = columnType === 'main' ? '补' : '';
+      }
       
       return (
-      <div className="flex flex-col items-center">
-          <div className="flex flex-col space-y-0.5 w-fit items-end">
+      <div className="flex flex-col w-full px-1">
+          <div className="flex flex-col space-y-0.5 w-full">
                 {data.processed.map((r) => {
-                    const winContent = (r.typeLabel === '中' && r.description.includes(';')) ? renderWinningContent(r.description) : null;
+                    const isWinning = r.typeLabel === '中';
+                    // PANEL 1: Shift content left by hiding the type label column for winning records
+                    const hideLabel = isWinning && columnType === 'col1';
+                    
+                    // MAIN PANEL: Strictly hide description for winning records
+                    const showDescription = !(isWinning && columnType === 'main');
+                    
+                    // PANEL 1: Redundant amount column hidden for winners because win info is in description
+                    const showAmountColumn = !(isWinning && columnType === 'col1');
+                    
                     return (
-                    <div key={r.id} className={`group flex justify-end items-center py-0.5 relative gap-1 md:gap-2 ${!r.isVisible ? 'opacity-30 grayscale no-print' : ''}`}>
-                        <div className="no-print opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1 absolute -left-16 z-10 bg-white shadow-sm rounded border border-gray-100 p-1">
-                            <button onClick={() => handleEditClick(r)} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Pencil size={12} /></button>
+                    <div key={r.id} className={`group flex items-start py-1 relative gap-1 md:gap-2 w-full ${!r.isVisible ? 'opacity-30 grayscale no-print' : ''}`}>
+                        <div className="no-print opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1 absolute -left-10 md:-left-12 top-0.5 z-40 bg-white shadow-sm rounded border border-gray-100 p-1">
+                            <button onClick={() => startEditing(r)} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Pencil size={12} /></button>
                             <button onClick={() => requestDeleteRecord(r.id)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 size={12} /></button>
                         </div>
-                        <div className="text-sm md:text-xl font-bold uppercase tracking-wide text-gray-600">{r.typeLabel}</div>
-                        
-                        {/* Description Rendering */}
-                        {winContent ? (
-                            <div className="mr-2">{winContent}</div>
-                        ) : (
-                            r.description && <div className="text-xs md:text-sm text-gray-600 font-medium mr-1 md:mr-2 max-w-[100px] md:max-w-[150px] truncate">{r.description}</div>
-                        )}
 
-                        <div className={`text-base md:text-2xl font-mono font-bold w-20 md:w-36 text-right ${r.operation === 'add' ? 'text-green-700' : r.operation === 'subtract' ? 'text-red-700' : 'text-gray-600'}`}>
-                            {r.operation === 'none' ? r.amount.toLocaleString(undefined, {minimumFractionDigits: 2}) : Math.abs(r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                        <div className="flex w-full items-start relative z-10 min-h-[24px]">
+                            {/* Shift to far left if label hidden */}
+                            <div className={`${hideLabel ? 'w-0 overflow-hidden' : 'w-[20px] md:w-[32px]'} text-sm md:text-xl font-bold uppercase tracking-wide text-gray-600 shrink-0 text-center leading-tight pt-0.5`}>
+                                {hideLabel ? '' : r.typeLabel}
+                            </div>
+                            <div className="flex-1 px-1 md:px-2 min-w-0 overflow-visible">
+                                {showDescription ? (
+                                    isWinning 
+                                        ? renderWinningContent(r.description) 
+                                        : renderFormattedDescription(r.description)
+                                ) : null}
+                            </div>
+                            
+                            {showAmountColumn ? (
+                                <div className={`text-base md:text-2xl font-mono font-bold shrink-0 w-[110px] md:w-[160px] text-right leading-none pl-2 pt-0.5 ${
+                                    r.operation === 'add' ? 'text-green-700' : 
+                                    r.operation === 'subtract' ? (isMain ? 'text-red-700' : 'text-gray-900') : 
+                                    'text-gray-600'
+                                }`}>
+                                    {r.operation === 'none' ? r.amount.toLocaleString(undefined, {minimumFractionDigits: 2}) : Math.abs(r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                </div>
+                            ) : (
+                                <div className="shrink-0 w-0" />
+                            )}
                         </div>
                     </div>
                 )})}
           </div>
+
           {hasCalculableRecords && (
-            <div className="mt-2 pt-1 flex flex-col items-end w-fit border-t-2 border-gray-900">
-                <div className="flex items-center gap-1 md:gap-2 justify-end">
-                    <span className="text-sm md:text-xl font-bold text-gray-900 uppercase">{displayLabel}</span>
-                    <span className={`text-lg md:text-3xl font-mono font-bold w-24 md:w-40 text-right ${data.finalBalance >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
-                        {data.finalBalance < 0 ? `(${Math.abs(data.finalBalance).toLocaleString(undefined, {minimumFractionDigits: 2})})` : data.finalBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}
+            <div className="mt-3 pt-1.5 flex flex-col items-end w-full border-t-2 border-gray-900">
+                <div className="flex items-center gap-1 md:gap-4 justify-end w-full">
+                    {displayLabel && <span className="text-sm md:text-xl font-bold text-gray-900 uppercase">{displayLabel}</span>}
+                    <span className={`text-lg md:text-3xl font-mono font-bold min-w-[110px] md:min-w-[170px] text-right ${data.finalBalance >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
+                        {data.finalBalance < 0 
+                            ? (columnType === 'col1' 
+                                ? Math.abs(data.finalBalance).toLocaleString(undefined, {minimumFractionDigits: 2}) 
+                                : `(${Math.abs(data.finalBalance).toLocaleString(undefined, {minimumFractionDigits: 2})})`)
+                            : data.finalBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}
                     </span>
                 </div>
             </div>
@@ -391,39 +543,58 @@ const ClientLedger: React.FC = () => {
       </div>
   )};
 
-  if (!client) return <div className="p-8">Loading client data...</div>;
+  if (!client) return <div className="p-8 text-center text-gray-500">Loading client...</div>;
 
   return (
     <div className="bg-gray-100 min-h-screen pb-20">
-      <div className="no-print bg-white sticky top-0 z-20 shadow-md">
+      <div className="no-print bg-white sticky top-0 z-40 shadow-md">
         <div className="flex items-center justify-between p-3 md:p-4 max-w-5xl mx-auto">
           <div className="flex items-center space-x-2 md:space-x-3">
-            <Link to="/clients" className="p-2 hover:bg-gray-100 rounded-full text-gray-600 transition-colors"><ArrowLeft size={20} /></Link>
-            <div><h1 className="text-base md:text-lg font-bold text-gray-900 leading-tight">{client.name}</h1><p className="text-[10px] md:text-xs text-gray-500 font-mono">{client.code}</p></div>
+            <Link to="/clients" className="p-2 hover:bg-gray-100 rounded-full text-gray-600 transition-colors">
+              <ArrowLeft size={20} />
+            </Link>
+            <div>
+              <h1 className="text-base md:text-lg font-bold text-gray-900 leading-tight">{client.name}</h1>
+              <p className="text-[10px] md:text-xs text-gray-500 font-mono">{client.code}</p>
+            </div>
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-4">
+             <div className="hidden md:flex items-center bg-gray-100 rounded-lg p-1">
+                 <button onClick={handlePrevMonth} disabled={currentYear === 2025 && currentMonth === 0} className="p-1 hover:bg-white rounded disabled:opacity-30"><ChevronLeft size={16}/></button>
+                 <span className="px-2 text-xs font-bold w-20 text-center">{MONTH_NAMES[currentMonth].slice(0,3)} {currentYear}</span>
+                 <button onClick={handleNextMonth} disabled={currentYear === 2026 && currentMonth === 11} className="p-1 hover:bg-white rounded disabled:opacity-30"><ChevronRight size={16}/></button>
+             </div>
              <div className="text-right mr-2">
                 <p className={`text-sm md:text-lg font-bold leading-tight ${totalOwed >= 0 ? 'text-green-600' : 'text-red-600'}`}>${Math.abs(totalOwed).toLocaleString()}</p>
                 <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{totalOwed >= 0 ? 'OWES' : 'CREDIT'}</p>
              </div>
-             <div className="hidden md:flex space-x-2">
-                 <button onClick={openNewTab} className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-50 shadow-sm"><ExternalLink size={18} /></button>
+             <div className="flex space-x-2">
+                 <button onClick={openNewTab} className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-50 shadow-sm hidden md:block" title="Open in New Tab"><ExternalLink size={18} /></button>
+                 <button onClick={handleDownloadImage} className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-50 shadow-sm hidden md:block" title="Download as Image"><ImageDown size={18} /></button>
                  <button onClick={handlePrint} className="bg-gray-800 text-white px-3 py-2 rounded-lg hover:bg-gray-900 shadow-sm"><Printer size={18} /></button>
              </div>
-             <button onClick={handlePrint} className="md:hidden p-2 text-gray-600 hover:bg-gray-100 rounded-lg"><Printer size={20} /></button>
           </div>
+        </div>
+        <div className="bg-gray-50 border-b border-gray-200 px-4 py-2 flex justify-start md:justify-center space-x-2 overflow-x-auto no-scrollbar">
+             {sortedWeekKeys.map(wk => {
+                const days = weeksData[Number(wk)];
+                const rangeStr = getWeekRangeString(null, null, days);
+                return (
+                    <button key={wk} onClick={() => handleWeekSelect(Number(wk))} className={`px-3 py-1 text-xs font-bold rounded-full border transition-colors whitespace-nowrap flex-shrink-0 ${selectedWeekNum === Number(wk) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'}`}>
+                        {rangeStr}
+                    </button>
+                );
+             })}
         </div>
       </div>
 
       <div className="max-w-5xl mx-auto px-2 md:px-8 py-4 md:py-6">
         <div className="no-print mb-6 md:mb-8 space-y-4">
-            <div className="flex justify-center">
-                <div className="bg-white rounded-lg p-1 shadow-sm border border-gray-200 flex w-full md:w-auto overflow-x-auto">
-                    {['col1', 'col2', 'main'].map(col => (
-                        <button key={col} onClick={() => setActiveColumn(col as LedgerColumn)} className={`flex-1 md:flex-none px-3 py-2 text-xs md:text-sm font-bold rounded-md transition-all whitespace-nowrap ${activeColumn === col ? (col === 'main' ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-700') : 'text-gray-500 hover:bg-gray-50'}`}>
-                            {col === 'main' ? 'Main Ledger' : col === 'col1' ? 'Panel 1' : 'Panel 2'}
-                        </button>
-                    ))}
+            <div className="flex md:hidden justify-center items-center space-x-3 overflow-x-auto no-scrollbar pb-2">
+                <div className="flex bg-white rounded-full p-1 border border-gray-200 shadow-sm w-full">
+                    <button onClick={() => setActiveColumn('col1')} className={`flex-1 px-3 py-1.5 text-xs font-bold rounded-full transition-all whitespace-nowrap ${activeColumn === 'col1' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>Panel 1</button>
+                    <button onClick={() => setActiveColumn('col2')} className={`flex-1 px-3 py-1.5 text-xs font-bold rounded-full transition-all whitespace-nowrap ${activeColumn === 'col2' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>Panel 2</button>
+                    <button onClick={() => setActiveColumn('main')} className={`flex-1 px-3 py-1.5 text-xs font-bold rounded-full transition-all whitespace-nowrap ${activeColumn === 'main' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>Main</button>
                 </div>
             </div>
 
@@ -431,56 +602,105 @@ const ClientLedger: React.FC = () => {
             <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 md:gap-3">
                 {categories.filter(c => c.label !== '').map((cat, index) => (
                 <div key={cat.id} className="relative group touch-manipulation cursor-grab active:cursor-grabbing" draggable onDragStart={(e) => handleDragStart(e, index)} onDragOver={(e) => handleDragOver(e, index)} onDrop={handleDrop}>
-                    <button onClick={() => handleCategorySelect(cat)} className={`w-full h-full flex flex-col items-center justify-center p-3 md:p-4 border-2 rounded-xl transition-all shadow-sm active:scale-95 ${cat.color} ${cat.operation === 'add' ? 'border-green-100' : cat.operation === 'subtract' ? 'border-red-100' : 'border-gray-100'}`}>
-                        <div className={`p-1.5 md:p-2 rounded-full mb-1 md:mb-2 bg-black bg-opacity-5`}>{cat.operation === 'add' ? <Plus size={16} /> : cat.operation === 'subtract' ? <Minus size={16} /> : <Hash size={16} />}</div>
+                    <button onClick={() => handleCategorySelect(cat)} className={`w-full h-full flex flex-col items-center justify-center p-3 md:p-4 border-2 rounded-xl transition-all shadow-sm active:scale-95 ${cat.color} ${cat.operation === 'add' ? 'border-green-100 hover:border-green-300' : cat.operation === 'subtract' ? 'border-red-100 hover:border-red-300' : 'border-gray-100 hover:border-gray-300'}`}>
+                        <div className="p-1.5 md:p-2 rounded-full mb-1 md:mb-2 bg-black bg-opacity-5">
+                            {cat.operation === 'add' ? <Plus size={16} /> : cat.operation === 'subtract' ? <Minus size={16} /> : <Hash size={16} />}
+                        </div>
                         <span className="text-sm md:text-base font-bold text-center truncate w-full">{cat.label}</span>
                     </button>
+                    <div className="absolute top-1 left-1 text-gray-400 opacity-50 hidden md:block"><GripHorizontal size={14} /></div>
                     <button onClick={(e) => requestDeleteCategory(e, cat.id)} className="absolute -top-2 -right-2 text-gray-400 hover:text-red-600 bg-white rounded-full p-1 shadow-md opacity-0 group-hover:opacity-100 transition-opacity"><X size={14} /></button>
                 </div>
                 ))}
-                <button onClick={handleQuickEntry} className="flex flex-col items-center justify-center p-3 md:p-4 bg-indigo-50 border-2 border-indigo-200 rounded-xl hover:bg-indigo-100 transition-all text-indigo-700 active:scale-95"><div className="p-1.5 md:p-2 rounded-full mb-1 md:mb-2 bg-indigo-200"><Zap size={16} /></div><span className="text-sm md:text-base font-bold text-center">Quick Entry</span></button>
-                <button onClick={() => setIsAddCatModalOpen(true)} className="flex flex-col items-center justify-center p-3 md:p-4 bg-white border-2 border-dashed border-gray-300 rounded-xl hover:bg-gray-50 transition-all text-gray-500"><Plus size={20} className="mb-1" /><span className="text-[10px] md:text-xs font-bold uppercase">New</span></button>
+                <button onClick={handleQuickEntry} className="flex flex-col items-center justify-center p-3 md:p-4 bg-indigo-50 border-2 border-indigo-200 rounded-xl hover:bg-indigo-100 transition-all text-indigo-700 active:scale-95">
+                    <div className="p-1.5 md:p-2 rounded-full mb-1 md:mb-2 bg-indigo-200"><Zap size={16} /></div>
+                    <span className="text-sm md:text-base font-bold text-center">Quick Entry</span>
+                </button>
+                <button onClick={() => setIsAddCatModalOpen(true)} className="flex flex-col items-center justify-center p-3 md:p-4 bg-white border-2 border-dashed border-gray-300 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all text-gray-500"><Plus size={20} className="mb-1" /><span className="text-[10px] md:text-xs font-bold uppercase">New</span></button>
             </div>
             ) : (
-            <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden ring-4 ring-blue-50/50">
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden animate-fade-in ring-4 ring-blue-50/50">
                 <div className={`p-3 flex items-center justify-between ${activeCategory.label === '' ? 'bg-indigo-50 border-b border-indigo-100' : activeCategory.color}`}>
-                    <div className="flex items-center space-x-2"><h3 className="font-bold flex items-center text-sm md:text-base text-gray-900">{activeCategory.label || "Quick Entry Mode"}</h3></div>
-                    <button onClick={() => setActiveCategory(null)} className="p-1 hover:bg-black/10 rounded"><X size={20} /></button>
+                <div className="flex items-center space-x-2">
+                    <h3 className="font-bold flex items-center text-sm md:text-base text-gray-900">
+                        {activeCategory.label || "Quick Entry Mode"}
+                        {activeCategory.label !== '' && <span className="ml-2 text-xs font-normal opacity-75 border px-1 rounded border-current">{activeCategory.operation === 'add' ? '+' : activeCategory.operation === 'subtract' ? '-' : 'Ø'}</span>}
+                    </h3>
+                    <span className="text-[10px] md:text-xs opacity-50 px-2 py-0.5 bg-black/5 rounded-full">{activeColumn === 'main' ? 'Main' : activeColumn === 'col1' ? 'P1' : 'P2'}</span>
+                    {activeCategory.label === '' && <span className="text-[10px] font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded">Continuous</span>}
+                </div>
+                <button onClick={() => setActiveCategory(null)} className="p-1 hover:bg-black/10 rounded"><X size={20} /></button>
                 </div>
                 <form onSubmit={handleSubmit} className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {activeCategory.label === '' && (
-                        <div className="md:col-span-2">
-                            {activeColumn === 'col1' ? <div className="bg-gray-100 text-gray-600 p-2 rounded-lg text-center font-bold text-sm mb-2 border border-gray-200">(Ø) Note Only Mode</div> : 
+                {activeCategory.label === '' && (
+                    <div className="md:col-span-2">
+                        {activeColumn === 'col1' ? <div className="bg-gray-100 text-gray-600 p-2 rounded-lg text-center font-bold text-sm mb-2 border border-gray-200">(Ø) Note Only Mode (No Calculation)</div> : (
                             <div className="flex space-x-2 mb-2">
                                 <button type="button" onClick={() => setCurrentOperation('add')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${currentOperation === 'add' ? 'bg-green-100 text-green-800 ring-2 ring-green-500' : 'bg-gray-100 text-gray-500'}`}>(+) Add</button>
                                 <button type="button" onClick={() => setCurrentOperation('subtract')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${currentOperation === 'subtract' ? 'bg-red-100 text-red-800 ring-2 ring-red-500' : 'bg-gray-100 text-gray-500'}`}>(-) Deduct</button>
                                 <button type="button" onClick={() => setCurrentOperation('none')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${currentOperation === 'none' ? 'bg-gray-200 text-gray-800 ring-2 ring-gray-500' : 'bg-gray-100 text-gray-500'}`}>(Ø) Note</button>
-                            </div>}
-                        </div>
-                    )}
-                    <div className="md:col-span-2"><label className="text-xs font-bold text-gray-500 uppercase">Amount</label><input ref={amountInputRef} autoFocus type="number" step="0.01" required value={amount} onChange={e => setAmount(e.target.value)} className="w-full mt-1 p-3 text-2xl font-mono border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="0.00" /></div>
-                    <div><label className="text-xs font-bold text-gray-500 uppercase">Note</label><input type="text" value={description} onChange={e => setDescription(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"/></div>
-                    <div className="flex items-end"><button type="submit" className={`w-full py-3 rounded-lg text-white font-bold shadow-md active:scale-95 transition-transform ${activeCategory.label === '' ? (activeColumn === 'col1' ? 'bg-gray-600' : currentOperation === 'add' ? 'bg-green-600' : currentOperation === 'subtract' ? 'bg-red-600' : 'bg-gray-600') : (activeCategory.operation === 'add' ? 'bg-green-600' : activeCategory.operation === 'subtract' ? 'bg-red-600' : 'bg-gray-600')}`}>{activeCategory.label === '' ? 'Add & Continue' : `Confirm ${activeCategory.label}`}</button></div>
+                            </div>
+                        )}
+                    </div>
+                )}
+                <div className="md:col-span-2">
+                    <label className="text-xs font-bold text-gray-500 uppercase">Amount</label>
+                    <input ref={amountInputRef} autoFocus type="number" step="0.01" required value={amount} onChange={e => setAmount(e.target.value)} className="w-full mt-1 p-3 text-2xl font-mono border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="0.00"/>
+                </div>
+                <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase">Note</label>
+                    <input type="text" value={description} onChange={e => setDescription(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"/>
+                </div>
+                <div className="flex items-end">
+                    <button type="submit" className={`w-full py-3 rounded-lg text-white font-bold shadow-md active:scale-95 transition-transform ${activeCategory.label === '' ? (activeColumn === 'col1' ? 'bg-gray-600' : currentOperation === 'add' ? 'bg-green-600' : currentOperation === 'subtract' ? 'bg-red-600' : 'bg-gray-600') : (activeCategory.operation === 'add' ? 'bg-green-600' : activeCategory.operation === 'subtract' ? 'bg-red-600' : 'bg-gray-600')}`}>{activeCategory.label === '' ? 'Add & Continue' : `Confirm ${activeCategory.label}`}</button>
+                </div>
                 </form>
             </div>
             )}
         </div>
 
-        <div id="printable-area" className="relative max-w-5xl mx-auto">
-            <div className="bg-white border border-gray-200 shadow-sm min-h-[600px] relative text-lg font-serif">
-                <div style={{ height: `${verticalPadding.top}px` }} className="relative group w-full no-print-bg">
-                    <div className="absolute bottom-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResizeVertical('top', e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div>
-                </div>
-                <div className="px-4 md:px-8 pb-2 md:pb-4 flex justify-between items-end mb-2 md:mb-4">
-                    <div><h2 className="text-2xl md:text-4xl font-bold text-gray-900 uppercase tracking-widest">{client.name}</h2>{client.code && <p className="text-gray-600 mt-1 font-mono text-sm md:text-xl">{client.code}</p>}</div>
-                </div>
-                <div className="flex w-full min-h-[400px] relative" ref={containerRef}>
-                    <div style={{ width: `${colWidths[0]}%` }} className="relative flex flex-col p-1 md:p-2 border-r border-transparent group"><LedgerColumnView data={col1Ledger} footerLabel="收" /><div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print" onMouseDown={(e) => startResizeCol(0, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div></div>
-                    <div style={{ width: `${colWidths[1]}%` }} className="relative flex flex-col p-1 md:p-2 border-r border-transparent group"><LedgerColumnView data={col2Ledger} footerLabel="收" /><div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print" onMouseDown={(e) => startResizeCol(1, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div></div>
-                    <div style={{ width: `${colWidths[2]}%` }} className="relative flex flex-col p-1 md:p-2 bg-gray-50/30"><LedgerColumnView data={mainLedger} footerLabel="欠" /></div>
-                </div>
-                <div style={{ height: `${verticalPadding.bottom}px` }} className="relative group w-full mt-auto no-print-bg">
-                    <div className="absolute top-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResizeVertical('bottom', e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div>
+        <div className="flex flex-col md:flex-row gap-4 items-start relative">
+            <div className="hidden md:flex flex-col gap-2 no-print sticky top-24 z-30 w-24 shrink-0">
+                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 pl-1">Panels</div>
+                <button onClick={() => setActiveColumn('col1')} className={`px-3 py-2 text-[10px] font-bold rounded-lg text-left transition-all border ${activeColumn === 'col1' ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'}`}>Panel 1</button>
+                <button onClick={() => setActiveColumn('col2')} className={`px-3 py-2 text-[10px] font-bold rounded-lg text-left transition-all border ${activeColumn === 'col2' ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'}`}>Panel 2</button>
+                <button onClick={() => setActiveColumn('main')} className={`px-3 py-2 text-[10px] font-bold rounded-lg text-left transition-all border ${activeColumn === 'main' ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'}`}>Main</button>
+            </div>
+
+            <div id="printable-area" className="flex-1 w-full min-w-0">
+                <div className="bg-white border border-gray-200 shadow-sm min-h-[600px] relative text-lg font-serif">
+                    <div style={{ height: `${verticalPadding.top}px` }} className="relative group w-full no-print-bg">
+                        <div className="absolute bottom-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResizeVertical('top', e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div>
+                    </div>
+                    
+                    <div className="px-4 md:px-8 pb-2 md:pb-4 flex justify-between items-end mb-2 md:mb-4">
+                        <div>
+                            <h2 className="text-2xl md:text-4xl font-bold text-gray-900 uppercase tracking-widest">{client.name}</h2>
+                            {client.code && <p className="text-gray-600 mt-1 font-mono text-sm md:text-xl">{client.code}</p>}
+                        </div>
+                        <div className="md:hidden text-right">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Viewing</span>
+                            <div className="text-sm font-bold text-blue-600 uppercase">{activeColumn === 'main' ? 'Main Ledger' : activeColumn === 'col1' ? 'Panel 1' : 'Panel 2'}</div>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col md:flex-row w-full min-h-[400px] relative" ref={containerRef}>
+                        <div className={`relative flex flex-col p-1 md:p-2 border-r border-transparent group ${activeColumn === 'col1' ? 'block w-full md:flex md:w-auto' : 'hidden md:flex'}`} style={{ width: window.innerWidth >= 768 ? `${colWidths[0]}%` : undefined, zIndex: 30 }}>
+                            <LedgerColumnView data={col1Ledger} footerLabel="收" columnType="col1"/>
+                            <div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print hidden md:flex" onMouseDown={(e) => startResizeCol(0, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div>
+                        </div>
+                        <div className={`relative flex flex-col p-1 md:p-2 border-r border-transparent group ${activeColumn === 'col2' ? 'block w-full md:flex md:w-auto' : 'hidden md:flex'}`} style={{ width: window.innerWidth >= 768 ? `${colWidths[1]}%` : undefined, zIndex: 20 }}>
+                            <LedgerColumnView data={col2Ledger} footerLabel="收" columnType="col2"/>
+                            <div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print hidden md:flex" onMouseDown={(e) => startResizeCol(1, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div>
+                        </div>
+                        <div className={`relative flex flex-col p-1 md:p-2 bg-gray-50/30 ${activeColumn === 'main' ? 'block w-full md:flex md:w-auto' : 'hidden md:flex'}`} style={{ width: window.innerWidth >= 768 ? `${colWidths[2]}%` : undefined, zIndex: 10 }}>
+                            <LedgerColumnView data={mainLedger} footerLabel="欠" columnType="main"/>
+                        </div>
+                    </div>
+
+                    <div style={{ height: `${verticalPadding.bottom}px` }} className="relative group w-full mt-auto no-print-bg">
+                        <div className="absolute top-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResizeVertical('bottom', e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -488,22 +708,12 @@ const ClientLedger: React.FC = () => {
 
        {isAddCatModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 no-print font-sans">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
+          <div className="bg-white rounded-xl shadow-xl w-full max-sm p-6">
             <h2 className="text-xl font-bold mb-4">Add Button Option</h2>
             <form onSubmit={handleAddCategory} className="space-y-4">
               <div><label className="block text-sm font-medium text-gray-700 mb-1">Button Name</label><input type="text" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value={newCatLabel} onChange={e => setNewCatLabel(e.target.value)} placeholder="e.g. Bonus" /></div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Calculation Type</label>
-                <div className="grid grid-cols-3 gap-2">
-                  <button type="button" onClick={() => setNewCatOp('add')} className={`py-2 px-1 rounded-lg border text-xs md:text-sm font-bold ${newCatOp === 'add' ? 'bg-green-50 border-green-500 text-green-700' : 'border-gray-200 text-gray-500'}`}>(+) Add</button>
-                  <button type="button" onClick={() => setNewCatOp('subtract')} className={`py-2 px-1 rounded-lg border text-xs md:text-sm font-bold ${newCatOp === 'subtract' ? 'bg-red-50 border-red-500 text-red-700' : 'border-gray-200 text-gray-500'}`}>(-) Deduct</button>
-                  <button type="button" onClick={() => setNewCatOp('none')} className={`py-2 px-1 rounded-lg border text-xs md:text-sm font-bold ${newCatOp === 'none' ? 'bg-gray-100 border-gray-500 text-gray-700' : 'border-gray-200 text-gray-500'}`}>Note</button>
-                </div>
-              </div>
-              <div className="flex justify-end space-x-3 mt-6">
-                <button type="button" onClick={() => setIsAddCatModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
-                <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Create</button>
-              </div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Calculation Type</label><div className="grid grid-cols-3 gap-2"><button type="button" onClick={() => setNewCatOp('add')} className={`py-2 px-1 rounded-lg border text-xs md:text-sm font-bold ${newCatOp === 'add' ? 'bg-green-50 border-green-500 text-green-700' : 'border-gray-200 text-gray-500'}`}>(+) Add</button><button type="button" onClick={() => setNewCatOp('subtract')} className={`py-2 px-1 rounded-lg border text-xs md:text-sm font-bold ${newCatOp === 'subtract' ? 'bg-red-50 border-red-500 text-red-700' : 'border-gray-200 text-gray-500'}`}>(-) Deduct</button><button type="button" onClick={() => setNewCatOp('none')} className={`py-2 px-1 rounded-lg border text-xs md:text-sm font-bold ${newCatOp === 'none' ? 'bg-gray-100 border-gray-500 text-gray-700' : 'border-gray-200 text-gray-500'}`}>Gray</button></div></div>
+              <div className="flex justify-end space-x-3 mt-6"><button type="button" onClick={() => setIsAddCatModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button><button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Create</button></div>
             </form>
           </div>
         </div>
@@ -512,56 +722,98 @@ const ClientLedger: React.FC = () => {
       {confirmModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4 no-print font-sans">
               <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 animate-in fade-in zoom-in duration-200">
-                  <div className={`flex items-center justify-center w-12 h-12 rounded-full mb-4 mx-auto ${confirmModal.type === 'PRINT_ERROR' ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'}`}>
-                      {confirmModal.type === 'PRINT_ERROR' ? <Printer size={24} /> : <AlertTriangle size={24} />}
-                  </div>
+                  <div className={`flex items-center justify-center w-12 h-12 rounded-full mb-4 mx-auto ${confirmModal.type === 'PRINT_ERROR' ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'}`}>{confirmModal.type === 'PRINT_ERROR' ? <Printer size={24} /> : <AlertTriangle size={24} />}</div>
                   <h3 className="text-xl font-bold text-center text-gray-900 mb-2">{confirmModal.title}</h3>
                   <p className="text-center text-gray-500 mb-6">{confirmModal.message}</p>
-                  <div className="flex space-x-3">
-                      <button onClick={() => setConfirmModal(null)} className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium">{confirmModal.type === 'PRINT_ERROR' ? 'Close' : 'Cancel'}</button>
-                      {confirmModal.type === 'PRINT_ERROR' && <button onClick={openNewTab} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium flex items-center justify-center"><ExternalLink size={16} className="mr-2" />Open Tab</button>}
-                      {confirmModal.type !== 'PRINT_ERROR' && <button onClick={handleConfirmAction} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium">Confirm</button>}
-                  </div>
+                  <div className="flex space-x-3"><button onClick={() => setConfirmModal(null)} className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium">Cancel</button>{confirmModal.type !== 'PRINT_ERROR' && <button onClick={handleConfirmAction} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium">Confirm</button>}</div>
               </div>
           </div>
       )}
 
       {editingRecord && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 no-print font-sans">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-                <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-xl font-bold">Edit Transaction</h2>
-                    <button onClick={() => setEditingRecord(null)} className="text-gray-400 hover:text-gray-600"><X size={24} /></button>
-                </div>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 no-print font-sans overflow-y-auto">
+            <div className={`bg-white rounded-xl shadow-xl w-full p-6 my-8 mx-auto ${editingRecord.typeLabel === '中' ? 'max-w-4xl' : 'max-w-md'}`}>
+                <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold">Edit Transaction</h2><button onClick={() => setEditingRecord(null)} className="text-gray-400 hover:text-gray-600"><X size={24} /></button></div>
                 <form onSubmit={handleUpdateRecord} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="col-span-2">
-                             <label className="block text-sm font-medium text-gray-700 mb-1">Column / Panel</label>
-                             <div className="grid grid-cols-3 gap-2">
-                                <button type="button" onClick={() => setEditingRecord({...editingRecord, column: 'col1'})} className={`py-1 px-2 text-xs rounded border ${editingRecord.column === 'col1' ? 'bg-blue-100 border-blue-500' : 'border-gray-200'}`}>Panel 1</button>
-                                <button type="button" onClick={() => setEditingRecord({...editingRecord, column: 'col2'})} className={`py-1 px-2 text-xs rounded border ${editingRecord.column === 'col2' ? 'bg-blue-100 border-blue-500' : 'border-gray-200'}`}>Panel 2</button>
-                                <button type="button" onClick={() => setEditingRecord({...editingRecord, column: 'main'})} className={`py-1 px-2 text-xs rounded border ${editingRecord.column === 'main' ? 'bg-blue-100 border-blue-500' : 'border-gray-200'}`}>Main</button>
-                             </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="md:col-span-2">
+                             <label className="block text-sm font-medium text-gray-700 mb-1">Column</label>
+                             <div className="grid grid-cols-3 gap-2"><button type="button" onClick={() => setEditingRecord({...editingRecord, column: 'col1'})} className={`py-1 px-2 text-xs rounded border ${editingRecord.column === 'col1' ? 'bg-blue-100 border-blue-500' : 'border-gray-200'}`}>Panel 1</button><button type="button" onClick={() => setEditingRecord({...editingRecord, column: 'col2'})} className={`py-1 px-2 text-xs rounded border ${editingRecord.column === 'col2' ? 'bg-blue-100 border-blue-500' : 'border-gray-200'}`}>Panel 2</button><button type="button" onClick={() => setEditingRecord({...editingRecord, column: 'main'})} className={`py-1 px-2 text-xs rounded border ${editingRecord.column === 'main' ? 'bg-blue-100 border-blue-500' : 'border-gray-200'}`}>Main</button></div>
                         </div>
-                        <div className="col-span-2">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
-                             <div className="relative"><span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 font-bold">$</span><input type="number" step="0.01" required value={editingRecord.amount} onChange={e => setEditingRecord({...editingRecord, amount: parseFloat(e.target.value)})} className="w-full pl-7 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
-                        </div>
-                        <div className="col-span-2">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Description/Note</label>
-                            <input type="text" value={editingRecord.description} onChange={e => setEditingRecord({...editingRecord, description: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                        </div>
-                        <div className="col-span-2">
-                             <label className="flex items-center space-x-2 mt-2">
-                                <input type="checkbox" checked={editingRecord.isVisible} onChange={e => setEditingRecord({...editingRecord, isVisible: e.target.checked})} className="w-4 h-4 text-blue-600 rounded" />
-                                <span className="text-sm text-gray-700">Show on Statement</span>
-                            </label>
-                        </div>
+                        <div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">Type</label><div className={`px-4 py-2 rounded-lg text-center font-bold text-sm ${editingRecord.operation === 'add' ? 'bg-green-100 text-green-800' : editingRecord.operation === 'subtract' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>{editingRecord.typeLabel}</div></div>
+                        
+                        <div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">Total Amount</label><input type="number" step="0.01" required value={editingRecord.amount} onChange={e => setEditingRecord({...editingRecord, amount: parseFloat(e.target.value)})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
+                        
+                        {editingRecord.typeLabel === '中' ? (
+                            <div className="md:col-span-2 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="font-bold text-gray-700 uppercase tracking-wider text-xs">Structured Winner Info</h3>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] text-gray-400 font-bold">DATE:</span>
+                                        <input type="text" value={editWinDate} onChange={e => setEditWinDate(e.target.value)} className="w-16 px-1.5 py-1 text-xs border rounded font-mono" placeholder="DD/MM" />
+                                    </div>
+                                </div>
+                                <div className="space-y-3">
+                                    {editWinLines.map((line, idx) => (
+                                        <div key={idx} className="flex flex-wrap md:flex-nowrap gap-2 items-end bg-white p-2 rounded border border-gray-100 shadow-sm relative">
+                                            <div className="flex-1 min-w-[60px]">
+                                                <label className="block text-[9px] text-gray-400 font-bold uppercase">Sides</label>
+                                                <input type="text" value={line.sides} onChange={e => {
+                                                    const nl = [...editWinLines]; nl[idx].sides = e.target.value.toUpperCase(); setEditWinLines(nl);
+                                                }} className="w-full px-2 py-1 text-xs border rounded uppercase font-mono" placeholder="MKT" />
+                                            </div>
+                                            <div className="flex-1 min-w-[70px]">
+                                                <label className="block text-[9px] text-gray-400 font-bold uppercase">Number</label>
+                                                <input type="text" value={line.number} onChange={e => {
+                                                    const nl = [...editWinLines]; nl[idx].number = e.target.value; setEditWinLines(nl);
+                                                }} className="w-full px-2 py-1 text-xs border rounded font-mono" placeholder="8888" />
+                                            </div>
+                                            <div className="w-12">
+                                                <label className="block text-[9px] text-gray-400 font-bold uppercase text-center">Big</label>
+                                                <input type="text" value={line.big} onChange={e => {
+                                                    const nl = [...editWinLines]; nl[idx].big = e.target.value; setEditWinLines(nl);
+                                                }} className="w-full px-1 py-1 text-xs border rounded text-center font-mono" />
+                                            </div>
+                                            <div className="w-12">
+                                                <label className="block text-[9px] text-gray-400 font-bold uppercase text-center">Small</label>
+                                                <input type="text" value={line.small} onChange={e => {
+                                                    const nl = [...editWinLines]; nl[idx].small = e.target.value; setEditWinLines(nl);
+                                                }} className="w-full px-1 py-1 text-xs border rounded text-center font-mono" />
+                                            </div>
+                                            <div className="w-20">
+                                                <label className="block text-[9px] text-gray-400 font-bold uppercase text-right">Win Amt</label>
+                                                <input type="text" value={line.win} onChange={e => {
+                                                    const nl = [...editWinLines]; nl[idx].win = e.target.value; setEditWinLines(nl);
+                                                }} className="w-full px-2 py-1 text-xs border rounded text-right font-bold text-red-600 font-mono" />
+                                            </div>
+                                            <div className="w-14">
+                                                <label className="block text-[9px] text-gray-400 font-bold uppercase text-center">Type</label>
+                                                <input type="text" value={line.type} onChange={e => {
+                                                    const nl = [...editWinLines]; nl[idx].type = e.target.value; setEditWinLines(nl);
+                                                }} className="w-full px-1 py-1 text-xs border rounded text-center font-mono" />
+                                            </div>
+                                            <div className="w-10">
+                                                <label className="block text-[9px] text-gray-400 font-bold uppercase text-center">Pos</label>
+                                                <input type="text" value={line.pos} onChange={e => {
+                                                    const nl = [...editWinLines]; nl[idx].pos = e.target.value; setEditWinLines(nl);
+                                                }} className="w-full px-1 py-1 text-xs border rounded text-center font-mono" />
+                                            </div>
+                                            <button type="button" onClick={() => setEditWinLines(editWinLines.filter((_, i) => i !== idx))} className="p-1.5 text-gray-400 hover:text-red-600 rounded bg-gray-50"><Trash2 size={14}/></button>
+                                        </div>
+                                    ))}
+                                    <button type="button" onClick={() => setEditWinLines([...editWinLines, { sides: '', number: '', big: '0', small: '0', win: '0', type: 'ibox', pos: '头' }])} className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:bg-white hover:border-gray-400 transition-all flex items-center justify-center text-xs font-bold uppercase"><Plus size={14} className="mr-2" /> Add Line</button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="md:col-span-2">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Note</label>
+                                <input type="text" value={editingRecord.description} onChange={e => setEditingRecord({...editingRecord, description: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                            </div>
+                        )}
+
+                        <div className="md:col-span-2"><label className="flex items-center space-x-2 mt-2"><input type="checkbox" checked={editingRecord.isVisible} onChange={e => setEditingRecord({...editingRecord, isVisible: e.target.checked})} className="w-4 h-4 text-blue-600 rounded" /><span className="text-sm text-gray-700">Show on Statement</span></label></div>
                     </div>
-                    <div className="flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-100">
-                        <button type="button" onClick={() => setEditingRecord(null)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
-                        <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"><Check size={18} className="mr-2" />Update Transaction</button>
-                    </div>
+                    <div className="flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-100"><button type="button" onClick={() => setEditingRecord(null)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button><button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"><Check size={18} className="mr-2" />Update</button></div>
                 </form>
             </div>
         </div>
