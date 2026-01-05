@@ -342,8 +342,6 @@ const WinCalculator: React.FC = () => {
         const [yStr, mStr, dStr] = selectedDate.split('-');
         const dateLabel = `${dStr}/${mStr}`;
 
-        // Nice display formatting requested by user:
-        // Group entries by Number + Position + PlayType + Sides
         const groupedMap = entries.reduce((acc, e) => {
             const key = `${e.number}-${e.position}-${e.playType}-${e.sides.join('')}`;
             if (!acc[key]) {
@@ -358,10 +356,10 @@ const WinCalculator: React.FC = () => {
         const description = Object.values(groupedMap)
             .map((e: WinningEntry & { big: number; small: number; win: number }) => {
                 const typeStr = e.playType === 'Box' ? 'ibox' : e.playType === 'Pau' ? '包' : '';
-                const winStr = Math.floor(e.win).toString(); // Robust integer for description
+                const winStr = Math.floor(e.win).toLocaleString();
                 const sidesStr = e.sides.join('');
-                // STRICT FORMAT: MKT 2323 - 10 - 10 - 1833 ibox (头)
-                return `${sidesStr} ${e.number} - ${e.big} - ${e.small} - ${winStr} ${typeStr} (${e.positionLabel})`.trim();
+                // UPDATED FORMAT: [SIDES] [NUMBER] [BIG] - [SMALL] [TYPE] [POS] - [WIN]
+                return `${sidesStr} ${e.number} ${e.big} - ${e.small} ${typeStr} ${e.positionLabel} - ${winStr}`.trim();
             })
             .join('; ');
 

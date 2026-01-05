@@ -298,7 +298,7 @@ const ClientLedger: React.FC = () => {
       }
   };
 
-  // Unified Winner Parser for Editor and Viewer
+  // Improved Winner Parser to handle: [SIDES] [NUMBER] [BIG] - [SMALL] [TYPE] [POS] - [WIN]
   const parseAllWinningDetails = (desc: string) => {
       const safeDesc = desc || '';
       const dateMatch = safeDesc.match(/^(\d{1,2}[\/\.]\d{1,2})\s+(.*)/);
@@ -311,27 +311,31 @@ const ClientLedger: React.FC = () => {
           const parts = line.split('-').map(p => p.trim());
           let sides = '', num = '', big = '0', small = '0', win = '0', type = '', pos = '';
           
-          if (parts.length >= 4) {
-              const headPart = parts[0];
-              const headSplit = headPart.split(/\s+/);
-              sides = headSplit[0] || '';
-              num = headSplit[1] || '';
-              big = parts[1] || '0';
-              small = parts[2] || '0';
-              
-              const tail = parts[3];
-              const tailSplit = tail.split(/\s+(.+)/);
-              win = tailSplit[0] || '0';
-              let restVal = tailSplit[1] || '';
-              
-              // Cleanly extract position and type, avoiding duplication
-              const posMatch = restVal.match(/\((.)\)$/);
-              if (posMatch) {
-                  pos = posMatch[1];
-                  type = restVal.replace(/\(.\)$/, '').trim();
-              } else {
-                  type = restVal;
+          if (parts.length >= 3) {
+              // Parts: ["SIDES NUMBER BIG", "SMALL TYPE POS", "WIN"]
+              const head = parts[0].split(/\s+/).filter(Boolean);
+              if (head.length >= 3) {
+                  sides = head[0]; num = head[1]; big = head[2];
+              } else if (head.length === 2) {
+                  num = head[0]; big = head[1];
               }
+
+              const mid = parts[1].split(/\s+/).filter(Boolean);
+              if (mid.length >= 3) {
+                  small = mid[0]; type = mid[1]; pos = mid[2].replace(/\(|\)/g, '');
+              } else if (mid.length === 2) {
+                  small = mid[0]; type = mid[1];
+              } else if (mid.length === 1) {
+                  small = mid[0];
+              }
+
+              win = parts[2];
+          } else if (parts.length === 2) {
+               // Fallback for older format: ["INFO", "WIN"]
+               const head = parts[0].split(/\s+/).filter(Boolean);
+               sides = head[0] || '';
+               num = head[1] || '';
+               win = parts[1];
           } else {
               num = line;
           }
@@ -358,7 +362,7 @@ const ClientLedger: React.FC = () => {
     
     let finalDesc = editingRecord.description;
     if (editingRecord.typeLabel === '中') {
-        const assembledLines = editWinLines.map(l => `${l.sides} ${l.number} - ${l.big} - ${l.small} - ${l.win} ${l.type} (${l.pos})`).join('; ');
+        const assembledLines = editWinLines.map(l => `${l.sides} ${l.number} ${l.big} - ${l.small} ${l.type} ${l.pos} - ${l.win}`).join('; ');
         finalDesc = `${editWinDate} ${assembledLines}`.trim();
     }
 
@@ -406,23 +410,34 @@ const ClientLedger: React.FC = () => {
     
     return (
         <div className="flex flex-col w-full min-w-0 pt-0.5 overflow-visible font-mono">
-            {/* Date on Top */}
+            {/* Date on Top - Positioned like the screenshot */}
             {dateStr && (
-                <div className="text-[10px] md:text-[11px] text-gray-400 select-none pb-0.5 mb-1 w-fit">
+                <div className="text-[11px] md:text-[13px] text-gray-400 select-none pb-0.5 mb-1 pl-[45px] md:pl-[65px]">
                     {dateStr}
                 </div>
             )}
-            <div className="flex flex-col w-full min-w-0 gap-1 overflow-visible">
+            <div className="flex flex-col w-full min-w-0 gap-1.5 overflow-visible">
                 {parsedLines.map((line, i) => (
-                    <div key={i} className="flex items-center text-[11px] md:text-sm text-gray-800 leading-none py-1 w-full relative h-6 whitespace-nowrap overflow-visible">
-                        <span className="font-bold w-[35px] md:w-[45px] shrink-0 text-gray-600 uppercase">{line.sides}</span>
-                        <span className="font-bold w-[45px] md:w-[55px] shrink-0 text-gray-900 tracking-wider">{line.number}</span>
-                        <span className="text-gray-400 w-[60px] md:w-[70px] shrink-0 text-center text-[9px] md:text-xs font-bold px-1">
+                    <div key={i} className="flex items-center text-[12px] md:text-sm text-gray-800 leading-none py-1 w-full relative h-6 whitespace-nowrap overflow-visible">
+                        <span className="font-bold w-[40px] md:w-[50px] shrink-0 text-gray-600 uppercase text-left">{line.sides}</span>
+                        <span className="font-bold w-[50px] md:w-[65px] shrink-0 text-gray-900 tracking-wider text-left">{line.number}</span>
+                        <span className="text-gray-400 w-[65px] md:w-[85px] shrink-0 text-center text-[10px] md:text-xs font-bold px-1">
                             {line.big} - {line.small}
                         </span>
-                        <span className="text-gray-400 text-[9px] md:text-[10px] uppercase font-bold w-[35px] md:w-[40px] shrink-0 truncate text-center">{line.type}</span>
-                        <span className="text-gray-500 text-[9px] md:text-[10px] w-[25px] md:w-[35px] shrink-0 text-center font-bold">{line.pos}</span>
-                        <span className="text-red-600 font-black flex-1 text-right text-[12px] md:text-[16px] pr-2 overflow-hidden truncate">
+                        <span className="text-gray-400 text-[10px] md:text-[11px] uppercase font-bold w-[40px] md:w-[50px] shrink-0 truncate text-left">{line.type}</span>
+                        
+                        {/* Position with badge styling ("Logo") */}
+                        <div className="w-[30px] md:w-[40px] shrink-0 flex justify-center">
+                            {line.pos && (
+                                <span className="px-1 py-0.5 rounded border border-gray-300 bg-gray-50 text-[10px] md:text-[11px] font-bold text-gray-700 leading-none">
+                                    {line.pos}
+                                </span>
+                            )}
+                        </div>
+
+                        {/* Hyphen and Amount alignment */}
+                        <span className="text-gray-400 px-2">-</span>
+                        <span className="text-red-600 font-black flex-1 text-right text-[13px] md:text-[18px] pr-2 overflow-hidden truncate">
                             {parseFloat(line.win) > 0 ? parseFloat(line.win).toLocaleString() : ''}
                         </span>
                     </div>
@@ -449,9 +464,7 @@ const ClientLedger: React.FC = () => {
                 {data.processed.map((r) => {
                     const isWinning = r.typeLabel === '中';
                     const hideLabel = isWinning && columnType === 'col1';
-                    // User Request: Column 3 (main) shows amount only, hide win description details
                     const showDescription = !(isWinning && columnType === 'main');
-                    // User Request: Hide the right-side amount for '中' in Col 1 to avoid overlap/duplication
                     const showAmountColumn = !(isWinning && columnType === 'col1');
                     
                     return (
@@ -494,7 +507,11 @@ const ClientLedger: React.FC = () => {
                 <div className="flex items-center gap-1 md:gap-4 justify-end w-full">
                     {displayLabel && <span className="text-sm md:text-xl font-bold text-gray-900 uppercase">{displayLabel}</span>}
                     <span className={`text-lg md:text-3xl font-mono font-bold min-w-[110px] md:min-w-[170px] text-right ${data.finalBalance >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
-                        {data.finalBalance < 0 ? `(${Math.abs(data.finalBalance).toLocaleString(undefined, {minimumFractionDigits: 2})})` : data.finalBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}
+                        {data.finalBalance < 0 
+                            ? (columnType === 'col1' 
+                                ? Math.abs(data.finalBalance).toLocaleString(undefined, {minimumFractionDigits: 2}) 
+                                : `(${Math.abs(data.finalBalance).toLocaleString(undefined, {minimumFractionDigits: 2})})`)
+                            : data.finalBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}
                     </span>
                 </div>
             </div>
