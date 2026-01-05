@@ -403,25 +403,28 @@ const ClientLedger: React.FC = () => {
     const { dateStr, parsedLines } = parseAllWinningDetails(description || '');
     
     return (
-        <div className="flex flex-col w-full min-w-0 pt-0.5 overflow-visible">
-            <div className="flex items-start gap-1">
-                {dateStr && <span className="text-[10px] md:text-[11px] font-mono text-gray-400 shrink-0 select-none pt-1 w-[32px] text-left">{dateStr}</span>}
-                <div className="flex flex-col w-full min-w-0 gap-1 overflow-visible">
-                    {parsedLines.map((line, i) => (
-                        <div key={i} className="flex items-center text-[11px] md:text-sm text-gray-800 leading-none py-1 w-full relative h-6 font-mono whitespace-nowrap overflow-visible">
-                            <span className="font-bold w-[35px] md:w-[45px] shrink-0 text-gray-600 uppercase">{line.sides}</span>
-                            <span className="font-bold w-[45px] md:w-[55px] shrink-0 text-gray-900 tracking-wider">{line.number}</span>
-                            <span className="text-gray-400 w-[65px] md:w-[85px] shrink-0 text-center text-[9px] md:text-xs font-bold px-1">
-                                {line.big} - {line.small}
-                            </span>
-                            <span className="text-gray-400 text-[9px] md:text-[10px] uppercase font-bold w-[35px] md:w-[45px] shrink-0 truncate">{line.type}</span>
-                            <span className="text-gray-500 text-[9px] md:text-[10px] w-[25px] md:w-[35px] shrink-0 text-center">{line.pos}</span>
-                            <span className="text-red-600 font-black flex-1 text-right text-[12px] md:text-[16px] pr-2 overflow-hidden truncate">
-                                {parseFloat(line.win) > 0 ? parseFloat(line.win).toLocaleString() : ''}
-                            </span>
-                        </div>
-                    ))}
+        <div className="flex flex-col w-full min-w-0 pt-0.5 overflow-visible font-mono">
+            {/* Date on Top */}
+            {dateStr && (
+                <div className="text-[10px] md:text-[11px] text-gray-400 select-none pb-0.5 mb-1 w-fit">
+                    {dateStr}
                 </div>
+            )}
+            <div className="flex flex-col w-full min-w-0 gap-1 overflow-visible">
+                {parsedLines.map((line, i) => (
+                    <div key={i} className="flex items-center text-[11px] md:text-sm text-gray-800 leading-none py-1 w-full relative h-6 whitespace-nowrap overflow-visible">
+                        <span className="font-bold w-[35px] md:w-[45px] shrink-0 text-gray-600 uppercase">{line.sides}</span>
+                        <span className="font-bold w-[45px] md:w-[55px] shrink-0 text-gray-900 tracking-wider">{line.number}</span>
+                        <span className="text-gray-400 w-[60px] md:w-[70px] shrink-0 text-center text-[9px] md:text-xs font-bold px-1">
+                            {line.big} - {line.small}
+                        </span>
+                        <span className="text-gray-400 text-[9px] md:text-[10px] uppercase font-bold w-[35px] md:w-[40px] shrink-0 truncate text-center">{line.type}</span>
+                        <span className="text-gray-500 text-[9px] md:text-[10px] w-[25px] md:w-[35px] shrink-0 text-center font-bold">{line.pos}</span>
+                        <span className="text-red-600 font-black flex-1 text-right text-[12px] md:text-[16px] pr-2 overflow-hidden truncate">
+                            {parseFloat(line.win) > 0 ? parseFloat(line.win).toLocaleString() : ''}
+                        </span>
+                    </div>
+                ))}
             </div>
         </div>
     );
