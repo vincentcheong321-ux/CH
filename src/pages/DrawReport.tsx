@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { getClients, getDrawBalances, saveDrawBalance, getClientBalancesPriorToDate, generateSpecialCarryForward, getLedgerRecords, getNetAmount } from '../services/storageService';
 import { Client, LedgerRecord } from '../types';
@@ -259,8 +258,7 @@ const DrawReport: React.FC = () => {
                       // REQUIREMENT: C19 bring forward ONLY in panel 1, do NOT show in 上欠
                       if (codeUpper === 'C19') {
                           newBalances[client.id] = '0.00';
-                          // For C19, we specifically avoid saving a Draw Balance entry
-                          // as it should stay purely in Panel 1 as copied rows.
+                          // SKIP saveDrawBalance for C19 to prevent main ledger entry
                       } else {
                           newBalances[client.id] = specialBalance.toFixed(2);
                           await saveDrawBalance(selectedDate, client.id, specialBalance);

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Printer, Trash2, Plus, Minus, Pencil, X, Check, AlertTriangle, ExternalLink, GripHorizontal, Hash, Zap, ChevronLeft, ChevronRight, ImageDown, Trash } from 'lucide-react';
@@ -388,9 +387,9 @@ const ClientLedger: React.FC = () => {
   const col2Ledger = useMemo(() => calculateColumn('col2'), [filteredRecords]);
 
   const handleClearPanel1 = async () => {
-    if (!window.confirm("Are you sure you want to delete ALL entries in Panel 1 for this week? This cannot be undone.")) return;
-    for (const record of col1Ledger.processed) {
-        await deleteLedgerRecord(record.id);
+    if (!window.confirm("Delete ALL entries in Panel 1 for this week?")) return;
+    for (const r of col1Ledger.processed) {
+        await deleteLedgerRecord(r.id);
     }
     loadRecords();
   };
@@ -625,7 +624,7 @@ const ClientLedger: React.FC = () => {
                         <Plus size={10} className="mr-1" /> New
                     </button>
 
-                    {/* NEW: Clear Panel 1 Button */}
+                    {/* Desktop Clear Panel 1 Button */}
                     {activeColumn === 'col1' && col1Ledger.processed.length > 0 && (
                         <button 
                             onClick={handleClearPanel1}
@@ -682,11 +681,24 @@ const ClientLedger: React.FC = () => {
 
                 {/* Mobile View Controls */}
                 <div className="lg:hidden flex flex-col gap-3 mb-6 no-print">
-                    <div className="flex bg-white rounded-xl p-1 border border-gray-200 shadow-sm">
-                        <button onClick={() => setActiveColumn('col1')} className={`flex-1 px-3 py-2 text-xs font-bold rounded-lg transition-all ${activeColumn === 'col1' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500'}`}>P1</button>
-                        <button onClick={() => setActiveColumn('col2')} className={`flex-1 px-3 py-2 text-xs font-bold rounded-lg transition-all ${activeColumn === 'col2' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500'}`}>P2</button>
-                        <button onClick={() => setActiveColumn('main')} className={`flex-1 px-3 py-2 text-xs font-bold rounded-lg transition-all ${activeColumn === 'main' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500'}`}>Main</button>
+                    <div className="flex flex-col gap-2">
+                         <div className="flex bg-white rounded-xl p-1 border border-gray-200 shadow-sm">
+                            <button onClick={() => setActiveColumn('col1')} className={`flex-1 px-3 py-2 text-xs font-bold rounded-lg transition-all ${activeColumn === 'col1' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500'}`}>P1</button>
+                            <button onClick={() => setActiveColumn('col2')} className={`flex-1 px-3 py-2 text-xs font-bold rounded-lg transition-all ${activeColumn === 'col2' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500'}`}>P2</button>
+                            <button onClick={() => setActiveColumn('main')} className={`flex-1 px-3 py-2 text-xs font-bold rounded-lg transition-all ${activeColumn === 'main' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500'}`}>Main</button>
+                        </div>
+                        
+                        {/* Mobile Clear Panel 1 Button */}
+                        {activeColumn === 'col1' && col1Ledger.processed.length > 0 && (
+                            <button 
+                                onClick={handleClearPanel1}
+                                className="w-full flex items-center justify-center py-2 bg-red-50 border border-red-200 rounded-xl text-red-600 text-xs font-bold uppercase shadow-sm"
+                            >
+                                <Trash size={14} className="mr-2" /> Clear All P1
+                            </button>
+                        )}
                     </div>
+                    
                     {!activeCategory && (
                         <div className="grid grid-cols-3 gap-2">
                              <button onClick={handleQuickEntry} className="flex items-center justify-center p-2 bg-indigo-50 border border-indigo-200 rounded-xl text-indigo-700 text-xs font-bold"><Zap size={14} className="mr-1" /> Quick</button>
