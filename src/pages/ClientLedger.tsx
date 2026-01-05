@@ -408,35 +408,54 @@ const ClientLedger: React.FC = () => {
         <div className="flex flex-col w-full min-w-0 pt-0.5 overflow-visible font-mono">
             {/* Date on Top */}
             {dateStr && (
-                <div className="text-[11px] md:text-[13px] text-gray-400 select-none pb-0.5 mb-1 pl-2 md:pl-4">
+                <div className="text-[12px] md:text-[14px] text-gray-400 select-none pb-1 font-bold">
                     {dateStr}
                 </div>
             )}
             
-            <div className="flex flex-col w-full min-w-0 gap-1 overflow-visible">
+            <div className="flex flex-col w-full min-w-0 gap-3 overflow-visible">
                 {parsedLines.map((line, i) => (
-                    <div key={i} className="flex items-center gap-1.5 md:gap-4 text-[11px] md:text-[16px] text-gray-800 leading-none py-0.5 w-full whitespace-nowrap">
-                        <span className="font-bold text-gray-800 uppercase w-[30px] md:w-[38px] shrink-0 text-left">{line.sides}</span>
-                        <span className="font-bold text-gray-900 tracking-wider w-[44px] md:w-[54px] shrink-0 text-center">{line.number}</span>
-                        <span className="text-gray-400 text-center text-[10px] md:text-[12px] font-bold w-[45px] md:w-[60px] shrink-0">
-                            {line.big}-{line.small}
-                        </span>
-                        <span className="text-gray-400 text-[10px] md:text-[11px] uppercase font-bold w-[35px] md:w-[45px] shrink-0 text-center truncate">{line.type}</span>
-                        
-                        <div className="w-[24px] md:w-[28px] shrink-0 flex justify-center">
-                            {line.pos && (
-                                <span className="px-1.5 py-0.5 rounded border border-gray-600 bg-white text-[11px] md:text-[13px] font-black text-gray-900 leading-none shadow-sm min-w-[20px] text-center">
-                                    {line.pos}
-                                </span>
-                            )}
+                    <div key={i} className="flex flex-col w-full gap-1 border-b border-gray-100 pb-2 last:border-0">
+                        {/* Sides on their own line */}
+                        <div className="text-[12px] md:text-[15px] font-black text-gray-800 uppercase tracking-widest leading-none">
+                            {line.sides}
                         </div>
-
-                        {/* Spacious area for Win Amount - Shifted to ensure no truncation */}
-                        <div className="flex items-center justify-end flex-1 min-w-[60px] md:min-w-[100px] pr-1">
-                            <span className="text-gray-300 px-1 font-light">-</span>
-                            <span className="text-red-600 font-black text-right truncate">
-                                {parseFloat(line.win) > 0 ? parseFloat(line.win).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 3 }) : ''}
+                        
+                        {/* Details Row */}
+                        <div className="flex items-center gap-1 md:gap-3 text-[13px] md:text-[18px] leading-none">
+                            {/* Number */}
+                            <span className="font-black text-gray-900 tracking-tighter w-[45px] md:w-[60px] shrink-0">
+                                {line.number}
                             </span>
+                            
+                            {/* Bet (Big-Small) */}
+                            <span className="text-gray-400 font-bold text-[11px] md:text-[14px] w-[50px] md:w-[65px] shrink-0 text-center">
+                                {line.big}-{line.small}
+                            </span>
+                            
+                            {/* Type (e.g. ibox) */}
+                            <span className="text-gray-400 text-[10px] md:text-[12px] uppercase font-bold w-[35px] md:w-[45px] shrink-0 text-center truncate">
+                                {line.type}
+                            </span>
+                            
+                            {/* Position in Circle */}
+                            <div className="flex justify-center items-center shrink-0 w-[28px] md:w-[36px]">
+                                {line.pos && (
+                                    <div className="w-6 h-6 md:w-8 md:h-8 rounded-full border border-gray-900 flex items-center justify-center bg-white shadow-sm">
+                                        <span className="text-[11px] md:text-[15px] font-black text-gray-900 leading-none">
+                                            {line.pos}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Win Amount - Spacious and bold */}
+                            <div className="flex items-center justify-end flex-1 min-w-[70px] md:min-w-[120px] pr-1">
+                                <span className="text-gray-300 px-1 font-light">-</span>
+                                <span className="text-red-600 font-black text-right truncate text-lg md:text-3xl tracking-tighter">
+                                    {parseFloat(line.win) > 0 ? parseFloat(line.win).toLocaleString() : ''}
+                                </span>
+                            </div>
                         </div>
                     </div>
                 ))}
@@ -727,7 +746,6 @@ const ClientLedger: React.FC = () => {
                         {editingRecord.typeLabel === '中' ? (
                             <div className="md:col-span-2 bg-gray-50 p-4 rounded-xl border border-gray-200">
                                 <div className="flex justify-between items-center mb-4">
-                                    {/* Fix: Added missing opening bracket for h3 tag */}
                                     <h3 className="font-bold text-gray-700 uppercase tracking-wider text-xs">Structured Winner Info</h3>
                                     <div className="flex items-center gap-2">
                                         <span className="text-[10px] text-gray-400 font-bold">DATE:</span>
