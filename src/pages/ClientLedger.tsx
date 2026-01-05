@@ -30,7 +30,6 @@ const ClientLedger: React.FC = () => {
   const [categories, setCategories] = useState<TransactionCategory[]>([]);
   const [totalOwed, setTotalOwed] = useState(0);
   
-  // Input State
   const [activeCategory, setActiveCategory] = useState<TransactionCategory | null>(null);
   const [activeColumn, setActiveColumn] = useState<LedgerColumn>('main');
   const [amount, setAmount] = useState('');
@@ -38,21 +37,13 @@ const ClientLedger: React.FC = () => {
   const [isVisible, setIsVisible] = useState(true);
   const [currentOperation, setCurrentOperation] = useState<'add'|'subtract'|'none'>('add');
 
-  // Focus Management
   const amountInputRef = useRef<HTMLInputElement>(null);
-
-  // New Category State
   const [isAddCatModalOpen, setIsAddCatModalOpen] = useState(false);
   const [newCatLabel, setNewCatLabel] = useState('');
   const [newCatOp, setNewCatOp] = useState<'add'|'subtract'|'none'>('subtract');
-
-  // Edit State
   const [editingRecord, setEditingRecord] = useState<LedgerRecord | null>(null);
-
-  // Drag State
   const [draggedCatIndex, setDraggedCatIndex] = useState<number | null>(null);
 
-  // Layout & Resizing State
   const [colWidths, setColWidths] = useState<number[]>([33.33, 33.33, 33.34]);
   const [verticalPadding, setVerticalPadding] = useState<{top: number, bottom: number}>({ top: 40, bottom: 40 });
   const containerRef = useRef<HTMLDivElement>(null);
@@ -66,7 +57,6 @@ const ClientLedger: React.FC = () => {
       containerWidth?: number 
   } | null>(null);
 
-  // Derived Date State
   const currentYear = currentDate.getFullYear();
   const currentMonth = currentDate.getMonth();
   const weeksData = useMemo(() => getWeeksForMonth(currentYear, currentMonth), [currentYear, currentMonth]);
@@ -74,20 +64,13 @@ const ClientLedger: React.FC = () => {
   
   const selectedWeekNum = useMemo(() => {
       const todayStr = `${currentYear}-${String(currentMonth+1).padStart(2,'0')}-${String(currentDate.getDate()).padStart(2,'0')}`;
-      const foundWeek = Object.keys(weeksData).find(w => {
-          return weeksData[parseInt(w)].some(d => {
-              const dStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-              return dStr === todayStr;
-          });
-      });
+      const foundWeek = Object.keys(weeksData).find(w => weeksData[parseInt(w)].some(d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` === todayStr));
       return foundWeek ? parseInt(foundWeek) : 1;
   }, [weeksData, currentDate, currentYear, currentMonth]);
 
   const handleWeekSelect = (weekNum: number) => {
       const days = weeksData[weekNum];
-      if (days && days.length > 0) {
-          setCurrentDate(new Date(days[0]));
-      }
+      if (days && days.length > 0) setCurrentDate(new Date(days[0]));
   };
 
   const handlePrevMonth = () => {
@@ -106,7 +89,6 @@ const ClientLedger: React.FC = () => {
       setCurrentDate(newDate);
   };
 
-  // Confirmation Modal State
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
     type: 'DELETE_RECORD' | 'DELETE_CATEGORY' | 'PRINT_ERROR';
@@ -131,23 +113,18 @@ const ClientLedger: React.FC = () => {
     }
   };
 
-  // --- Filter Records by Selected Week ---
   const filteredRecords = useMemo(() => {
       const days = weeksData[selectedWeekNum];
       if (!days || days.length === 0) return [];
-      
       const start = days[0];
       const end = days[days.length - 1];
       const startStr = `${start.getFullYear()}-${String(start.getMonth()+1).padStart(2,'0')}-${String(start.getDate()).padStart(2,'0')}`;
       const endStr = `${end.getFullYear()}-${String(end.getMonth()+1).padStart(2,'0')}-${String(end.getDate()).padStart(2,'0')}`;
-
       return records.filter(r => r.date >= startStr && r.date <= endStr);
   }, [records, weeksData, selectedWeekNum]);
 
-  // --- Resize Handlers ---
   const onMouseMove = useCallback((e: MouseEvent) => {
     if (!dragInfo.current) return;
-    
     if (dragInfo.current.type === 'col' && dragInfo.current.index !== undefined && dragInfo.current.startX !== undefined && dragInfo.current.startWidths && dragInfo.current.containerWidth) {
         const { index, startX, startWidths, containerWidth } = dragInfo.current;
         const diffX = e.clientX - startX;
@@ -157,16 +134,12 @@ const ClientLedger: React.FC = () => {
         newWidths[index] += diffPercent;
         newWidths[index + 1] -= diffPercent;
         setColWidths(newWidths);
-    } 
-    else if (dragInfo.current.type === 'top' || dragInfo.current.type === 'bottom') {
+    } else if (dragInfo.current.type === 'top' || dragInfo.current.type === 'bottom') {
         const { startY, startHeight } = dragInfo.current;
         if (startY === undefined || startHeight === undefined) return;
         const diffY = e.clientY - startY;
-        if (dragInfo.current.type === 'top') {
-            setVerticalPadding(prev => ({ ...prev, top: Math.max(0, startHeight + diffY) }));
-        } else {
-             setVerticalPadding(prev => ({ ...prev, bottom: Math.max(0, startHeight - diffY) }));
-        }
+        if (dragInfo.current.type === 'top') setVerticalPadding(prev => ({ ...prev, top: Math.max(0, startHeight + diffY) }));
+        else setVerticalPadding(prev => ({ ...prev, bottom: Math.max(0, startHeight - diffY) }));
     }
   }, []);
 
@@ -217,34 +190,19 @@ const ClientLedger: React.FC = () => {
     if (!id || !activeCategory || !amount) return;
     const val = parseFloat(amount);
     if (isNaN(val)) return;
-
     let op = activeCategory.label === '' ? currentOperation : activeCategory.operation;
     if (activeColumn === 'col1' && activeCategory.label === '') op = 'none';
-
     const entryDate = `${currentDate.getFullYear()}-${String(currentDate.getMonth()+1).padStart(2,'0')}-${String(currentDate.getDate()).padStart(2,'0')}`;
-
     const newRecord: Omit<LedgerRecord, 'id'> = {
-      clientId: id,
-      date: entryDate,
-      description: description,
-      typeLabel: activeCategory.label,
-      amount: val,
-      operation: op,
-      column: activeColumn,
-      isVisible: isVisible
+      clientId: id, date: entryDate, description: description, typeLabel: activeCategory.label, amount: val, operation: op, column: activeColumn, isVisible: isVisible
     };
-
     await saveLedgerRecord(newRecord);
     loadRecords();
-    
     if (activeCategory.label.trim() === '') {
-        setAmount('');
-        setDescription('');
+        setAmount(''); setDescription('');
         setTimeout(() => { if (amountInputRef.current) amountInputRef.current.focus(); }, 10);
     } else {
-        setAmount('');
-        setDescription('');
-        setActiveCategory(null);
+        setAmount(''); setDescription(''); setActiveCategory(null);
     }
   };
 
@@ -309,24 +267,14 @@ const ClientLedger: React.FC = () => {
       const element = document.getElementById('printable-area');
       if (element) {
           try {
-              const canvas = await html2canvas(element, {
-                  scale: 2,
-                  backgroundColor: '#ffffff',
-                  useCORS: true,
-                  logging: false
-              });
+              const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false });
               const link = document.createElement('a');
               link.download = `${client?.name || 'ledger'}_statement.png`;
               link.href = canvas.toDataURL('image/png');
               link.click();
           } catch (error) {
               console.error("Image capture failed", error);
-              setConfirmModal({
-                  isOpen: true,
-                  type: 'PRINT_ERROR',
-                  title: 'Image Error',
-                  message: 'Failed to generate image. Please try again.'
-              });
+              setConfirmModal({ isOpen: true, type: 'PRINT_ERROR', title: 'Image Error', message: 'Failed to generate image. Please try again.' });
           }
       }
   };
@@ -334,14 +282,7 @@ const ClientLedger: React.FC = () => {
   const handleUpdateRecord = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editingRecord) {
-      await updateLedgerRecord(editingRecord.id, {
-        amount: editingRecord.amount,
-        description: editingRecord.description,
-        operation: editingRecord.operation,
-        date: editingRecord.date,
-        isVisible: editingRecord.isVisible,
-        column: editingRecord.column
-      });
+      await updateLedgerRecord(editingRecord.id, { amount: editingRecord.amount, description: editingRecord.description, operation: editingRecord.operation, date: editingRecord.date, isVisible: editingRecord.isVisible, column: editingRecord.column });
       loadRecords();
       setEditingRecord(null);
     }
@@ -359,20 +300,19 @@ const ClientLedger: React.FC = () => {
   const col1Ledger = useMemo(() => calculateColumn('col1'), [filteredRecords]);
   const col2Ledger = useMemo(() => calculateColumn('col2'), [filteredRecords]);
 
-  // Helper to render formatted description with split date
+  // Unified Formatter for nicer description display
   const renderFormattedDescription = (text: string) => {
     if (!text) return null;
-    // Regex to match "DD/MM " pattern at the start
     const dateMatch = text.match(/^(\d{1,2}\/\d{1,2})\s+(.*)/);
     if (dateMatch) {
         return (
-            <div className="flex items-baseline w-full">
-                <span className="text-[10px] md:text-[13px] font-mono text-gray-400 shrink-0 w-[40px] md:w-[50px]">{dateMatch[1]}</span>
-                <span className="text-[11px] md:text-[16px] text-gray-700 font-bold leading-tight min-w-0 flex-1 truncate">{dateMatch[2]}</span>
+            <div className="flex items-start w-full">
+                <span className="text-[10px] md:text-[13px] font-mono text-gray-400 shrink-0 w-[36px] md:w-[46px]">{dateMatch[1]}</span>
+                <span className="text-[11px] md:text-[16px] text-gray-700 font-bold leading-tight break-words flex-1 whitespace-normal">{dateMatch[2]}</span>
             </div>
         );
     }
-    return <span className="text-[11px] md:text-[16px] text-gray-700 font-bold leading-tight break-words">{text}</span>;
+    return <span className="text-[11px] md:text-[16px] text-gray-700 font-bold leading-tight break-words whitespace-normal">{text}</span>;
   };
 
   const LedgerColumnView = ({ data, footerLabel = "收" }: { data: ReturnType<typeof calculateColumn>, footerLabel?: string }) => {
@@ -387,20 +327,20 @@ const ClientLedger: React.FC = () => {
       <div className="flex flex-col w-full px-1">
           <div className="flex flex-col space-y-0.5 w-full">
                 {data.processed.map((r) => (
-                <div key={r.id} className={`group flex items-start py-0.5 relative gap-1 md:gap-2 w-full ${!r.isVisible ? 'opacity-30 grayscale no-print' : ''}`}>
-                    <div className="no-print opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1 absolute -left-10 md:-left-12 top-0 z-10 bg-white shadow-sm rounded border border-gray-100 p-1">
+                <div key={r.id} className={`group flex items-start py-1 relative gap-1 md:gap-2 w-full ${!r.isVisible ? 'opacity-30 grayscale no-print' : ''}`}>
+                    <div className="no-print opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1 absolute -left-10 md:-left-12 top-0.5 z-10 bg-white shadow-sm rounded border border-gray-100 p-1">
                         <button onClick={() => setEditingRecord(r)} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Pencil size={12} /></button>
                         <button onClick={() => requestDeleteRecord(r.id)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 size={12} /></button>
                     </div>
 
-                    <div className="flex w-full items-baseline">
-                        <div className="text-sm md:text-xl font-bold uppercase tracking-wide text-gray-600 min-w-[20px] md:min-w-[32px] shrink-0 text-center">
+                    <div className="flex w-full items-start">
+                        <div className="text-sm md:text-xl font-bold uppercase tracking-wide text-gray-600 min-w-[20px] md:min-w-[32px] shrink-0 text-center leading-tight">
                             {r.typeLabel}
                         </div>
-                        <div className="flex-1 px-1 min-w-0 overflow-hidden">
+                        <div className="flex-1 px-1.5 min-w-0">
                             {renderFormattedDescription(r.description)}
                         </div>
-                        <div className={`text-base md:text-2xl font-mono font-bold shrink-0 min-w-[80px] md:min-w-[140px] text-right ${
+                        <div className={`text-base md:text-2xl font-mono font-bold shrink-0 min-w-[90px] md:min-w-[150px] text-right leading-none ${
                             r.operation === 'add' ? 'text-green-700' : 
                             r.operation === 'subtract' ? (isMain ? 'text-red-700' : 'text-gray-900') : 
                             'text-gray-600'
@@ -413,10 +353,10 @@ const ClientLedger: React.FC = () => {
           </div>
 
           {hasCalculableRecords && (
-            <div className="mt-2 pt-1 flex flex-col items-end w-full border-t-2 border-gray-900">
+            <div className="mt-3 pt-1.5 flex flex-col items-end w-full border-t-2 border-gray-900">
                 <div className="flex items-center gap-1 md:gap-4 justify-end w-full">
                     <span className="text-sm md:text-xl font-bold text-gray-900 uppercase">{displayLabel}</span>
-                    <span className={`text-lg md:text-3xl font-mono font-bold min-w-[100px] md:min-w-[160px] text-right ${data.finalBalance >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
+                    <span className={`text-lg md:text-3xl font-mono font-bold min-w-[110px] md:min-w-[170px] text-right ${data.finalBalance >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
                         {data.finalBalance < 0 ? `(${Math.abs(data.finalBalance).toLocaleString(undefined, {minimumFractionDigits: 2})})` : data.finalBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}
                     </span>
                 </div>
@@ -436,13 +376,10 @@ const ClientLedger: React.FC = () => {
               <ArrowLeft size={20} />
             </Link>
             <div>
-              <h1 className="text-base md:text-lg font-bold text-gray-900 leading-tight">
-                {client.name}
-              </h1>
+              <h1 className="text-base md:text-lg font-bold text-gray-900 leading-tight">{client.name}</h1>
               <p className="text-[10px] md:text-xs text-gray-500 font-mono">{client.code}</p>
             </div>
           </div>
-          
           <div className="flex items-center space-x-4">
              <div className="hidden md:flex items-center bg-gray-100 rounded-lg p-1">
                  <button onClick={handlePrevMonth} disabled={currentYear === 2025 && currentMonth === 0} className="p-1 hover:bg-white rounded disabled:opacity-30"><ChevronLeft size={16}/></button>
@@ -450,9 +387,7 @@ const ClientLedger: React.FC = () => {
                  <button onClick={handleNextMonth} disabled={currentYear === 2026 && currentMonth === 11} className="p-1 hover:bg-white rounded disabled:opacity-30"><ChevronRight size={16}/></button>
              </div>
              <div className="text-right mr-2">
-                <p className={`text-sm md:text-lg font-bold leading-tight ${totalOwed >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                   ${Math.abs(totalOwed).toLocaleString()}
-                </p>
+                <p className={`text-sm md:text-lg font-bold leading-tight ${totalOwed >= 0 ? 'text-green-600' : 'text-red-600'}`}>${Math.abs(totalOwed).toLocaleString()}</p>
                 <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{totalOwed >= 0 ? 'OWES' : 'CREDIT'}</p>
              </div>
              <div className="flex space-x-2">
@@ -462,18 +397,12 @@ const ClientLedger: React.FC = () => {
              </div>
           </div>
         </div>
-        
-        {/* Week Selector Bar */}
         <div className="bg-gray-50 border-b border-gray-200 px-4 py-2 flex justify-start md:justify-center space-x-2 overflow-x-auto no-scrollbar">
              {sortedWeekKeys.map(wk => {
                 const days = weeksData[Number(wk)];
                 const rangeStr = getWeekRangeString(null, null, days);
                 return (
-                    <button 
-                        key={wk} 
-                        onClick={() => handleWeekSelect(Number(wk))}
-                        className={`px-3 py-1 text-xs font-bold rounded-full border transition-colors whitespace-nowrap flex-shrink-0 ${selectedWeekNum === Number(wk) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'}`}
-                    >
+                    <button key={wk} onClick={() => handleWeekSelect(Number(wk))} className={`px-3 py-1 text-xs font-bold rounded-full border transition-colors whitespace-nowrap flex-shrink-0 ${selectedWeekNum === Number(wk) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'}`}>
                         {rangeStr}
                     </button>
                 );
@@ -482,30 +411,12 @@ const ClientLedger: React.FC = () => {
       </div>
 
       <div className="max-w-5xl mx-auto px-2 md:px-8 py-4 md:py-6">
-        {/* Input Controls */}
         <div className="no-print mb-6 md:mb-8 space-y-4">
-            
-            {/* Panel Selector (Mobile Only Horizontal) */}
             <div className="flex md:hidden justify-center items-center space-x-3 overflow-x-auto no-scrollbar pb-2">
                 <div className="flex bg-white rounded-full p-1 border border-gray-200 shadow-sm w-full">
-                    <button 
-                        onClick={() => setActiveColumn('col1')} 
-                        className={`flex-1 px-3 py-1.5 text-xs font-bold rounded-full transition-all whitespace-nowrap ${activeColumn === 'col1' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
-                    >
-                        Panel 1
-                    </button>
-                    <button 
-                        onClick={() => setActiveColumn('col2')} 
-                        className={`flex-1 px-3 py-1.5 text-xs font-bold rounded-full transition-all whitespace-nowrap ${activeColumn === 'col2' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
-                    >
-                        Panel 2
-                    </button>
-                    <button 
-                        onClick={() => setActiveColumn('main')} 
-                        className={`flex-1 px-3 py-1.5 text-xs font-bold rounded-full transition-all whitespace-nowrap ${activeColumn === 'main' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
-                    >
-                        Main
-                    </button>
+                    <button onClick={() => setActiveColumn('col1')} className={`flex-1 px-3 py-1.5 text-xs font-bold rounded-full transition-all whitespace-nowrap ${activeColumn === 'col1' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>Panel 1</button>
+                    <button onClick={() => setActiveColumn('col2')} className={`flex-1 px-3 py-1.5 text-xs font-bold rounded-full transition-all whitespace-nowrap ${activeColumn === 'col2' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>Panel 2</button>
+                    <button onClick={() => setActiveColumn('main')} className={`flex-1 px-3 py-1.5 text-xs font-bold rounded-full transition-all whitespace-nowrap ${activeColumn === 'main' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>Main</button>
                 </div>
             </div>
 
@@ -514,7 +425,7 @@ const ClientLedger: React.FC = () => {
                 {categories.filter(c => c.label !== '').map((cat, index) => (
                 <div key={cat.id} className="relative group touch-manipulation cursor-grab active:cursor-grabbing" draggable onDragStart={(e) => handleDragStart(e, index)} onDragOver={(e) => handleDragOver(e, index)} onDrop={handleDrop}>
                     <button onClick={() => handleCategorySelect(cat)} className={`w-full h-full flex flex-col items-center justify-center p-3 md:p-4 border-2 rounded-xl transition-all shadow-sm active:scale-95 ${cat.color} ${cat.operation === 'add' ? 'border-green-100 hover:border-green-300' : cat.operation === 'subtract' ? 'border-red-100 hover:border-red-300' : 'border-gray-100 hover:border-gray-300'}`}>
-                        <div className={`p-1.5 md:p-2 rounded-full mb-1 md:mb-2 bg-black bg-opacity-5`}>
+                        <div className="p-1.5 md:p-2 rounded-full mb-1 md:mb-2 bg-black bg-opacity-5">
                             {cat.operation === 'add' ? <Plus size={16} /> : cat.operation === 'subtract' ? <Minus size={16} /> : <Hash size={16} />}
                         </div>
                         <span className="text-sm md:text-base font-bold text-center truncate w-full">{cat.label}</span>
@@ -570,84 +481,45 @@ const ClientLedger: React.FC = () => {
             )}
         </div>
 
-        {/* Layout Container for Desktop Sidebar + Ledger */}
         <div className="flex flex-col md:flex-row gap-4 items-start relative">
-            
-            {/* Desktop Vertical Panel Selector Sidebar */}
             <div className="hidden md:flex flex-col gap-2 no-print sticky top-24 z-30 w-24 shrink-0">
                 <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 pl-1">Panels</div>
-                <button 
-                    onClick={() => setActiveColumn('col1')} 
-                    className={`px-3 py-2 text-[10px] font-bold rounded-lg text-left transition-all border ${activeColumn === 'col1' ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'}`}
-                >
-                    Panel 1
-                </button>
-                <button 
-                    onClick={() => setActiveColumn('col2')} 
-                    className={`px-3 py-2 text-[10px] font-bold rounded-lg text-left transition-all border ${activeColumn === 'col2' ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'}`}
-                >
-                    Panel 2
-                </button>
-                <button 
-                    onClick={() => setActiveColumn('main')} 
-                    className={`px-3 py-2 text-[10px] font-bold rounded-lg text-left transition-all border ${activeColumn === 'main' ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'}`}
-                >
-                    Main
-                </button>
+                <button onClick={() => setActiveColumn('col1')} className={`px-3 py-2 text-[10px] font-bold rounded-lg text-left transition-all border ${activeColumn === 'col1' ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'}`}>Panel 1</button>
+                <button onClick={() => setActiveColumn('col2')} className={`px-3 py-2 text-[10px] font-bold rounded-lg text-left transition-all border ${activeColumn === 'col2' ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'}`}>Panel 2</button>
+                <button onClick={() => setActiveColumn('main')} className={`px-3 py-2 text-[10px] font-bold rounded-lg text-left transition-all border ${activeColumn === 'main' ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'}`}>Main</button>
             </div>
 
-            {/* Ledger Display Area */}
             <div id="printable-area" className="flex-1 w-full min-w-0">
                 <div className="bg-white border border-gray-200 shadow-sm min-h-[600px] relative text-lg font-serif">
-                    
-                    {/* Resizer Top */}
                     <div style={{ height: `${verticalPadding.top}px` }} className="relative group w-full no-print-bg">
                         <div className="absolute bottom-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResizeVertical('top', e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div>
                     </div>
                     
-                    {/* Header */}
                     <div className="px-4 md:px-8 pb-2 md:pb-4 flex justify-between items-end mb-2 md:mb-4">
                         <div>
                             <h2 className="text-2xl md:text-4xl font-bold text-gray-900 uppercase tracking-widest">{client.name}</h2>
                             {client.code && <p className="text-gray-600 mt-1 font-mono text-sm md:text-xl">{client.code}</p>}
                         </div>
-                        {/* Mobile Only: Show current active panel indicator */}
                         <div className="md:hidden text-right">
                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Viewing</span>
                             <div className="text-sm font-bold text-blue-600 uppercase">{activeColumn === 'main' ? 'Main Ledger' : activeColumn === 'col1' ? 'Panel 1' : 'Panel 2'}</div>
                         </div>
                     </div>
 
-                    {/* Ledger Content - Responsive Layout */}
                     <div className="flex flex-col md:flex-row w-full min-h-[400px] relative" ref={containerRef}>
-                        {/* Column 1 */}
-                        <div 
-                            className={`relative flex flex-col p-1 md:p-2 border-r border-transparent group ${activeColumn === 'col1' ? 'block w-full md:flex md:w-auto' : 'hidden md:flex'}`}
-                            style={{ width: window.innerWidth >= 768 ? `${colWidths[0]}%` : undefined }}
-                        >
+                        <div className={`relative flex flex-col p-1 md:p-2 border-r border-transparent group ${activeColumn === 'col1' ? 'block w-full md:flex md:w-auto' : 'hidden md:flex'}`} style={{ width: window.innerWidth >= 768 ? `${colWidths[0]}%` : undefined }}>
                             <LedgerColumnView data={col1Ledger} footerLabel="收"/>
                             <div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print hidden md:flex" onMouseDown={(e) => startResizeCol(0, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div>
                         </div>
-
-                        {/* Column 2 */}
-                        <div 
-                            className={`relative flex flex-col p-1 md:p-2 border-r border-transparent group ${activeColumn === 'col2' ? 'block w-full md:flex md:w-auto' : 'hidden md:flex'}`}
-                            style={{ width: window.innerWidth >= 768 ? `${colWidths[1]}%` : undefined }}
-                        >
+                        <div className={`relative flex flex-col p-1 md:p-2 border-r border-transparent group ${activeColumn === 'col2' ? 'block w-full md:flex md:w-auto' : 'hidden md:flex'}`} style={{ width: window.innerWidth >= 768 ? `${colWidths[1]}%` : undefined }}>
                             <LedgerColumnView data={col2Ledger} footerLabel="收"/>
                             <div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print hidden md:flex" onMouseDown={(e) => startResizeCol(1, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div>
                         </div>
-
-                        {/* Main Column */}
-                        <div 
-                            className={`relative flex flex-col p-1 md:p-2 bg-gray-50/30 ${activeColumn === 'main' ? 'block w-full md:flex md:w-auto' : 'hidden md:flex'}`}
-                            style={{ width: window.innerWidth >= 768 ? `${colWidths[2]}%` : undefined }}
-                        >
+                        <div className={`relative flex flex-col p-1 md:p-2 bg-gray-50/30 ${activeColumn === 'main' ? 'block w-full md:flex md:w-auto' : 'hidden md:flex'}`} style={{ width: window.innerWidth >= 768 ? `${colWidths[2]}%` : undefined }}>
                             <LedgerColumnView data={mainLedger} footerLabel="欠"/>
                         </div>
                     </div>
 
-                    {/* Resizer Bottom */}
                     <div style={{ height: `${verticalPadding.bottom}px` }} className="relative group w-full mt-auto no-print-bg">
                         <div className="absolute top-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResizeVertical('bottom', e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div>
                     </div>

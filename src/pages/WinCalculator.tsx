@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Calculator, Trophy, RotateCcw, Plus, Trash2, Save, User, CheckCircle, Calendar, Hash, Medal, Layers, RefreshCw } from 'lucide-react';
+import { Calculator, Trophy, Plus, Trash2, Save, User, CheckCircle, Calendar, Layers, RefreshCw } from 'lucide-react';
 import { getClients, saveLedgerRecord, getWinningsByDateRange, getLedgerRecords, getNetAmount } from '../services/storageService';
 import { Client, LedgerRecord } from '../types';
 import { getWeeksForMonth, MONTH_NAMES, getWeekRangeString } from '../utils/reportUtils';
@@ -342,11 +342,26 @@ const WinCalculator: React.FC = () => {
         const [yStr, mStr, dStr] = selectedDate.split('-');
         const dateLabel = `${dStr}/${mStr}`;
 
-        const description = entries
+        // Nice display formatting requested by user:
+        // Group entries by Number + Position + PlayType + Sides
+        const groupedMap = entries.reduce((acc, e) => {
+            const key = `${e.number}-${e.position}-${e.playType}-${e.sides.join('')}`;
+            if (!acc[key]) {
+                acc[key] = { ...e, big: 0, small: 0, win: 0 };
+            }
+            if (e.betType === 'Big' || e.betType === '3A') acc[key].big += e.betAmount;
+            if (e.betType === 'Small' || e.betType === '3ABC') acc[key].small += e.betAmount;
+            acc[key].win += e.winAmount;
+            return acc;
+        }, {} as Record<string, any>);
+
+        const description = Object.values(groupedMap)
             .map(e => {
                 const typeStr = e.playType === 'Box' ? 'ibox' : e.playType === 'Pau' ? '包' : '';
-                const exactWinStr = Math.floor(e.winAmount); // Floor to match image style or keep fraction? Image shows .00
-                return `${e.sides.join('')} ${e.number} - ${e.betAmount} - ${exactWinStr} ${typeStr} (${e.positionLabel})`.trim();
+                const winStr = Math.floor(e.win).toLocaleString();
+                const sidesStr = e.sides.join('');
+                // Format: MKT 2323 - 10- 10 - 1833 ibox (头)
+                return `${sidesStr} ${e.number} - ${e.big} - ${e.small} - ${winStr} ${typeStr} (${e.positionLabel})`.trim();
             })
             .join('; ');
 
@@ -384,8 +399,18 @@ const WinCalculator: React.FC = () => {
         setIsSaving(false);
         setShowSuccess(true);
         
+        const d = new Date(selectedDate);
+        const y = d.getFullYear();
+        const m = d.getMonth();
+        const weeks = getWeeksForMonth(y, m);
+        let weekNum = 1;
+        const foundWeek = Object.keys(weeks).find(w => weeks[parseInt(w)].some(day => 
+            `${day.getFullYear()}-${String(day.getMonth()+1).padStart(2,'0')}-${String(day.getDate()).padStart(2,'0')}` === selectedDate
+        ));
+        if (foundWeek) weekNum = parseInt(foundWeek);
+
         setTimeout(() => {
-            navigate(`/clients/${selectedClientId}`, { state: navState });
+            navigate(`/clients/${selectedClientId}`, { state: { year: y, month: m, week: weekNum } });
         }, 800);
         
         handleClearAll();
@@ -405,6 +430,7 @@ const WinCalculator: React.FC = () => {
         setPreviewClientId(clientId);
     }, []);
 
+    // FIX: Removed undefined variables 'advances' and 'credits' from the dependency array.
     const handleListInputBlur = useCallback(async (clientId: string) => {
         if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
         blurTimeoutRef.current = setTimeout(() => {
