@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { getClients, getDrawBalances, saveDrawBalance, getClientBalancesPriorToDate, generateSpecialCarryForward, getLedgerRecords, getNetAmount } from '../services/storageService';
 import { Client, LedgerRecord } from '../types';
@@ -9,7 +8,6 @@ import { useGlobalState } from '../context/GlobalStateContext';
 
 // Preview Component
 const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, selectedDate: string }) => {
-    // ... (same as before)
     const [balance, setBalance] = useState<number | null>(null);
     const [dailyRecords, setDailyRecords] = useState<LedgerRecord[]>([]);
     const [loading, setLoading] = useState(true);
@@ -153,8 +151,6 @@ const DrawReport: React.FC = () => {
   const currentMonth = currentDate.getMonth();
   
   // Format selectedDate string 'YYYY-MM-DD' from currentDate
-  // IMPORTANT: We need to ensure we map to the start of the week logic if not already aligned,
-  // but simpler is to just format the date directly. The week logic will handle finding the containing week.
   const selectedDate = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
 
   useEffect(() => {
@@ -256,11 +252,16 @@ const DrawReport: React.FC = () => {
                   const codeUpper = client.code?.toUpperCase();
                   
                   // Special Logic for Z21 and C19 (Row Copying)
-                  // This overrides prevBalances logic if applicable
                   if (codeUpper === 'Z21' || codeUpper === 'C19') {
                       const specialBalance = await generateSpecialCarryForward(client.id, codeUpper, selectedDate);
-                      newBalances[client.id] = specialBalance.toString();
-                      await saveDrawBalance(selectedDate, client.id, specialBalance);
+                      // REQUIREMENT: C19 bring forward ONLY in panel 1, do NOT show in 上欠
+                      if (codeUpper === 'C19') {
+                          newBalances[client.id] = '0.00';
+                          // Skip saveDrawBalance to prevent '上欠' entry in main ledger
+                      } else {
+                          newBalances[client.id] = specialBalance.toFixed(2);
+                          await saveDrawBalance(selectedDate, client.id, specialBalance);
+                      }
                   } else {
                       // Standard Case
                       const bal = prevBalances[client.id] || 0;
@@ -341,7 +342,7 @@ const DrawReport: React.FC = () => {
   }
 
   const activeWeekIndex = activeWeekNum ? Object.keys(currentMonthWeeks).map(Number).sort((a: number, b: number) => a - b).indexOf(Number(activeWeekNum)) : 0;
-  const sortedWeekNums = Object.keys(currentMonthWeeks).map(Number).sort((a: number, b: number) => a - b);
+  const sortedWeekNums = Object.keys(currentMonthWeeks).map(Number).sort((a, b) => a - b);
 
   const activeWeekDays = activeWeekNum ? currentMonthWeeks[parseInt(activeWeekNum)] : [];
 
