@@ -300,7 +300,7 @@ const ClientLedger: React.FC = () => {
   const col1Ledger = useMemo(() => calculateColumn('col1'), [filteredRecords]);
   const col2Ledger = useMemo(() => calculateColumn('col2'), [filteredRecords]);
 
-  // Unified Formatter for nicer description display
+  // Standard formatter for regular descriptions
   const renderFormattedDescription = (text: string) => {
     if (!text) return null;
     const dateMatch = text.match(/^(\d{1,2}\/\d{1,2})\s+(.*)/);
@@ -313,6 +313,64 @@ const ClientLedger: React.FC = () => {
         );
     }
     return <span className="text-[11px] md:text-[16px] text-gray-700 font-bold leading-tight break-words whitespace-normal">{text}</span>;
+  };
+
+  // Special formatter for Winning descriptions
+  const parseWinningLine = (line: string) => {
+    // Expected formats:
+    // 1. "KMT 2323 - 10 - 10 - 1,833 ibox (头)" (4 parts, 3 dashes)
+    // 2. "KMT 2323 - 10 - 611 ibox (二)" (3 parts, 2 dashes)
+    const parts = line.split(/\s+-\s+/);
+    
+    if (parts.length >= 4) {
+        const [head, big, small, tail] = parts;
+        const tailSplit = tail.trim().split(/\s+(.+)/);
+        const win = tailSplit[0];
+        const rest = tailSplit[1] || '';
+        return { valid: true, head, bet: `${big}/${small}`, win, rest };
+    }
+    
+    if (parts.length === 3) {
+        const [head, bet, tail] = parts;
+        const tailSplit = tail.trim().split(/\s+(.+)/);
+        const win = tailSplit[0];
+        const rest = tailSplit[1] || '';
+        return { valid: true, head, bet, win, rest };
+    }
+    
+    return { valid: false, text: line };
+  };
+
+  const renderWinningContent = (description: string) => {
+    const dateMatch = description.match(/^(\d{1,2}[\/\.]\d{1,2})\s+(.*)/);
+    const date = dateMatch ? dateMatch[1] : '';
+    const content = dateMatch ? dateMatch[2] : description;
+    
+    const lines = content.split(/;\s*/).filter(Boolean);
+    
+    return (
+        <div className="flex flex-col w-full min-w-0 pt-0.5">
+            <div className="flex items-start gap-2">
+                {date && <span className="text-[10px] md:text-[11px] font-mono text-gray-400 shrink-0 select-none pt-0.5">{date}</span>}
+                <div className="flex flex-col w-full min-w-0 gap-0.5">
+                    {lines.map((line, i) => {
+                        const parsed = parseWinningLine(line);
+                        if (parsed.valid) {
+                            return (
+                                <div key={i} className="flex items-baseline text-[10px] md:text-sm text-gray-700 leading-tight">
+                                    <span className="font-bold w-[70px] md:w-[90px] shrink-0 truncate mr-1">{parsed.head}</span>
+                                    <span className="text-gray-400 w-[40px] shrink-0 text-center mr-1 font-mono tracking-tighter">{parsed.bet}</span>
+                                    <span className="text-red-600 font-bold w-[50px] shrink-0 text-right mr-2">{parsed.win}</span>
+                                    <span className="text-gray-500 truncate">{parsed.rest}</span>
+                                </div>
+                            );
+                        }
+                        return <div key={i} className="text-[10px] md:text-sm text-gray-600 truncate">{line}</div>;
+                    })}
+                </div>
+            </div>
+        </div>
+    );
   };
 
   const LedgerColumnView = ({ data, footerLabel = "收" }: { data: ReturnType<typeof calculateColumn>, footerLabel?: string }) => {
@@ -338,7 +396,10 @@ const ClientLedger: React.FC = () => {
                             {r.typeLabel}
                         </div>
                         <div className="flex-1 px-1.5 min-w-0">
-                            {renderFormattedDescription(r.description)}
+                            {r.typeLabel === '中' 
+                                ? renderWinningContent(r.description) 
+                                : renderFormattedDescription(r.description)
+                            }
                         </div>
                         <div className={`text-base md:text-2xl font-mono font-bold shrink-0 min-w-[90px] md:min-w-[150px] text-right leading-none ${
                             r.operation === 'add' ? 'text-green-700' : 
