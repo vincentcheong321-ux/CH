@@ -434,18 +434,22 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
     if (col1Records.length === 0) return 0;
 
     const mappedAll = col1Records.map(mapJournalToLedgerRecord);
-    
+    // Sort descending by date (Newest First)
+    const sortedAll = sortLedgerRecords(mappedAll).reverse();
+
     let rowsToCopy: LedgerRecord[] = [];
     if (clientCode.toUpperCase() === 'Z21') {
-        // Z21: Exactly 4 latest records (Oldest of the 4 is first in result array)
+        // Z21: Exactly 4 latest records (Oldest of the 4 is first in result array because of slice(-4) on ascending, or slice(0,4) on descending?)
+        // Let's use ascending sort for slicing to be consistent with previous logic
         const sortedAsc = sortLedgerRecords(mappedAll);
         
         rowsToCopy = sortedAsc.slice(-4).map((rec, idx) => 
             idx === 0 ? { ...rec, operation: 'none' as const } : rec
         );
     } else if (clientCode.toUpperCase() === 'C19') {
-        // C19: Exactly all records in Panel 1 are summarized and brought over
-        rowsToCopy = sortLedgerRecords(mappedAll);
+        // C19: Exactly 6 latest records
+        const sortedAsc = sortLedgerRecords(mappedAll);
+        rowsToCopy = sortedAsc.slice(-6);
     } else { return 0; }
 
     const sum = rowsToCopy.reduce((acc, r) => acc + getNetAmount(r), 0);
@@ -473,7 +477,7 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
                 }
             });
 
-            // For Z21, add the marked down oldest first record to Panel 2 as a '收' record
+            // NEW CONDITION: For Z21, add the marked down oldest first record to Panel 2 as a '收' record
             if (clientCode.toUpperCase() === 'Z21' && weightIdx === 0) {
                  const { data: dupesP2 } = await supabase.from('financial_journal').select('id')
                     .eq('client_id', clientId)
@@ -497,29 +501,6 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
         }
         weightIdx++;
     }
-
-    // NEW RULE: For C19, bring the Panel 1 summary total to the main ledger as an '上欠' (DRAW) record
-    if (clientCode.toUpperCase() === 'C19') {
-        const { data: existingDraw } = await supabase.from('financial_journal')
-            .select('id')
-            .eq('client_id', clientId)
-            .eq('entry_date', targetDate)
-            .eq('entry_type', 'DRAW')
-            .maybeSingle();
-        
-        if (existingDraw) {
-            await supabase.from('financial_journal').update({ amount: sum }).eq('id', existingDraw.id);
-        } else {
-            await supabase.from('financial_journal').insert({
-                client_id: clientId,
-                entry_date: targetDate,
-                entry_type: 'DRAW',
-                amount: sum,
-                data: {}
-            });
-        }
-    }
-
     return sum;
 };
 
@@ -576,6 +557,7 @@ export const fetchClientTotalBalance = async (clientId: string): Promise<number>
     const sortedForSnapshot = [...records].sort((a,b) => b.date.localeCompare(a.date));
     
     // STRICTLY find a snapshot that belongs to the MAIN ledger.
+    // This prevents picking up a P1 '上欠' record and calculating incorrectly.
     const latestSnapshot = sortedForSnapshot.find(r => 
         (r.id.startsWith('draw_') || r.typeLabel === '上欠') && 
         (r.column === 'main' || !r.column)
@@ -584,8 +566,9 @@ export const fetchClientTotalBalance = async (clientId: string): Promise<number>
     let effectiveRecords = records;
     if (latestSnapshot) {
         effectiveRecords = records.filter(r => {
-            if (r.id === latestSnapshot.id) return true; 
-            if (r.date > latestSnapshot.date) return true; 
+            if (r.id === latestSnapshot.id) return true; // Always include the snapshot
+            if (r.date > latestSnapshot.date) return true; // Include later dates
+            // Include records on SAME DAY as snapshot, as long as they are not OTHER snapshots
             if (r.date === latestSnapshot.date && !r.id.startsWith('draw_') && r.typeLabel !== '上欠') return true;
             return false;
         });
@@ -596,13 +579,15 @@ export const fetchClientTotalBalance = async (clientId: string): Promise<number>
         if (col2Records.length > 0) return col2Records.reduce((acc, r) => acc + getNetAmount(r), 0);
     } 
     
-    // Default: Main Ledger Only
+    // Default: Main Ledger Only (Includes snapshot if it is in main)
     const mainRecords = effectiveRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
     return mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
 };
 
 export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: Client[]): Promise<Record<string, number>> => {
     if (supabase) {
+        // UPDATED: Use LT (Strictly Less Than) dateLimit to get CLOSING balance of previous week.
+        // Also changed query to use LT to minimize data fetch if possible, though LTE for safety on boundaries.
         const { data } = await supabase.from('financial_journal').select('*').lt('entry_date', dateLimit).order('entry_date', { ascending: true });
         if (!data) return {};
 
@@ -620,6 +605,7 @@ export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: 
             const clientCode = client?.code?.toUpperCase() || '';
             const sortedForSnapshot = [...records].sort((a,b) => b.date.localeCompare(a.date));
             
+            // STRICTLY find a snapshot that belongs to the MAIN ledger before the date limit.
             const latestSnapshot = sortedForSnapshot.find(r => 
                 (r.id.startsWith('draw_') || r.typeLabel === '上欠') && 
                 (r.column === 'main' || !r.column)
@@ -639,6 +625,7 @@ export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: 
                 const col2Records = effectiveRecords.filter(r => r.column === 'col2' && r.isVisible);
                 balances[clientId] = col2Records.length > 0 ? col2Records.reduce((acc, r) => acc + getNetAmount(r), 0) : effectiveRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible).reduce((acc, r) => acc + getNetAmount(r), 0);
             } else {
+                // Unified logic for all other clients: Use Final Total Balance of Main Ledger (ignore P1)
                 const mainRecords = effectiveRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
                 balances[clientId] = mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
             }

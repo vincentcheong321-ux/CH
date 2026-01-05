@@ -198,7 +198,6 @@ const ClientLedger: React.FC = () => {
   const handleQuickEntry = () => {
       const quickCat: TransactionCategory = { id: 'quick_entry', label: '', operation: 'add', color: 'bg-blue-600 text-white' };
       setActiveCategory(quickCat);
-      // Quick entry now defaults to 'none' for Panel 1, and 'add' for others
       setCurrentOperation(activeColumn === 'col1' ? 'none' : 'add');
       setAmount('');
       setDescription('');
@@ -209,15 +208,8 @@ const ClientLedger: React.FC = () => {
     if (!id || !activeCategory || !amount) return;
     const val = parseFloat(amount);
     if (isNaN(val)) return;
-    
-    // Determine Operation: Use current toggle selection for Quick Entry (unnamed) buttons
     let op = activeCategory.label === '' ? currentOperation : activeCategory.operation;
-    
-    // RE-RESTRICT: Panel 1 Quick Entry MUST be 'none'
-    if (activeColumn === 'col1' && activeCategory.label === '') {
-        op = 'none';
-    }
-
+    if (activeColumn === 'col1' && activeCategory.label === '') op = 'none';
     const entryDate = `${currentDate.getFullYear()}-${String(currentDate.getMonth()+1).padStart(2,'0')}-${String(currentDate.getDate()).padStart(2,'0')}`;
     const newRecord: Omit<LedgerRecord, 'id'> = {
       clientId: id, date: entryDate, description: description, typeLabel: activeCategory.label, amount: val, operation: op, column: activeColumn, isVisible: isVisible
@@ -414,43 +406,39 @@ const ClientLedger: React.FC = () => {
     
     return (
         <div className="flex flex-col w-full min-w-0 pt-0.5 overflow-visible font-mono">
+            {/* Date on Top */}
             {dateStr && (
-                <div className="text-[10px] md:text-[11px] text-gray-400 select-none pb-0.5 pl-1 font-bold">
+                <div className="text-[11px] md:text-[13px] text-gray-400 select-none pb-0.5 mb-1 pl-2 md:pl-4">
                     {dateStr}
                 </div>
             )}
             
             <div className="flex flex-col w-full min-w-0 gap-1 overflow-visible">
                 {parsedLines.map((line, i) => (
-                    <div key={i} className="flex flex-col w-full bg-white/50 rounded-sm">
-                        {line.sides && (
-                             <div className="text-[11px] font-extrabold text-gray-800 uppercase tracking-tight leading-none pl-1 mb-0.5">
-                                {line.sides}
-                             </div>
-                        )}
-                        <div className="flex items-center text-[13px] md:text-[15px] leading-none py-0.5 w-full whitespace-nowrap pl-1 min-w-max">
-                            <div className="font-black text-gray-900 tracking-tighter shrink-0 w-[34px] md:w-[44px]">
-                                {line.number}
-                            </div>
-                            <div className="text-gray-500 font-bold text-[10px] md:text-[12px] tracking-tighter shrink-0 w-[38px] md:w-[50px] text-center">
-                                {line.big}-{line.small}
-                            </div>
-                            <div className="text-gray-400 text-[10px] md:text-[11px] uppercase font-bold shrink-0 w-[32px] md:w-[42px] text-center">
-                                {line.type}
-                            </div>
-                            <div className="w-[20px] flex justify-center shrink-0">
-                                {line.pos && (
-                                    <div className="w-4 h-4 rounded-full border border-gray-900 flex items-center justify-center bg-white shadow-sm">
-                                        <span className="text-[9px] font-black text-gray-900 leading-none scale-90">
-                                            {line.pos}
-                                        </span>
-                                    </div>
-                                )}
-                            </div>
-                            <div className="text-gray-300 font-light px-1 shrink-0">-</div>
-                            <div className="text-red-600 font-black text-lg md:text-xl tracking-tighter shrink-0 ml-1">
-                                {parseFloat(line.win.replace(/,/g, '')) > 0 ? parseFloat(line.win.replace(/,/g, '')).toLocaleString() : ''}
-                            </div>
+                    <div key={i} className="flex items-center gap-1.5 md:gap-4 text-[11px] md:text-[16px] text-gray-800 leading-none py-0.5 w-full whitespace-nowrap">
+                        <span className="font-bold text-gray-800 uppercase w-[30px] md:w-[38px] shrink-0 text-left">{line.sides}</span>
+                        <span className="font-bold text-gray-900 tracking-wider w-[44px] md:w-[54px] shrink-0 text-center">{line.number}</span>
+                        <span className="text-gray-400 text-center text-[10px] md:text-[12px] font-bold w-[45px] md:w-[60px] shrink-0">
+                            {line.big}-{line.small}
+                        </span>
+                        <span className="text-gray-400 text-[10px] md:text-[11px] uppercase font-bold w-[35px] md:w-[45px] shrink-0 text-center truncate">{line.type}</span>
+                        
+                        <div className="w-[24px] md:w-[28px] shrink-0 flex justify-center">
+                            {line.pos && (
+                                <div className="w-6 h-6 md:w-8 md:h-8 rounded-full border border-gray-900 flex items-center justify-center bg-white shadow-sm">
+                                    <span className="text-[11px] md:text-[15px] font-black text-gray-900 leading-none">
+                                        {line.pos}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Spacious area for Win Amount - Shifted to ensure no truncation */}
+                        <div className="flex items-center justify-end flex-1 min-w-[60px] md:min-w-[100px] pr-1">
+                            <span className="text-gray-300 px-1 font-light">-</span>
+                            <span className="text-red-600 font-black text-right truncate text-lg md:text-3xl tracking-tighter">
+                                {parseFloat(line.win) > 0 ? parseFloat(line.win).toLocaleString() : ''}
+                            </span>
                         </div>
                     </div>
                 ))}
@@ -475,8 +463,13 @@ const ClientLedger: React.FC = () => {
           <div className="flex flex-col space-y-0.5 w-full">
                 {data.processed.map((r) => {
                     const isWinning = r.typeLabel === '中';
+                    // PANEL 1: Shift content left by hiding the type label column for winning records
                     const hideLabel = isWinning && columnType === 'col1';
+                    
+                    // MAIN PANEL: Strictly hide description for winning records
                     const showDescription = !(isWinning && columnType === 'main');
+                    
+                    // PANEL 1: Redundant amount column hidden for winners because win info is in description
                     const showAmountColumn = !(isWinning && columnType === 'col1');
                     
                     return (
@@ -485,7 +478,9 @@ const ClientLedger: React.FC = () => {
                             <button onClick={() => startEditing(r)} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Pencil size={12} /></button>
                             <button onClick={() => requestDeleteRecord(r.id)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 size={12} /></button>
                         </div>
+
                         <div className="flex w-full items-start relative z-10 min-h-[24px]">
+                            {/* Shift to far left if label hidden */}
                             <div className={`${hideLabel ? 'w-0 overflow-hidden' : 'w-[20px] md:w-[32px]'} text-sm md:text-xl font-bold uppercase tracking-wide text-gray-600 shrink-0 text-center leading-tight pt-0.5`}>
                                 {hideLabel ? '' : r.typeLabel}
                             </div>
@@ -496,6 +491,7 @@ const ClientLedger: React.FC = () => {
                                         : renderFormattedDescription(r.description)
                                 ) : null}
                             </div>
+                            
                             {showAmountColumn ? (
                                 <div className={`text-base md:text-2xl font-mono font-bold shrink-0 w-[110px] md:w-[160px] text-right leading-none pl-2 pt-0.5 ${
                                     r.operation === 'add' ? 'text-green-700' : 
@@ -511,6 +507,7 @@ const ClientLedger: React.FC = () => {
                     </div>
                 )})}
           </div>
+
           {hasCalculableRecords && (
             <div className="mt-3 pt-1.5 flex flex-col items-end w-full border-t-2 border-gray-900">
                 <div className="flex items-center gap-1 md:gap-4 justify-end w-full">
@@ -549,7 +546,10 @@ const ClientLedger: React.FC = () => {
                  <span className="px-2 text-xs font-bold w-20 text-center">{MONTH_NAMES[currentMonth].slice(0,3)} {currentYear}</span>
                  <button onClick={handleNextMonth} disabled={currentYear === 2026 && currentMonth === 11} className="p-1 hover:bg-white rounded disabled:opacity-30"><ChevronRight size={16}/></button>
              </div>
-             {/* Removed total balance section from header */}
+             <div className="text-right mr-2">
+                <p className={`text-sm md:text-lg font-bold leading-tight ${totalOwed >= 0 ? 'text-green-600' : 'text-red-600'}`}>${Math.abs(totalOwed).toLocaleString()}</p>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{totalOwed >= 0 ? 'OWES' : 'CREDIT'}</p>
+             </div>
              <div className="flex space-x-2">
                  <button onClick={openNewTab} className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-50 shadow-sm hidden md:block" title="Open in New Tab"><ExternalLink size={18} /></button>
                  <button onClick={handleDownloadImage} className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-50 shadow-sm hidden md:block" title="Download as Image"><ImageDown size={18} /></button>
@@ -570,120 +570,150 @@ const ClientLedger: React.FC = () => {
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-2 md:px-8 py-4 md:py-6">
-        <div className="no-print mb-6 md:mb-8 space-y-4">
-            <div className="flex md:hidden justify-center items-center space-x-3 overflow-x-auto no-scrollbar pb-2">
-                <div className="flex bg-white rounded-full p-1 border border-gray-200 shadow-sm w-full">
-                    <button onClick={() => setActiveColumn('col1')} className={`flex-1 px-3 py-1.5 text-xs font-bold rounded-full transition-all whitespace-nowrap ${activeColumn === 'col1' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>Panel 1</button>
-                    <button onClick={() => setActiveColumn('col2')} className={`flex-1 px-3 py-1.5 text-xs font-bold rounded-full transition-all whitespace-nowrap ${activeColumn === 'col2' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>Panel 2</button>
-                    <button onClick={() => setActiveColumn('main')} className={`flex-1 px-3 py-1.5 text-xs font-bold rounded-full transition-all whitespace-nowrap ${activeColumn === 'main' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>Main</button>
+      <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-6">
+        {/* Responsive Layout with Side Buttons */}
+        <div className="flex flex-col lg:flex-row gap-6 items-start relative">
+            
+            {/* STICKY SIDEBAR: Controls moved here */}
+            <aside className="hidden lg:flex flex-col gap-6 no-print sticky top-24 z-30 w-36 shrink-0 h-[calc(100vh-120px)] overflow-y-auto pr-2 no-scrollbar">
+                
+                {/* 1. Panel Section */}
+                <div className="space-y-2">
+                    <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-200 pb-1 mb-2">View Panels</div>
+                    <button onClick={() => setActiveColumn('col1')} className={`w-full px-3 py-2 text-[11px] font-bold rounded-xl text-left transition-all border ${activeColumn === 'col1' ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'}`}>Panel 1</button>
+                    <button onClick={() => setActiveColumn('col2')} className={`w-full px-3 py-2 text-[11px] font-bold rounded-xl text-left transition-all border ${activeColumn === 'col2' ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'}`}>Panel 2</button>
+                    <button onClick={() => setActiveColumn('main')} className={`w-full px-3 py-2 text-[11px] font-bold rounded-xl text-left transition-all border ${activeColumn === 'main' ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'}`}>Main Ledger</button>
                 </div>
-            </div>
 
-            {!activeCategory ? (
-            <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 md:gap-3">
-                {categories.filter(c => c.label !== '').map((cat, index) => (
-                <div key={cat.id} className="relative group touch-manipulation cursor-grab active:cursor-grabbing" draggable onDragStart={(e) => handleDragStart(e, index)} onDragOver={(e) => handleDragOver(e, index)} onDrop={handleDrop}>
-                    <button onClick={() => handleCategorySelect(cat)} className={`w-full h-full flex flex-col items-center justify-center p-3 md:p-4 border-2 rounded-xl transition-all shadow-sm active:scale-95 ${cat.color} ${cat.operation === 'add' ? 'border-green-100 hover:border-green-300' : cat.operation === 'subtract' ? 'border-red-100 hover:border-red-300' : 'border-gray-100 hover:border-gray-300'}`}>
-                        <div className="p-1.5 md:p-2 rounded-full mb-1 md:mb-2 bg-black bg-opacity-5">
-                            {cat.operation === 'add' ? <Plus size={16} /> : cat.operation === 'subtract' ? <Minus size={16} /> : <Hash size={16} />}
-                        </div>
-                        <span className="text-sm md:text-base font-bold text-center truncate w-full">{cat.label}</span>
+                {/* 2. Quick Actions */}
+                <div className="space-y-2">
+                    <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-200 pb-1 mb-2">Categories</div>
+                    <button 
+                        onClick={handleQuickEntry}
+                        className="w-full flex items-center px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-xl hover:bg-indigo-100 transition-all text-indigo-700 text-[11px] font-bold shadow-sm"
+                    >
+                        <Zap size={14} className="mr-2" /> Quick Entry
                     </button>
-                    <div className="absolute top-1 left-1 text-gray-400 opacity-50 hidden md:block"><GripHorizontal size={14} /></div>
-                    <button onClick={(e) => requestDeleteCategory(e, cat.id)} className="absolute -top-2 -right-2 text-gray-400 hover:text-red-600 bg-white rounded-full p-1 shadow-md opacity-0 group-hover:opacity-100 transition-opacity"><X size={14} /></button>
+                    
+                    <div className="grid grid-cols-1 gap-1.5 mt-2">
+                        {categories.filter(c => c.label !== '').map((cat, index) => (
+                            <div key={cat.id} className="relative group">
+                                <button 
+                                    onClick={() => handleCategorySelect(cat)}
+                                    className={`w-full flex items-center justify-between px-3 py-2 border rounded-xl transition-all shadow-sm active:scale-95 ${cat.color} text-[11px] font-bold ${cat.operation === 'add' ? 'border-green-100' : cat.operation === 'subtract' ? 'border-red-100' : 'border-gray-100'}`}
+                                >
+                                    <span className="truncate pr-1">{cat.label}</span>
+                                    {cat.operation === 'add' ? <Plus size={10} /> : cat.operation === 'subtract' ? <Minus size={10} /> : <Hash size={10} />}
+                                </button>
+                                <button onClick={(e) => requestDeleteCategory(e, cat.id)} className="absolute -top-1 -right-1 text-gray-400 hover:text-red-600 bg-white rounded-full p-0.5 shadow-md opacity-0 group-hover:opacity-100 transition-opacity"><X size={10} /></button>
+                            </div>
+                        ))}
+                    </div>
+
+                    <button 
+                        onClick={() => setIsAddCatModalOpen(true)}
+                        className="w-full flex items-center justify-center py-2 bg-white border border-dashed border-gray-300 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all text-gray-500 text-[10px] font-bold uppercase mt-2"
+                    >
+                        <Plus size={12} className="mr-1" /> New
+                    </button>
                 </div>
-                ))}
-                <button onClick={handleQuickEntry} className="flex flex-col items-center justify-center p-3 md:p-4 bg-indigo-50 border-2 border-indigo-200 rounded-xl hover:bg-indigo-100 transition-all text-indigo-700 active:scale-95">
-                    <div className="p-1.5 md:p-2 rounded-full mb-1 md:mb-2 bg-indigo-200"><Zap size={16} /></div>
-                    <span className="text-sm md:text-base font-bold text-center">Quick Entry</span>
-                </button>
-                <button onClick={() => setIsAddCatModalOpen(true)} className="flex flex-col items-center justify-center p-3 md:p-4 bg-white border-2 border-dashed border-gray-300 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all text-gray-500"><Plus size={20} className="mb-1" /><span className="text-[10px] md:text-xs font-bold uppercase">New</span></button>
-            </div>
-            ) : (
-            <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden animate-fade-in ring-4 ring-blue-50/50">
-                <div className={`p-3 flex items-center justify-between ${activeCategory.label === '' ? 'bg-indigo-50 border-b border-indigo-100' : activeCategory.color}`}>
-                <div className="flex items-center space-x-2">
-                    <h3 className="font-bold flex items-center text-sm md:text-base text-gray-900">
-                        {activeCategory.label || "Quick Entry Mode"}
-                        {activeCategory.label !== '' && <span className="ml-2 text-xs font-normal opacity-75 border px-1 rounded border-current">{activeCategory.operation === 'add' ? '+' : activeCategory.operation === 'subtract' ? '-' : 'Ø'}</span>}
-                    </h3>
-                    <span className="text-[10px] md:text-xs opacity-50 px-2 py-0.5 bg-black/5 rounded-full">{activeColumn === 'main' ? 'Main' : activeColumn === 'col1' ? 'P1' : 'P2'}</span>
-                    {activeCategory.label === '' && <span className="text-[10px] font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded">Continuous</span>}
-                </div>
-                <button onClick={() => setActiveCategory(null)} className="p-1 hover:bg-black/10 rounded"><X size={20} /></button>
-                </div>
-                <form onSubmit={handleSubmit} className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                {activeCategory.label === '' && (
-                    <div className="md:col-span-2">
-                        {activeColumn === 'col1' ? (
-                            <div className="bg-gray-100 text-gray-600 p-2 rounded-lg text-center font-bold text-sm mb-2 border border-gray-200">(Ø) Note Mode (No Calculation)</div>
-                        ) : (
-                            <div className="flex space-x-2 mb-2">
-                                <button type="button" onClick={() => setCurrentOperation('add')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${currentOperation === 'add' ? 'bg-green-100 text-green-800 ring-2 ring-green-500' : 'bg-gray-100 text-gray-500'}`}>(+) Add</button>
-                                <button type="button" onClick={() => setCurrentOperation('subtract')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${currentOperation === 'subtract' ? 'bg-red-100 text-red-800 ring-2 ring-red-500' : 'bg-gray-100 text-gray-500'}`}>(-) Deduct</button>
-                                <button type="button" onClick={() => setCurrentOperation('none')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${currentOperation === 'none' ? 'bg-gray-200 text-gray-800 ring-2 ring-gray-500' : 'bg-gray-100 text-gray-500'}`}>(Ø) Note</button>
+            </aside>
+
+            {/* Main Content Area */}
+            <div className="flex-1 w-full min-w-0">
+                
+                {/* Entry Form (Top of ledger content) */}
+                {activeCategory && (
+                <div className="no-print mb-6 bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden animate-in slide-in-from-top-4 duration-300 ring-4 ring-blue-50/50">
+                    <div className={`p-3 flex items-center justify-between ${activeCategory.label === '' ? 'bg-indigo-50 border-b border-indigo-100' : activeCategory.color}`}>
+                        <div className="flex items-center space-x-2">
+                            <h3 className="font-bold flex items-center text-sm text-gray-900">
+                                {activeCategory.label || "Quick Entry Mode"}
+                                {activeCategory.label !== '' && <span className="ml-2 text-[10px] font-normal opacity-75 border px-1.5 rounded-md border-current">{activeCategory.operation === 'add' ? '+' : activeCategory.operation === 'subtract' ? '-' : 'Ø'}</span>}
+                            </h3>
+                            <span className="text-[10px] opacity-50 px-2 py-0.5 bg-black/5 rounded-full">{activeColumn === 'main' ? 'Main' : activeColumn === 'col1' ? 'P1' : 'P2'}</span>
+                        </div>
+                        <button onClick={() => setActiveCategory(null)} className="p-1 hover:bg-black/10 rounded-full"><X size={20} /></button>
+                    </div>
+                    <form onSubmit={handleSubmit} className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {activeCategory.label === '' && (
+                            <div className="md:col-span-2">
+                                {activeColumn === 'col1' ? <div className="bg-gray-100 text-gray-600 p-2 rounded-xl text-center font-bold text-xs mb-2 border border-gray-200">(Ø) Note Only Mode (No Calculation)</div> : (
+                                    <div className="flex space-x-2 mb-2">
+                                        <button type="button" onClick={() => setCurrentOperation('add')} className={`flex-1 py-1.5 rounded-lg font-bold text-xs ${currentOperation === 'add' ? 'bg-green-100 text-green-800 ring-2 ring-green-500' : 'bg-gray-100 text-gray-500'}`}>(+) Add</button>
+                                        <button type="button" onClick={() => setCurrentOperation('subtract')} className={`flex-1 py-1.5 rounded-lg font-bold text-xs ${currentOperation === 'subtract' ? 'bg-red-100 text-red-800 ring-2 ring-red-500' : 'bg-gray-100 text-gray-500'}`}>(-) Deduct</button>
+                                        <button type="button" onClick={() => setCurrentOperation('none')} className={`flex-1 py-1.5 rounded-lg font-bold text-xs ${currentOperation === 'none' ? 'bg-gray-200 text-gray-800 ring-2 ring-gray-500' : 'bg-gray-100 text-gray-500'}`}>(Ø) Note</button>
+                                    </div>
+                                )}
                             </div>
                         )}
-                    </div>
-                )}
-                <div className="md:col-span-2">
-                    <label className="text-xs font-bold text-gray-500 uppercase">Amount</label>
-                    <input ref={amountInputRef} autoFocus type="number" step="0.01" required value={amount} onChange={e => setAmount(e.target.value)} className="w-full mt-1 p-3 text-2xl font-mono border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="0.00"/>
-                </div>
-                <div>
-                    <label className="text-xs font-bold text-gray-500 uppercase">Note</label>
-                    <input type="text" value={description} onChange={e => setDescription(e.target.value)} className="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"/>
-                </div>
-                <div className="flex items-end">
-                    <button type="submit" className={`w-full py-3 rounded-lg text-white font-bold shadow-md active:scale-95 transition-transform ${activeCategory.label === '' ? (activeColumn === 'col1' ? 'bg-gray-600' : currentOperation === 'add' ? 'bg-green-600' : currentOperation === 'subtract' ? 'bg-red-600' : 'bg-gray-600') : (activeCategory.operation === 'add' ? 'bg-green-600' : activeCategory.operation === 'subtract' ? 'bg-red-600' : 'bg-gray-600')}`}>{activeCategory.label === '' ? 'Add & Continue' : `Confirm ${activeCategory.label}`}</button>
-                </div>
-                </form>
-            </div>
-            )}
-        </div>
-
-        <div className="flex flex-col md:flex-row gap-4 items-start relative">
-            <div className="hidden md:flex flex-col gap-2 no-print sticky top-24 z-30 w-24 shrink-0">
-                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 pl-1">Panels</div>
-                <button onClick={() => setActiveColumn('col1')} className={`px-3 py-2 text-[10px] font-bold rounded-lg text-left transition-all border ${activeColumn === 'col1' ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'}`}>Panel 1</button>
-                <button onClick={() => setActiveColumn('col2')} className={`px-3 py-2 text-[10px] font-bold rounded-lg text-left transition-all border ${activeColumn === 'col2' ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'}`}>Panel 2</button>
-                <button onClick={() => setActiveColumn('main')} className={`px-3 py-2 text-[10px] font-bold rounded-lg text-left transition-all border ${activeColumn === 'main' ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'}`}>Main</button>
-            </div>
-
-            <div id="printable-area" className="flex-1 w-full min-w-0">
-                <div className="bg-white border border-gray-200 shadow-sm min-h-[600px] relative text-lg font-serif">
-                    <div style={{ height: `${verticalPadding.top}px` }} className="relative group w-full no-print-bg">
-                        <div className="absolute bottom-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResizeVertical('top', e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div>
-                    </div>
-                    
-                    <div className="px-4 md:px-8 pb-2 md:pb-4 flex justify-between items-end mb-2 md:mb-4">
+                        <div className="md:col-span-2">
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Transaction Amount</label>
+                            <input ref={amountInputRef} autoFocus type="number" step="0.01" required value={amount} onChange={e => setAmount(e.target.value)} className="w-full p-3 text-2xl font-mono border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-inner" placeholder="0.00"/>
+                        </div>
                         <div>
-                            <h2 className="text-2xl md:text-4xl font-bold text-gray-900 uppercase tracking-widest">{client.name}</h2>
-                            {client.code && <p className="text-gray-600 mt-1 font-mono text-sm md:text-xl">{client.code}</p>}
+                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 block">Note / Ref</label>
+                            <input type="text" value={description} onChange={e => setDescription(e.target.value)} className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm"/>
                         </div>
-                        <div className="md:hidden text-right">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Viewing</span>
-                            <div className="text-sm font-bold text-blue-600 uppercase">{activeColumn === 'main' ? 'Main Ledger' : activeColumn === 'col1' ? 'Panel 1' : 'Panel 2'}</div>
+                        <div className="flex items-end">
+                            <button type="submit" className={`w-full py-3 rounded-xl text-white font-black text-sm shadow-lg active:scale-95 transition-all ${activeCategory.label === '' ? (activeColumn === 'col1' ? 'bg-gray-700' : currentOperation === 'add' ? 'bg-green-600' : currentOperation === 'subtract' ? 'bg-red-600' : 'bg-gray-700') : (activeCategory.operation === 'add' ? 'bg-green-600' : activeCategory.operation === 'subtract' ? 'bg-red-600' : 'bg-gray-700')}`}>{activeCategory.label === '' ? 'Add & Continue' : `Confirm ${activeCategory.label}`}</button>
                         </div>
-                    </div>
+                    </form>
+                </div>
+                )}
 
-                    <div className="flex flex-col md:flex-row w-full min-h-[400px] relative" ref={containerRef}>
-                        <div className={`relative flex flex-col p-1 md:p-2 border-r border-transparent group ${activeColumn === 'col1' ? 'block w-full md:flex md:w-auto' : 'hidden md:flex'}`} style={{ width: window.innerWidth >= 768 ? `${colWidths[0]}%` : undefined, zIndex: 30 }}>
-                            <LedgerColumnView data={col1Ledger} footerLabel="收" columnType="col1"/>
-                            <div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print hidden md:flex" onMouseDown={(e) => startResizeCol(0, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div>
-                        </div>
-                        <div className={`relative flex flex-col p-1 md:p-2 border-r border-transparent group ${activeColumn === 'col2' ? 'block w-full md:flex md:w-auto' : 'hidden md:flex'}`} style={{ width: window.innerWidth >= 768 ? `${colWidths[1]}%` : undefined, zIndex: 20 }}>
-                            <LedgerColumnView data={col2Ledger} footerLabel="收" columnType="col2"/>
-                            <div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print hidden md:flex" onMouseDown={(e) => startResizeCol(1, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div>
-                        </div>
-                        <div className={`relative flex flex-col p-1 md:p-2 bg-gray-50/30 ${activeColumn === 'main' ? 'block w-full md:flex md:w-auto' : 'hidden md:flex'}`} style={{ width: window.innerWidth >= 768 ? `${colWidths[2]}%` : undefined, zIndex: 10 }}>
-                            <LedgerColumnView data={mainLedger} footerLabel="欠" columnType="main"/>
-                        </div>
+                {/* Mobile View Controls */}
+                <div className="lg:hidden flex flex-col gap-3 mb-6 no-print">
+                    <div className="flex bg-white rounded-xl p-1 border border-gray-200 shadow-sm">
+                        <button onClick={() => setActiveColumn('col1')} className={`flex-1 px-3 py-2 text-xs font-bold rounded-lg transition-all ${activeColumn === 'col1' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500'}`}>P1</button>
+                        <button onClick={() => setActiveColumn('col2')} className={`flex-1 px-3 py-2 text-xs font-bold rounded-lg transition-all ${activeColumn === 'col2' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500'}`}>P2</button>
+                        <button onClick={() => setActiveColumn('main')} className={`flex-1 px-3 py-2 text-xs font-bold rounded-lg transition-all ${activeColumn === 'main' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500'}`}>Main</button>
                     </div>
+                    {!activeCategory && (
+                        <div className="grid grid-cols-3 gap-2">
+                             <button onClick={handleQuickEntry} className="flex items-center justify-center p-2 bg-indigo-50 border border-indigo-200 rounded-xl text-indigo-700 text-xs font-bold"><Zap size={14} className="mr-1" /> Quick</button>
+                             {categories.slice(0, 5).filter(c => c.label !== '').map(cat => (
+                                 <button key={cat.id} onClick={() => handleCategorySelect(cat)} className={`px-3 py-2 border rounded-xl text-[10px] font-bold truncate ${cat.color}`}>{cat.label}</button>
+                             ))}
+                        </div>
+                    )}
+                </div>
 
-                    <div style={{ height: `${verticalPadding.bottom}px` }} className="relative group w-full mt-auto no-print-bg">
-                        <div className="absolute top-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResizeVertical('bottom', e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div>
+                {/* The Ledger Paper */}
+                <div id="printable-area" className="flex-1 w-full min-w-0">
+                    <div className="bg-white border border-gray-200 shadow-sm min-h-[600px] relative text-lg font-serif">
+                        <div style={{ height: `${verticalPadding.top}px` }} className="relative group w-full no-print-bg">
+                            <div className="absolute bottom-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResizeVertical('top', e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div>
+                        </div>
+                        
+                        <div className="px-4 md:px-8 pb-2 md:pb-4 flex justify-between items-end mb-2 md:mb-4">
+                            <div>
+                                <h2 className="text-2xl md:text-4xl font-bold text-gray-900 uppercase tracking-widest">{client.name}</h2>
+                                {client.code && <p className="text-gray-600 mt-1 font-mono text-sm md:text-xl">{client.code}</p>}
+                            </div>
+                            <div className="md:hidden text-right">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Viewing</span>
+                                <div className="text-sm font-bold text-blue-600 uppercase">{activeColumn === 'main' ? 'Main Ledger' : activeColumn === 'col1' ? 'Panel 1' : 'Panel 2'}</div>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col md:flex-row w-full min-h-[400px] relative" ref={containerRef}>
+                            <div className={`relative flex flex-col p-1 md:p-2 border-r border-transparent group ${activeColumn === 'col1' ? 'block w-full md:flex md:w-auto' : 'hidden md:flex'}`} style={{ width: window.innerWidth >= 1024 ? `${colWidths[0]}%` : undefined }}>
+                                <LedgerColumnView data={col1Ledger} footerLabel="收" columnType="col1"/>
+                                <div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print hidden md:flex" onMouseDown={(e) => startResizeCol(0, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div>
+                            </div>
+                            <div className={`relative flex flex-col p-1 md:p-2 border-r border-transparent group ${activeColumn === 'col2' ? 'block w-full md:flex md:w-auto' : 'hidden md:flex'}`} style={{ width: window.innerWidth >= 1024 ? `${colWidths[1]}%` : undefined }}>
+                                <LedgerColumnView data={col2Ledger} footerLabel="收" columnType="col2"/>
+                                <div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print hidden md:flex" onMouseDown={(e) => startResizeCol(1, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div>
+                            </div>
+                            <div className={`relative flex flex-col p-1 md:p-2 bg-gray-50/30 ${activeColumn === 'main' ? 'block w-full md:flex md:w-auto' : 'hidden md:flex'}`} style={{ width: window.innerWidth >= 1024 ? `${colWidths[2]}%` : undefined }}>
+                                <LedgerColumnView data={mainLedger} footerLabel="欠" columnType="main"/>
+                            </div>
+                        </div>
+
+                        <div style={{ height: `${verticalPadding.bottom}px` }} className="relative group w-full mt-auto no-print-bg">
+                            <div className="absolute top-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResizeVertical('bottom', e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -705,7 +735,7 @@ const ClientLedger: React.FC = () => {
 
       {confirmModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4 no-print font-sans">
-              <div className="bg-white rounded-xl shadow-xl w-full max-w-xs p-6 animate-in fade-in zoom-in duration-200">
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 animate-in fade-in zoom-in duration-200">
                   <div className={`flex items-center justify-center w-12 h-12 rounded-full mb-4 mx-auto ${confirmModal.type === 'PRINT_ERROR' ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'}`}>{confirmModal.type === 'PRINT_ERROR' ? <Printer size={24} /> : <AlertTriangle size={24} />}</div>
                   <h3 className="text-xl font-bold text-center text-gray-900 mb-2">{confirmModal.title}</h3>
                   <p className="text-center text-gray-500 mb-6">{confirmModal.message}</p>
