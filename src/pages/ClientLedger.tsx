@@ -22,6 +22,16 @@ import { getWeeksForMonth, getWeekRangeString, MONTH_NAMES } from '../utils/repo
 
 type LedgerColumn = 'main' | 'col1' | 'col2';
 
+interface WinningLineData {
+    sides: string;
+    number: string;
+    big: string;
+    small: string;
+    win: string;
+    type: string;
+    pos: string;
+}
+
 const ClientLedger: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { currentDate, setCurrentDate } = useGlobalState();
@@ -43,6 +53,10 @@ const ClientLedger: React.FC = () => {
   const [newCatOp, setNewCatOp] = useState<'add'|'subtract'|'none'>('subtract');
   const [editingRecord, setEditingRecord] = useState<LedgerRecord | null>(null);
   const [draggedCatIndex, setDraggedCatIndex] = useState<number | null>(null);
+
+  // Structured Edit State for Winnings
+  const [editWinDate, setEditWinDate] = useState('');
+  const [editWinLines, setEditWinLines] = useState<WinningLineData[]>([]);
 
   const [colWidths, setColWidths] = useState<number[]>([33.33, 33.33, 33.34]);
   const [verticalPadding, setVerticalPadding] = useState<{top: number, bottom: number}>({ top: 40, bottom: 40 });
@@ -281,11 +295,24 @@ const ClientLedger: React.FC = () => {
 
   const handleUpdateRecord = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingRecord) {
-      await updateLedgerRecord(editingRecord.id, { amount: editingRecord.amount, description: editingRecord.description, operation: editingRecord.operation, date: editingRecord.date, isVisible: editingRecord.isVisible, column: editingRecord.column });
-      loadRecords();
-      setEditingRecord(null);
+    if (!editingRecord) return;
+    
+    let finalDesc = editingRecord.description;
+    if (editingRecord.typeLabel === '中') {
+        const assembledLines = editWinLines.map(l => `${l.sides} ${l.number} - ${l.big} - ${l.small} - ${l.win} ${l.type} (${l.pos})`).join('; ');
+        finalDesc = `${editWinDate} ${assembledLines}`.trim();
     }
+
+    await updateLedgerRecord(editingRecord.id, { 
+        amount: editingRecord.amount, 
+        description: finalDesc, 
+        operation: editingRecord.operation, 
+        date: editingRecord.date, 
+        isVisible: editingRecord.isVisible, 
+        column: editingRecord.column 
+    });
+    loadRecords();
+    setEditingRecord(null);
   };
 
   const calculateColumn = (columnKey: LedgerColumn) => {
@@ -300,7 +327,52 @@ const ClientLedger: React.FC = () => {
   const col1Ledger = useMemo(() => calculateColumn('col1'), [filteredRecords]);
   const col2Ledger = useMemo(() => calculateColumn('col2'), [filteredRecords]);
 
-  // Updated to accept undefined to fix TS2345
+  // Unified Winner Parser for Editor
+  const parseAllWinningDetails = (desc: string) => {
+      const safeDesc = desc || '';
+      const dateMatch = safeDesc.match(/^(\d{1,2}[\/\.]\d{1,2})\s+(.*)/);
+      const dateStr = dateMatch ? dateMatch[1] : '';
+      const content = dateMatch ? dateMatch[2] : safeDesc;
+      const lines = content.split(/;\s*/).filter(Boolean);
+
+      const parsedLines: WinningLineData[] = lines.map(line => {
+          const parts = line.split(/\s+-\s+/);
+          let sides = '', num = '', big = '0', small = '0', win = '0', type = '', pos = '';
+          
+          if (parts.length >= 4) {
+              const headPart = parts[0].trim();
+              const headSplit = headPart.split(/\s+/);
+              sides = headSplit[0] || '';
+              num = headSplit[1] || '';
+              big = parts[1] || '0';
+              small = parts[2] || '0';
+              
+              const tail = parts[3].trim();
+              const tailSplit = tail.split(/\s+(.+)/);
+              win = tailSplit[0] || '0';
+              let restVal = tailSplit[1] || '';
+              const posMatch = restVal.match(/\((.)\)$/);
+              if (posMatch) {
+                  pos = posMatch[1];
+                  type = restVal.replace(/\s*\‍(.\‍)$/, '').trim();
+              } else {
+                  type = restVal;
+              }
+          }
+          return { sides, number: num, big, small, win, type, pos };
+      });
+      return { dateStr, parsedLines };
+  };
+
+  const startEditing = (record: LedgerRecord) => {
+      if (record.typeLabel === '中') {
+          const { dateStr, parsedLines } = parseAllWinningDetails(record.description);
+          setEditWinDate(dateStr);
+          setEditWinLines(parsedLines.length > 0 ? parsedLines : [{ sides: '', number: '', big: '0', small: '0', win: '0', type: 'ibox', pos: '头' }]);
+      }
+      setEditingRecord(record);
+  };
+
   const renderFormattedDescription = (text: string | undefined) => {
     if (!text) return null;
     const dateMatch = text.match(/^(\d{1,2}\/\d{1,2})\s+(.*)/);
@@ -315,86 +387,34 @@ const ClientLedger: React.FC = () => {
     return <span className="text-[11px] md:text-[16px] text-gray-700 font-bold leading-tight break-words whitespace-normal">{text}</span>;
   };
 
-  // Updated to accept undefined to fix TS2345
   const renderWinningContent = (description: string | undefined) => {
-    const safeDesc = description || '';
-    const dateMatch = safeDesc.match(/^(\d{1,2}[\/\.]\d{1,2})\s+(.*)/);
-    const date = dateMatch ? dateMatch[1] : '';
-    const content = dateMatch ? dateMatch[2] : safeDesc;
+    const { dateStr, parsedLines } = parseAllWinningDetails(description || '');
     
-    const lines = content.split(/;\s*/).filter(Boolean);
-    
-    // Helper to parse line
-    const parseWinningLine = (line: string) => {
-        const parts = line.split(/\s+-\s+/);
-        let head = '', bet = '', win = '', rest = '', position = '';
-        
-        const processTail = (tail: string) => {
-            const tailSplit = tail.trim().split(/\s+(.+)/);
-            const winVal = tailSplit[0];
-            let restVal = tailSplit[1] || '';
-            const posMatch = restVal.match(/\((.)\)$/);
-            let posVal = '';
-            if (posMatch) {
-                posVal = posMatch[1];
-                restVal = restVal.replace(/\s*\‍(.\‍)$/, '').trim();
-            }
-            return { win: winVal, rest: restVal, position: posVal };
-        };
-
-        if (parts.length >= 4) {
-            const [h, big, small, tail] = parts;
-            head = h;
-            // UPDATE: Bet format to "10 - 10" instead of "10/10"
-            bet = `${big} - ${small}`;
-            const processed = processTail(tail);
-            win = processed.win;
-            rest = processed.rest;
-            position = processed.position;
-            return { valid: true, head, bet, win, rest, position };
-        }
-        if (parts.length === 3) {
-            const [h, b, tail] = parts;
-            head = h;
-            bet = b;
-            const processed = processTail(tail);
-            win = processed.win;
-            rest = processed.rest;
-            position = processed.position;
-            return { valid: true, head, bet, win, rest, position };
-        }
-        return { valid: false, text: line };
-    };
-
     return (
         <div className="flex flex-col w-full min-w-0 pt-0.5">
             <div className="flex items-start gap-1">
-                {date && <span className="text-[10px] md:text-[11px] font-mono text-gray-400 shrink-0 select-none pt-1 w-[32px] text-left">{date}</span>}
+                {dateStr && <span className="text-[10px] md:text-[11px] font-mono text-gray-400 shrink-0 select-none pt-1 w-[32px] text-left">{dateStr}</span>}
                 <div className="flex flex-col w-full min-w-0 gap-1.5">
-                    {lines.map((line, i) => {
-                        const parsed = parseWinningLine(line);
-                        if (parsed.valid) {
-                            const isTop3 = ['头','二','三','1','2','3'].includes(parsed.position || '');
-                            return (
-                                <div key={i} className="flex items-center text-[11px] md:text-sm text-gray-800 leading-none py-0.5">
-                                    {parsed.position && (
-                                        <div className={`
-                                            w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold mr-2 shadow-sm shrink-0
-                                            ${isTop3 ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' : 'bg-blue-50 text-blue-700 border border-blue-100'}
-                                        `}>
-                                            {parsed.position}
-                                        </div>
-                                    )}
-                                    <span className="font-bold w-[75px] md:w-[90px] shrink-0 truncate mr-1 font-mono tracking-tight">{parsed.head}</span>
-                                    <span className="text-gray-500 w-[60px] shrink-0 text-center mr-2 font-mono tracking-tighter text-[10px] md:text-xs bg-gray-50 rounded-sm py-0.5 border border-gray-100">{parsed.bet}</span>
-                                    <span className="text-gray-400 text-[9px] md:text-[10px] truncate uppercase font-bold mr-auto tracking-wide">{parsed.rest}</span>
-                                    <span className="text-red-600 font-black shrink-0 text-right font-mono text-[14px] md:text-[18px] ml-2 tracking-tight">
-                                        {parsed.win}
-                                    </span>
-                                </div>
-                            );
-                        }
-                        return <div key={i} className="text-[10px] md:text-sm text-gray-600 truncate">{line}</div>;
+                    {parsedLines.map((line, i) => {
+                        const isTop3 = ['头','二','三','1','2','3'].includes(line.pos);
+                        return (
+                            <div key={i} className="flex items-center text-[11px] md:text-sm text-gray-800 leading-none py-0.5 w-full">
+                                {line.pos && (
+                                    <div className={`
+                                        w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold mr-2 shadow-sm shrink-0
+                                        ${isTop3 ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' : 'bg-blue-50 text-blue-700 border border-blue-100'}
+                                    `}>
+                                        {line.pos}
+                                    </div>
+                                )}
+                                <span className="font-bold w-[75px] md:w-[90px] shrink-0 truncate mr-1 font-mono tracking-tight uppercase">{line.sides} {line.number}</span>
+                                <span className="text-gray-500 w-[60px] shrink-0 text-center mr-2 font-mono tracking-tighter text-[10px] md:text-xs bg-gray-50 rounded-sm py-0.5 border border-gray-100">{line.big} - {line.small}</span>
+                                <span className="text-gray-400 text-[9px] md:text-[10px] truncate uppercase font-bold mr-auto tracking-wide">{line.type}</span>
+                                <span className="text-red-600 font-black shrink-0 text-right font-mono text-[14px] md:text-[18px] ml-2 tracking-tight">
+                                    {line.win}
+                                </span>
+                            </div>
+                        );
                     })}
                 </div>
             </div>
@@ -423,7 +443,7 @@ const ClientLedger: React.FC = () => {
                     return (
                     <div key={r.id} className={`group flex items-start py-1 relative gap-1 md:gap-2 w-full ${!r.isVisible ? 'opacity-30 grayscale no-print' : ''}`}>
                         <div className="no-print opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1 absolute -left-10 md:-left-12 top-0.5 z-10 bg-white shadow-sm rounded border border-gray-100 p-1">
-                            <button onClick={() => setEditingRecord(r)} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Pencil size={12} /></button>
+                            <button onClick={() => startEditing(r)} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Pencil size={12} /></button>
                             <button onClick={() => requestDeleteRecord(r.id)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 size={12} /></button>
                         </div>
 
@@ -431,15 +451,14 @@ const ClientLedger: React.FC = () => {
                             <div className="text-sm md:text-xl font-bold uppercase tracking-wide text-gray-600 min-w-[20px] md:min-w-[32px] shrink-0 text-center leading-tight pt-0.5">
                                 {isPanelWin ? '' : r.typeLabel}
                             </div>
-                            <div className="flex-1 px-1.5 min-w-0">
+                            <div className="flex-1 px-1.5 min-w-0 overflow-hidden">
                                 {isWinning 
                                     ? renderWinningContent(r.description) 
                                     : renderFormattedDescription(r.description)
                                 }
                             </div>
                             
-                            {/* Always show the Amount column to ensure alignment, even for winning records */}
-                            <div className={`text-base md:text-2xl font-mono font-bold shrink-0 min-w-[120px] md:min-w-[160px] text-right leading-none pl-2 pt-0.5 ${
+                            <div className={`text-base md:text-2xl font-mono font-bold shrink-0 min-w-[120px] md:w-[160px] text-right leading-none pl-2 pt-0.5 ${
                                 r.operation === 'add' ? 'text-green-700' : 
                                 r.operation === 'subtract' ? (isMain ? 'text-red-700' : 'text-gray-900') : 
                                 'text-gray-600'
@@ -652,19 +671,87 @@ const ClientLedger: React.FC = () => {
       )}
 
       {editingRecord && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 no-print font-sans">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 no-print font-sans overflow-y-auto">
+            <div className={`bg-white rounded-xl shadow-xl w-full p-6 my-8 mx-auto ${editingRecord.typeLabel === '中' ? 'max-w-4xl' : 'max-w-md'}`}>
                 <div className="flex justify-between items-center mb-6"><h2 className="text-xl font-bold">Edit Transaction</h2><button onClick={() => setEditingRecord(null)} className="text-gray-400 hover:text-gray-600"><X size={24} /></button></div>
                 <form onSubmit={handleUpdateRecord} className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="col-span-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="md:col-span-2">
                              <label className="block text-sm font-medium text-gray-700 mb-1">Column</label>
                              <div className="grid grid-cols-3 gap-2"><button type="button" onClick={() => setEditingRecord({...editingRecord, column: 'col1'})} className={`py-1 px-2 text-xs rounded border ${editingRecord.column === 'col1' ? 'bg-blue-100 border-blue-500' : 'border-gray-200'}`}>Panel 1</button><button type="button" onClick={() => setEditingRecord({...editingRecord, column: 'col2'})} className={`py-1 px-2 text-xs rounded border ${editingRecord.column === 'col2' ? 'bg-blue-100 border-blue-500' : 'border-gray-200'}`}>Panel 2</button><button type="button" onClick={() => setEditingRecord({...editingRecord, column: 'main'})} className={`py-1 px-2 text-xs rounded border ${editingRecord.column === 'main' ? 'bg-blue-100 border-blue-500' : 'border-gray-200'}`}>Main</button></div>
                         </div>
-                        <div className="col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">Type</label><div className={`px-4 py-2 rounded-lg text-center font-bold text-sm ${editingRecord.operation === 'add' ? 'bg-green-100 text-green-800' : editingRecord.operation === 'subtract' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>{editingRecord.typeLabel}</div></div>
-                        <div className="col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">Amount</label><input type="number" step="0.01" required value={editingRecord.amount} onChange={e => setEditingRecord({...editingRecord, amount: parseFloat(e.target.value)})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
-                        <div className="col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">Note</label><input type="text" value={editingRecord.description} onChange={e => setEditingRecord({...editingRecord, description: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
-                        <div className="col-span-2"><label className="flex items-center space-x-2 mt-2"><input type="checkbox" checked={editingRecord.isVisible} onChange={e => setEditingRecord({...editingRecord, isVisible: e.target.checked})} className="w-4 h-4 text-blue-600 rounded" /><span className="text-sm text-gray-700">Show on Statement</span></label></div>
+                        <div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">Type</label><div className={`px-4 py-2 rounded-lg text-center font-bold text-sm ${editingRecord.operation === 'add' ? 'bg-green-100 text-green-800' : editingRecord.operation === 'subtract' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>{editingRecord.typeLabel}</div></div>
+                        
+                        <div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">Total Amount</label><input type="number" step="0.01" required value={editingRecord.amount} onChange={e => setEditingRecord({...editingRecord, amount: parseFloat(e.target.value)})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" /></div>
+                        
+                        {editingRecord.typeLabel === '中' ? (
+                            <div className="md:col-span-2 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="font-bold text-gray-700 uppercase tracking-wider text-xs">Structured Winner Info</h3>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] text-gray-400 font-bold">DATE:</span>
+                                        <input type="text" value={editWinDate} onChange={e => setEditWinDate(e.target.value)} className="w-16 px-1.5 py-1 text-xs border rounded font-mono" placeholder="DD/MM" />
+                                    </div>
+                                </div>
+                                <div className="space-y-3">
+                                    {editWinLines.map((line, idx) => (
+                                        <div key={idx} className="flex flex-wrap md:flex-nowrap gap-2 items-end bg-white p-2 rounded border border-gray-100 shadow-sm relative">
+                                            <div className="flex-1 min-w-[60px]">
+                                                <label className="block text-[9px] text-gray-400 font-bold uppercase">Sides</label>
+                                                <input type="text" value={line.sides} onChange={e => {
+                                                    const nl = [...editWinLines]; nl[idx].sides = e.target.value.toUpperCase(); setEditWinLines(nl);
+                                                }} className="w-full px-2 py-1 text-xs border rounded uppercase font-mono" placeholder="MKT" />
+                                            </div>
+                                            <div className="flex-1 min-w-[70px]">
+                                                <label className="block text-[9px] text-gray-400 font-bold uppercase">Number</label>
+                                                <input type="text" value={line.number} onChange={e => {
+                                                    const nl = [...editWinLines]; nl[idx].number = e.target.value; setEditWinLines(nl);
+                                                }} className="w-full px-2 py-1 text-xs border rounded font-mono" placeholder="8888" />
+                                            </div>
+                                            <div className="w-12">
+                                                <label className="block text-[9px] text-gray-400 font-bold uppercase text-center">Big</label>
+                                                <input type="text" value={line.big} onChange={e => {
+                                                    const nl = [...editWinLines]; nl[idx].big = e.target.value; setEditWinLines(nl);
+                                                }} className="w-full px-1 py-1 text-xs border rounded text-center font-mono" />
+                                            </div>
+                                            <div className="w-12">
+                                                <label className="block text-[9px] text-gray-400 font-bold uppercase text-center">Small</label>
+                                                <input type="text" value={line.small} onChange={e => {
+                                                    const nl = [...editWinLines]; nl[idx].small = e.target.value; setEditWinLines(nl);
+                                                }} className="w-full px-1 py-1 text-xs border rounded text-center font-mono" />
+                                            </div>
+                                            <div className="w-20">
+                                                <label className="block text-[9px] text-gray-400 font-bold uppercase text-right">Win Amt</label>
+                                                <input type="text" value={line.win} onChange={e => {
+                                                    const nl = [...editWinLines]; nl[idx].win = e.target.value; setEditWinLines(nl);
+                                                }} className="w-full px-2 py-1 text-xs border rounded text-right font-bold text-red-600 font-mono" />
+                                            </div>
+                                            <div className="w-14">
+                                                <label className="block text-[9px] text-gray-400 font-bold uppercase text-center">Type</label>
+                                                <input type="text" value={line.type} onChange={e => {
+                                                    const nl = [...editWinLines]; nl[idx].type = e.target.value; setEditWinLines(nl);
+                                                }} className="w-full px-1 py-1 text-xs border rounded text-center font-mono" />
+                                            </div>
+                                            <div className="w-10">
+                                                <label className="block text-[9px] text-gray-400 font-bold uppercase text-center">Pos</label>
+                                                <input type="text" value={line.pos} onChange={e => {
+                                                    const nl = [...editWinLines]; nl[idx].pos = e.target.value; setEditWinLines(nl);
+                                                }} className="w-full px-1 py-1 text-xs border rounded text-center font-mono" />
+                                            </div>
+                                            <button type="button" onClick={() => setEditWinLines(editWinLines.filter((_, i) => i !== idx))} className="p-1.5 text-gray-400 hover:text-red-600 rounded bg-gray-50"><Trash2 size={14}/></button>
+                                        </div>
+                                    ))}
+                                    <button type="button" onClick={() => setEditWinLines([...editWinLines, { sides: '', number: '', big: '0', small: '0', win: '0', type: 'ibox', pos: '头' }])} className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:bg-white hover:border-gray-400 transition-all flex items-center justify-center text-xs font-bold uppercase"><Plus size={14} className="mr-2" /> Add Line</button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="md:col-span-2">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Note</label>
+                                <input type="text" value={editingRecord.description} onChange={e => setEditingRecord({...editingRecord, description: e.target.value})} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                            </div>
+                        )}
+
+                        <div className="md:col-span-2"><label className="flex items-center space-x-2 mt-2"><input type="checkbox" checked={editingRecord.isVisible} onChange={e => setEditingRecord({...editingRecord, isVisible: e.target.checked})} className="w-4 h-4 text-blue-600 rounded" /><span className="text-sm text-gray-700">Show on Statement</span></label></div>
                     </div>
                     <div className="flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-100"><button type="button" onClick={() => setEditingRecord(null)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button><button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"><Check size={18} className="mr-2" />Update</button></div>
                 </form>
