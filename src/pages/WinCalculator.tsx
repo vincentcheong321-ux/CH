@@ -353,7 +353,7 @@ const WinCalculator: React.FC = () => {
             if (e.betType === 'Small' || e.betType === '3ABC') acc[key].small += e.betAmount;
             acc[key].win += e.winAmount;
             return acc;
-        }, {} as Record<string, any>);
+        }, {} as Record<string, WinningEntry & { big: number; small: number; win: number }>);
 
         const description = Object.values(groupedMap)
             .map(e => {
@@ -430,7 +430,6 @@ const WinCalculator: React.FC = () => {
         setPreviewClientId(clientId);
     }, []);
 
-    // FIX: Removed undefined variables 'advances' and 'credits' from the dependency array.
     const handleListInputBlur = useCallback(async (clientId: string) => {
         if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
         blurTimeoutRef.current = setTimeout(() => {
