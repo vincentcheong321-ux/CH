@@ -345,7 +345,8 @@ const ClientLedger: React.FC = () => {
         if (parts.length >= 4) {
             const [h, big, small, tail] = parts;
             head = h;
-            bet = `${big}/${small}`;
+            // UPDATE: Bet format to "10 - 10" instead of "10/10"
+            bet = `${big} - ${small}`;
             const processed = processTail(tail);
             win = processed.win;
             rest = processed.rest;
@@ -385,7 +386,7 @@ const ClientLedger: React.FC = () => {
                                         </div>
                                     )}
                                     <span className="font-bold w-[75px] md:w-[90px] shrink-0 truncate mr-1 font-mono tracking-tight">{parsed.head}</span>
-                                    <span className="text-gray-500 w-[45px] shrink-0 text-center mr-2 font-mono tracking-tighter text-[10px] md:text-xs bg-gray-50 rounded-sm py-0.5 border border-gray-100">{parsed.bet}</span>
+                                    <span className="text-gray-500 w-[60px] shrink-0 text-center mr-2 font-mono tracking-tighter text-[10px] md:text-xs bg-gray-50 rounded-sm py-0.5 border border-gray-100">{parsed.bet}</span>
                                     <span className="text-gray-400 text-[9px] md:text-[10px] truncate uppercase font-bold mr-auto tracking-wide">{parsed.rest}</span>
                                     <span className="text-red-600 font-black shrink-0 text-right font-mono text-[14px] md:text-[18px] ml-2 tracking-tight">
                                         {parsed.win}
@@ -437,15 +438,14 @@ const ClientLedger: React.FC = () => {
                                 }
                             </div>
                             
-                            {!isWinning && (
-                                <div className={`text-base md:text-2xl font-mono font-bold shrink-0 min-w-[120px] md:min-w-[160px] text-right leading-none pl-2 pt-0.5 ${
-                                    r.operation === 'add' ? 'text-green-700' : 
-                                    r.operation === 'subtract' ? (isMain ? 'text-red-700' : 'text-gray-900') : 
-                                    'text-gray-600'
-                                }`}>
-                                    {r.operation === 'none' ? r.amount.toLocaleString(undefined, {minimumFractionDigits: 2}) : Math.abs(r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2})}
-                                </div>
-                            )}
+                            {/* Always show the Amount column to ensure alignment, even for winning records */}
+                            <div className={`text-base md:text-2xl font-mono font-bold shrink-0 min-w-[120px] md:min-w-[160px] text-right leading-none pl-2 pt-0.5 ${
+                                r.operation === 'add' ? 'text-green-700' : 
+                                r.operation === 'subtract' ? (isMain ? 'text-red-700' : 'text-gray-900') : 
+                                'text-gray-600'
+                            }`}>
+                                {r.operation === 'none' ? r.amount.toLocaleString(undefined, {minimumFractionDigits: 2}) : Math.abs(r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                            </div>
                         </div>
                     </div>
                 )})}

@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Calculator, Trophy, Plus, Trash2, Save, User, CheckCircle, Calendar, Layers, RefreshCw } from 'lucide-react';
@@ -380,7 +381,7 @@ const WinCalculator: React.FC = () => {
         await saveLedgerRecord({
             clientId: selectedClientId,
             date: selectedDate,
-            description: '', 
+            description: finalDescription, // Updated: Pass description to Main Ledger too
             typeLabel: '中',
             amount: totalWinnings,
             operation: 'subtract', 
