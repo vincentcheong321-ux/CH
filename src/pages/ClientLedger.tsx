@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Printer, Trash2, Plus, Minus, Pencil, X, Check, AlertTriangle, ExternalLink, GripHorizontal, Hash, Zap, ChevronLeft, ChevronRight, ImageDown } from 'lucide-react';
@@ -198,7 +197,8 @@ const ClientLedger: React.FC = () => {
   const handleQuickEntry = () => {
       const quickCat: TransactionCategory = { id: 'quick_entry', label: '', operation: 'add', color: 'bg-blue-600 text-white' };
       setActiveCategory(quickCat);
-      setCurrentOperation(activeColumn === 'col1' ? 'none' : 'add');
+      // Quick entry now defaults to 'add' for all panels, including Panel 1
+      setCurrentOperation('add');
       setAmount('');
       setDescription('');
   };
@@ -208,6 +208,8 @@ const ClientLedger: React.FC = () => {
     if (!id || !activeCategory || !amount) return;
     const val = parseFloat(amount);
     if (isNaN(val)) return;
+    
+    // Determine Operation: Use current toggle selection for Quick Entry (unnamed) buttons
     let op = activeCategory.label === '' ? currentOperation : activeCategory.operation;
 
     const entryDate = `${currentDate.getFullYear()}-${String(currentDate.getMonth()+1).padStart(2,'0')}-${String(currentDate.getDate()).padStart(2,'0')}`;
