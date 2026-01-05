@@ -424,7 +424,7 @@ const ClientLedger: React.FC = () => {
                              </div>
                         )}
 
-                        {/* Row 2: Details + Amount - Flex to stick amount to details */}
+                        {/* Row 2: Details + Amount - Flex to stick amount to details with min-w-max to prevent truncation */}
                         <div className="flex items-center gap-1 text-[13px] md:text-[15px] leading-none py-0.5 w-full whitespace-nowrap pl-1 min-w-max">
                             {/* Number */}
                             <div className="font-black text-gray-900 tracking-tighter shrink-0">
@@ -684,15 +684,15 @@ const ClientLedger: React.FC = () => {
                     </div>
 
                     <div className="flex flex-col md:flex-row w-full min-h-[400px] relative" ref={containerRef}>
-                        <div className={`relative flex flex-col p-1 md:p-2 border-r border-transparent group ${activeColumn === 'col1' ? 'block w-full md:flex md:w-auto' : 'hidden md:flex'}`} style={{ width: window.innerWidth >= 768 ? `${colWidths[0]}%` : undefined }}>
+                        <div className={`relative flex flex-col p-1 md:p-2 border-r border-transparent group ${activeColumn === 'col1' ? 'block w-full md:flex md:w-auto' : 'hidden md:flex'}`} style={{ width: window.innerWidth >= 768 ? `${colWidths[0]}%` : undefined, zIndex: 30 }}>
                             <LedgerColumnView data={col1Ledger} footerLabel="收" columnType="col1"/>
                             <div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print hidden md:flex" onMouseDown={(e) => startResizeCol(0, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div>
                         </div>
-                        <div className={`relative flex flex-col p-1 md:p-2 border-r border-transparent group ${activeColumn === 'col2' ? 'block w-full md:flex md:w-auto' : 'hidden md:flex'}`} style={{ width: window.innerWidth >= 768 ? `${colWidths[1]}%` : undefined }}>
+                        <div className={`relative flex flex-col p-1 md:p-2 border-r border-transparent group ${activeColumn === 'col2' ? 'block w-full md:flex md:w-auto' : 'hidden md:flex'}`} style={{ width: window.innerWidth >= 768 ? `${colWidths[1]}%` : undefined, zIndex: 20 }}>
                             <LedgerColumnView data={col2Ledger} footerLabel="收" columnType="col2"/>
                             <div className="absolute top-0 right-0 bottom-0 w-4 cursor-col-resize z-20 flex justify-center translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity no-print hidden md:flex" onMouseDown={(e) => startResizeCol(1, e)}><div className="w-0.5 h-full bg-blue-400/50" /></div>
                         </div>
-                        <div className={`relative flex flex-col p-1 md:p-2 bg-gray-50/30 ${activeColumn === 'main' ? 'block w-full md:flex md:w-auto' : 'hidden md:flex'}`} style={{ width: window.innerWidth >= 768 ? `${colWidths[2]}%` : undefined }}>
+                        <div className={`relative flex flex-col p-1 md:p-2 bg-gray-50/30 ${activeColumn === 'main' ? 'block w-full md:flex md:w-auto' : 'hidden md:flex'}`} style={{ width: window.innerWidth >= 768 ? `${colWidths[2]}%` : undefined, zIndex: 10 }}>
                             <LedgerColumnView data={mainLedger} footerLabel="欠" columnType="main"/>
                         </div>
                     </div>
