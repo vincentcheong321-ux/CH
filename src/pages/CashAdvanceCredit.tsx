@@ -260,11 +260,11 @@ const CashAdvanceCredit: React.FC = () => {
     };
 
     return (
-        <div className="flex flex-col lg:flex-row h-screen overflow-hidden bg-gray-50 relative">
+        <div className="flex flex-col lg:flex-row min-h-screen pb-20 relative">
             {previewClientId && <LedgerPreviewOverlay clientId={previewClientId} selectedDate={selectedDate} />}
 
             {/* Sidebar */}
-            <div className="lg:w-80 flex-shrink-0 no-print hidden lg:flex flex-col border-r border-gray-200 bg-white p-6 overflow-y-auto">
+            <div className="lg:w-80 flex-shrink-0 no-print hidden lg:flex flex-col border-r border-gray-200 bg-white p-6 overflow-y-auto h-screen sticky top-0">
                 <h1 className="text-2xl font-bold text-gray-800 mb-2 flex items-center">
                     <Repeat className="mr-2 text-blue-600" /> Advance & Credit
                 </h1>
@@ -292,10 +292,10 @@ const CashAdvanceCredit: React.FC = () => {
             </div>
 
             {/* Main Content Area */}
-            <div className="flex-1 flex flex-col min-w-0">
+            <div className="flex-1 flex flex-col">
                 
                 {/* Unified Header with Summary - Optimized for Mobile Layout */}
-                <div className="bg-white border-b border-gray-200 p-3 md:p-4 sticky top-0 z-40 shadow-sm">
+                <div className="bg-white border-b border-gray-200 p-3 md:p-4 sticky top-0 z-10 shadow-sm flex-shrink-0">
                     {/* Top Row for Mobile: Title + Month Nav */}
                     <div className="flex lg:hidden justify-between items-center mb-3">
                         <h1 className="text-lg font-bold text-gray-800 flex items-center">
@@ -311,7 +311,7 @@ const CashAdvanceCredit: React.FC = () => {
 
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         {/* Summary Cards Row */}
-                        <div className="flex items-center gap-3 overflow-x-auto no-scrollbar">
+                        <div className="flex items-center gap-3 overflow-x-auto no-scrollbar flex-shrink-0">
                              <div className="hidden lg:block mr-2">
                                 <h1 className="text-xl font-bold text-gray-800 flex items-center">
                                     <Repeat className="mr-2 text-blue-600" size={20} /> 
@@ -336,7 +336,7 @@ const CashAdvanceCredit: React.FC = () => {
                         </div>
 
                         {/* Auto Save Badge */}
-                        <div className="flex items-center justify-end">
+                        <div className="flex items-center justify-end flex-shrink-0">
                             <div className="flex items-center text-[10px] md:text-xs text-gray-500 bg-yellow-50 px-3 py-1.5 rounded-full border border-yellow-200 whitespace-nowrap">
                                 <Save size={14} className="mr-1.5" /> Auto-saves
                             </div>
@@ -345,12 +345,12 @@ const CashAdvanceCredit: React.FC = () => {
                 </div>
 
                 {/* Week Pills Mobile */}
-                <div className="bg-gray-50/95 backdrop-blur px-2 py-2 lg:hidden overflow-x-auto flex space-x-2 no-scrollbar border-b border-gray-200 sticky top-[108px] z-30 shadow-sm">
+                <div className="bg-gray-50/95 backdrop-blur px-2 py-2 lg:hidden overflow-x-auto flex space-x-2 no-scrollbar border-b border-gray-200 sticky top-[108px] z-10 shadow-sm flex-shrink-0">
                     {sortedWeeks.map(wn => {
                         const days = weekWeeks[wn];
                         const isActive = wn.toString() === activeWeekNum;
                         return (
-                            <button key={wn} onClick={() => handleDateClick(days[0])} className={`px-3 py-1.5 rounded-full text-[10px] font-bold whitespace-nowrap transition-all border ${isActive ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200'}`}>
+                            <button key={wn} onClick={() => handleDateClick(days[0])} className={`px-3 py-1.5 rounded-full text-[10px] font-bold whitespace-nowrap transition-all border flex-shrink-0 ${isActive ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-500 border-gray-200'}`}>
                                 W{sortedWeeks.indexOf(wn) + 1}: {getWeekRangeString(null, null, days)}
                             </button>
                         );
@@ -363,10 +363,10 @@ const CashAdvanceCredit: React.FC = () => {
                         <p>Select a date to start entering data.</p>
                     </div>
                 ) : (
-                    <div className="flex-1 flex overflow-hidden flex-col md:flex-row">
+                    <div className="flex-1 flex flex-col md:flex-row">
                         {/* Left Column: Advance */}
                         <div className="flex-1 flex flex-col border-r border-gray-200 bg-white min-w-0">
-                            <div className="p-3 bg-blue-50/50 border-b border-blue-100 flex items-center justify-between sticky top-0 z-20">
+                            <div className="p-3 bg-blue-50/50 border-b border-blue-100 flex items-center justify-between sticky top-0 z-0">
                                 <div className="flex items-center space-x-2">
                                     <div className="bg-blue-600 p-1.5 rounded-lg text-white shadow-sm"><Banknote size={16} /></div>
                                     <h3 className="font-bold text-blue-900 text-sm">Advance</h3>
@@ -374,7 +374,7 @@ const CashAdvanceCredit: React.FC = () => {
                                 <button onClick={() => setIsSelectingClient({ type: 'ADV' })} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-all flex items-center"><UserPlus size={14} className="mr-1"/> Add</button>
                             </div>
                             
-                            <div className="flex-1 overflow-y-auto">
+                            <div className="flex-1">
                                 {loading ? <div className="p-12 text-center text-gray-400 text-sm">Loading...</div> : (
                                     Object.keys(advances).length === 0 ? (
                                         <div className="p-8 text-center text-gray-300 italic text-xs">No advance records.</div>
@@ -402,7 +402,7 @@ const CashAdvanceCredit: React.FC = () => {
 
                         {/* Right Column: Credit */}
                         <div className="flex-1 flex flex-col bg-white min-w-0">
-                            <div className="p-3 bg-green-50/50 border-b border-green-100 flex items-center justify-between sticky top-0 z-20">
+                            <div className="p-3 bg-green-50/50 border-b border-green-100 flex items-center justify-between sticky top-0 z-0">
                                 <div className="flex items-center space-x-2">
                                     <div className="bg-green-600 p-1.5 rounded-lg text-white shadow-sm"><CreditCard size={16} /></div>
                                     <h3 className="font-bold text-green-900 text-sm">Credit</h3>
@@ -410,7 +410,7 @@ const CashAdvanceCredit: React.FC = () => {
                                 <button onClick={() => setIsSelectingClient({ type: 'CRED' })} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-all flex items-center"><UserPlus size={14} className="mr-1"/> Add</button>
                             </div>
 
-                            <div className="flex-1 overflow-y-auto">
+                            <div className="flex-1">
                                 {loading ? <div className="p-12 text-center text-gray-400 text-sm">Loading...</div> : (
                                     Object.keys(credits).length === 0 ? (
                                         <div className="p-8 text-center text-gray-300 italic text-xs">No credit records.</div>
