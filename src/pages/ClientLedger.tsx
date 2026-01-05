@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Printer, Trash2, Plus, Minus, Pencil, X, Check, AlertTriangle, ExternalLink, GripHorizontal, Hash, Zap, ChevronLeft, ChevronRight, ImageDown, Trash } from 'lucide-react';
+import { ArrowLeft, Printer, Trash2, Plus, Minus, Pencil, X, Check, AlertTriangle, ExternalLink, GripHorizontal, Hash, Zap, ChevronLeft, ChevronRight, ImageDown } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { 
   getClients, 
@@ -386,14 +387,6 @@ const ClientLedger: React.FC = () => {
   const col1Ledger = useMemo(() => calculateColumn('col1'), [filteredRecords]);
   const col2Ledger = useMemo(() => calculateColumn('col2'), [filteredRecords]);
 
-  const handleClearPanel1 = async () => {
-    if (!window.confirm("Delete ALL entries in Panel 1 for this week?")) return;
-    for (const r of col1Ledger.processed) {
-        await deleteLedgerRecord(r.id);
-    }
-    loadRecords();
-  };
-
   const renderFormattedDescription = (text: string | undefined) => {
     if (!text) return null;
     const dateMatch = text.match(/^(\d{1,2}\/\d{1,2})\s+(.*)/);
@@ -587,9 +580,9 @@ const ClientLedger: React.FC = () => {
                 {/* 1. Panel Section */}
                 <div className="space-y-2">
                     <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-200 pb-1 mb-2">View Panels</div>
-                    <button onClick={() => setActiveColumn('col1')} className={`w-full px-2 py-1.5 text-[10px] font-bold rounded-lg text-left transition-all border ${activeColumn === 'col1' ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'}`}>Panel 1</button>
-                    <button onClick={() => setActiveColumn('col2')} className={`w-full px-2 py-1.5 text-[10px] font-bold rounded-lg text-left transition-all border ${activeColumn === 'col2' ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'}`}>Panel 2</button>
-                    <button onClick={() => setActiveColumn('main')} className={`w-full px-2 py-1.5 text-[10px] font-bold rounded-lg text-left transition-all border ${activeColumn === 'main' ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'}`}>Main Ledger</button>
+                    <button onClick={() => setActiveColumn('col1')} className={`w-full px-3 py-2 text-[11px] font-bold rounded-xl text-left transition-all border ${activeColumn === 'col1' ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'}`}>Panel 1</button>
+                    <button onClick={() => setActiveColumn('col2')} className={`w-full px-3 py-2 text-[11px] font-bold rounded-xl text-left transition-all border ${activeColumn === 'col2' ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'}`}>Panel 2</button>
+                    <button onClick={() => setActiveColumn('main')} className={`w-full px-3 py-2 text-[11px] font-bold rounded-xl text-left transition-all border ${activeColumn === 'main' ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'}`}>Main Ledger</button>
                 </div>
 
                 {/* 2. Quick Actions */}
@@ -597,42 +590,32 @@ const ClientLedger: React.FC = () => {
                     <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-200 pb-1 mb-2">Categories</div>
                     <button 
                         onClick={handleQuickEntry}
-                        className="w-full flex items-center px-2 py-1.5 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-all text-indigo-700 text-[10px] font-bold shadow-sm"
+                        className="w-full flex items-center px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-xl hover:bg-indigo-100 transition-all text-indigo-700 text-[11px] font-bold shadow-sm"
                     >
-                        <Zap size={12} className="mr-1.5" /> Quick Entry
+                        <Zap size={14} className="mr-2" /> Quick Entry
                     </button>
                     
-                    <div className="grid grid-cols-1 gap-1 mt-2">
+                    <div className="grid grid-cols-1 gap-1.5 mt-2">
                         {categories.filter(c => c.label !== '').map((cat, index) => (
                             <div key={cat.id} className="relative group">
                                 <button 
                                     onClick={() => handleCategorySelect(cat)}
-                                    className={`w-full flex items-center justify-between px-2 py-1.5 border rounded-lg transition-all shadow-sm active:scale-95 ${cat.color} text-[10px] font-bold ${cat.operation === 'add' ? 'border-green-100' : cat.operation === 'subtract' ? 'border-red-100' : 'border-gray-100'}`}
+                                    className={`w-full flex items-center justify-between px-3 py-2 border rounded-xl transition-all shadow-sm active:scale-95 ${cat.color} text-[11px] font-bold ${cat.operation === 'add' ? 'border-green-100' : cat.operation === 'subtract' ? 'border-red-100' : 'border-gray-100'}`}
                                 >
                                     <span className="truncate pr-1">{cat.label}</span>
-                                    {cat.operation === 'add' ? <Plus size={8} /> : cat.operation === 'subtract' ? <Minus size={8} /> : <Hash size={8} />}
+                                    {cat.operation === 'add' ? <Plus size={10} /> : cat.operation === 'subtract' ? <Minus size={10} /> : <Hash size={10} />}
                                 </button>
-                                <button onClick={(e) => requestDeleteCategory(e, cat.id)} className="absolute -top-1 -right-1 text-gray-400 hover:text-red-600 bg-white rounded-full p-0.5 shadow-md opacity-0 group-hover:opacity-100 transition-opacity"><X size={8} /></button>
+                                <button onClick={(e) => requestDeleteCategory(e, cat.id)} className="absolute -top-1 -right-1 text-gray-400 hover:text-red-600 bg-white rounded-full p-0.5 shadow-md opacity-0 group-hover:opacity-100 transition-opacity"><X size={10} /></button>
                             </div>
                         ))}
                     </div>
 
                     <button 
                         onClick={() => setIsAddCatModalOpen(true)}
-                        className="w-full flex items-center justify-center py-1.5 bg-white border border-dashed border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all text-gray-500 text-[9px] font-bold uppercase mt-2"
+                        className="w-full flex items-center justify-center py-2 bg-white border border-dashed border-gray-300 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all text-gray-500 text-[10px] font-bold uppercase mt-2"
                     >
-                        <Plus size={10} className="mr-1" /> New
+                        <Plus size={12} className="mr-1" /> New
                     </button>
-
-                    {/* NEW: Clear Panel 1 Button */}
-                    {activeColumn === 'col1' && col1Ledger.processed.length > 0 && (
-                        <button 
-                            onClick={handleClearPanel1}
-                            className="w-full flex items-center justify-center py-2 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-all text-red-600 text-[10px] font-bold uppercase mt-6 shadow-sm"
-                        >
-                            <Trash size={12} className="mr-1.5" /> Clear All P1
-                        </button>
-                    )}
                 </div>
             </aside>
 
