@@ -298,6 +298,7 @@ const ClientLedger: React.FC = () => {
       }
   };
 
+  // Unified Winner Parser for Editor and Viewer
   const parseAllWinningDetails = (desc: string) => {
       const safeDesc = desc || '';
       const dateMatch = safeDesc.match(/^(\d{1,2}[\/\.]\d{1,2})\s+(.*)/);
@@ -404,21 +405,25 @@ const ClientLedger: React.FC = () => {
         <div className="flex flex-col w-full min-w-0 pt-0.5 overflow-visible">
             <div className="flex items-start gap-1">
                 {dateStr && <span className="text-[10px] md:text-[11px] font-mono text-gray-400 shrink-0 select-none pt-1 w-[32px] text-left">{dateStr}</span>}
-                <div className="flex flex-col w-full min-w-0 gap-1 overflow-visible">
-                    {parsedLines.map((line, i) => (
-                        <div key={i} className="flex items-center text-[11px] md:text-sm text-gray-800 leading-none py-1 w-full relative h-6 font-mono">
-                            {/* Marker bubble removed as requested by user image */}
-                            <span className="font-bold w-[35px] md:w-[45px] shrink-0 text-gray-600 uppercase">{line.sides}</span>
-                            <span className="font-bold w-[45px] md:w-[55px] shrink-0 text-gray-900 tracking-wider">{line.number}</span>
-                            <span className="text-gray-400 w-[70px] md:w-[90px] shrink-0 text-center text-[9px] md:text-xs font-bold px-1">
-                                {line.big} - {line.small}
-                            </span>
-                            <span className="text-gray-400 text-[9px] md:text-[10px] uppercase font-bold w-[30px] md:w-[40px] shrink-0 truncate">{line.type}</span>
-                            <span className="text-red-600 font-black flex-1 text-right text-[12px] md:text-[16px] pr-2">
-                                {line.win}
-                            </span>
-                        </div>
-                    ))}
+                <div className="flex flex-col w-full min-w-0 gap-1.5 overflow-visible">
+                    {parsedLines.map((line, i) => {
+                        const isTop3 = ['头','二','三','1','2','3'].includes(line.pos);
+                        return (
+                            <div key={i} className="flex items-center text-[10px] md:text-sm text-gray-800 leading-none py-0.5 w-full relative h-6">
+                                {line.pos && (
+                                    <div className={`
+                                        w-4 h-4 md:w-5 md:h-5 rounded-full flex items-center justify-center text-[9px] md:text-[10px] font-bold mr-2 shadow-sm shrink-0
+                                        ${isTop3 ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' : 'bg-blue-50 text-blue-700 border border-blue-100'}
+                                    `}>
+                                        {line.pos}
+                                    </div>
+                                )}
+                                <span className="font-bold w-[65px] md:w-[85px] shrink-0 truncate mr-1 font-mono tracking-tight uppercase">{line.sides} {line.number}</span>
+                                <span className="text-gray-500 w-[55px] md:w-[65px] shrink-0 text-center mr-2 font-mono tracking-tighter text-[9px] md:text-xs bg-gray-50 rounded-sm py-0.5 border border-gray-100">{line.big} - {line.small}</span>
+                                <span className="text-gray-400 text-[8px] md:text-[10px] uppercase font-bold flex-1 truncate tracking-wide pr-1">{line.type}</span>
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
         </div>
@@ -451,19 +456,18 @@ const ClientLedger: React.FC = () => {
                             <button onClick={() => requestDeleteRecord(r.id)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 size={12} /></button>
                         </div>
 
-                        <div className="flex w-full items-start relative z-10 min-h-[24px]">
+                        <div className="flex w-full items-start relative z-10 overflow-hidden min-h-[24px]">
                             <div className="text-sm md:text-xl font-bold uppercase tracking-wide text-gray-600 min-w-[20px] md:min-w-[32px] shrink-0 text-center leading-tight pt-0.5">
                                 {hideLabel ? '' : r.typeLabel}
                             </div>
-                            <div className="flex-1 px-1 md:px-2 min-w-0 overflow-visible">
+                            <div className="flex-1 px-1.5 min-w-0 overflow-visible">
                                 {isWinning 
                                     ? renderWinningContent(r.description) 
                                     : renderFormattedDescription(r.description)
                                 }
                             </div>
                             
-                            {/* Fixed Width Amount column to prevent overlapping details on the left */}
-                            <div className={`text-base md:text-2xl font-mono font-bold shrink-0 w-[110px] md:w-[160px] text-right leading-none pl-2 pt-0.5 ${
+                            <div className={`text-base md:text-2xl font-mono font-bold shrink-0 min-w-[110px] md:w-[150px] text-right leading-none pl-2 pt-0.5 ${
                                 r.operation === 'add' ? 'text-green-700' : 
                                 r.operation === 'subtract' ? (isMain ? 'text-red-700' : 'text-gray-900') : 
                                 'text-gray-600'
