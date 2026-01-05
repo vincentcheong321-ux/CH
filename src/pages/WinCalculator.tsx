@@ -142,7 +142,7 @@ const ClientWinInputRow = React.memo(({
     client: Client, 
     value: string, 
     onChange: (id: string, val: string) => void, 
-    onBlur: (id: string) => void, 
+    onBlur: (id: string) => void,
     onFocus: (id: string) => void,
     navState: any
 }) => {
@@ -358,9 +358,9 @@ const WinCalculator: React.FC = () => {
         const description = Object.values(groupedMap)
             .map((e: WinningEntry & { big: number; small: number; win: number }) => {
                 const typeStr = e.playType === 'Box' ? 'ibox' : e.playType === 'Pau' ? '包' : '';
-                const winStr = Math.floor(e.win).toString(); // Robust integer for description
+                const winStr = Math.floor(e.win).toLocaleString();
                 const sidesStr = e.sides.join('');
-                // STRICT FORMAT: MKT 2323 - 10 - 10 - 1833 ibox (头)
+                // Format: MKT 2323 - 10- 10 - 1833 ibox (头)
                 return `${sidesStr} ${e.number} - ${e.big} - ${e.small} - ${winStr} ${typeStr} (${e.positionLabel})`.trim();
             })
             .join('; ');
@@ -381,7 +381,7 @@ const WinCalculator: React.FC = () => {
         await saveLedgerRecord({
             clientId: selectedClientId,
             date: selectedDate,
-            description: finalDescription, 
+            description: finalDescription, // Updated: Pass description to Main Ledger too
             typeLabel: '中',
             amount: totalWinnings,
             operation: 'subtract', 

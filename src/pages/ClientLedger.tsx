@@ -78,12 +78,7 @@ const ClientLedger: React.FC = () => {
   
   const selectedWeekNum = useMemo(() => {
       const todayStr = `${currentYear}-${String(currentMonth+1).padStart(2,'0')}-${String(currentDate.getDate()).padStart(2,'0')}`;
-      const foundWeek = Object.keys(weeksData).find(w => {
-          return weeksData[parseInt(w)].some(d => {
-              const dStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-              return dStr === todayStr;
-          });
-      });
+      const foundWeek = Object.keys(weeksData).find(w => weeksData[parseInt(w)].some(d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` === todayStr));
       return foundWeek ? parseInt(foundWeek) : 1;
   }, [weeksData, currentDate, currentYear, currentMonth]);
 
@@ -298,28 +293,27 @@ const ClientLedger: React.FC = () => {
       }
   };
 
-  // Unified Winner Parser for Editor and Viewer
+  // Unified Winner Parser for Editor
   const parseAllWinningDetails = (desc: string) => {
       const safeDesc = desc || '';
       const dateMatch = safeDesc.match(/^(\d{1,2}[\/\.]\d{1,2})\s+(.*)/);
       const dateStr = dateMatch ? dateMatch[1] : '';
       const content = dateMatch ? dateMatch[2] : safeDesc;
-      
       const lines = content.split(/;\s*/).filter(Boolean);
 
       const parsedLines: WinningLineData[] = lines.map(line => {
-          const parts = line.split('-').map(p => p.trim());
+          const parts = line.split(/\s+-\s+/);
           let sides = '', num = '', big = '0', small = '0', win = '0', type = '', pos = '';
           
           if (parts.length >= 4) {
-              const headPart = parts[0];
+              const headPart = parts[0].trim();
               const headSplit = headPart.split(/\s+/);
               sides = headSplit[0] || '';
               num = headSplit[1] || '';
               big = parts[1] || '0';
               small = parts[2] || '0';
               
-              const tail = parts[3];
+              const tail = parts[3].trim();
               const tailSplit = tail.split(/\s+(.+)/);
               win = tailSplit[0] || '0';
               let restVal = tailSplit[1] || '';
@@ -330,8 +324,6 @@ const ClientLedger: React.FC = () => {
               } else {
                   type = restVal;
               }
-          } else {
-              num = line;
           }
           return { sides, number: num, big, small, win, type, pos };
       });
@@ -402,25 +394,28 @@ const ClientLedger: React.FC = () => {
     const { dateStr, parsedLines } = parseAllWinningDetails(description || '');
     
     return (
-        <div className="flex flex-col w-full min-w-0 pt-0.5 overflow-visible">
+        <div className="flex flex-col w-full min-w-0 pt-0.5">
             <div className="flex items-start gap-1">
                 {dateStr && <span className="text-[10px] md:text-[11px] font-mono text-gray-400 shrink-0 select-none pt-1 w-[32px] text-left">{dateStr}</span>}
-                <div className="flex flex-col w-full min-w-0 gap-1.5 overflow-visible">
+                <div className="flex flex-col w-full min-w-0 gap-1.5">
                     {parsedLines.map((line, i) => {
                         const isTop3 = ['头','二','三','1','2','3'].includes(line.pos);
                         return (
-                            <div key={i} className="flex items-center text-[10px] md:text-sm text-gray-800 leading-none py-0.5 w-full relative h-6">
+                            <div key={i} className="flex items-center text-[11px] md:text-sm text-gray-800 leading-none py-0.5 w-full">
                                 {line.pos && (
                                     <div className={`
-                                        w-4 h-4 md:w-5 md:h-5 rounded-full flex items-center justify-center text-[9px] md:text-[10px] font-bold mr-2 shadow-sm shrink-0
+                                        w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold mr-2 shadow-sm shrink-0
                                         ${isTop3 ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' : 'bg-blue-50 text-blue-700 border border-blue-100'}
                                     `}>
                                         {line.pos}
                                     </div>
                                 )}
-                                <span className="font-bold w-[65px] md:w-[85px] shrink-0 truncate mr-1 font-mono tracking-tight uppercase">{line.sides} {line.number}</span>
-                                <span className="text-gray-500 w-[55px] md:w-[65px] shrink-0 text-center mr-2 font-mono tracking-tighter text-[9px] md:text-xs bg-gray-50 rounded-sm py-0.5 border border-gray-100">{line.big} - {line.small}</span>
-                                <span className="text-gray-400 text-[8px] md:text-[10px] uppercase font-bold flex-1 truncate tracking-wide pr-1">{line.type}</span>
+                                <span className="font-bold w-[75px] md:w-[90px] shrink-0 truncate mr-1 font-mono tracking-tight uppercase">{line.sides} {line.number}</span>
+                                <span className="text-gray-500 w-[60px] shrink-0 text-center mr-2 font-mono tracking-tighter text-[10px] md:text-xs bg-gray-50 rounded-sm py-0.5 border border-gray-100">{line.big} - {line.small}</span>
+                                <span className="text-gray-400 text-[9px] md:text-[10px] truncate uppercase font-bold mr-auto tracking-wide">{line.type}</span>
+                                <span className="text-red-600 font-black shrink-0 text-right font-mono text-[14px] md:text-[18px] ml-2 tracking-tight">
+                                    {line.win}
+                                </span>
                             </div>
                         );
                     })}
@@ -446,28 +441,28 @@ const ClientLedger: React.FC = () => {
           <div className="flex flex-col space-y-0.5 w-full">
                 {data.processed.map((r) => {
                     const isWinning = r.typeLabel === '中';
+                    // User Request: will not show 中 in panel 1 col1, only show in right main column
                     const hideLabel = isWinning && columnType === 'col1';
                     
                     return (
                     <div key={r.id} className={`group flex items-start py-1 relative gap-1 md:gap-2 w-full ${!r.isVisible ? 'opacity-30 grayscale no-print' : ''}`}>
-                        {/* Actions Overlay */}
-                        <div className="no-print opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1 absolute -left-10 md:-left-12 top-0.5 z-40 bg-white shadow-sm rounded border border-gray-100 p-1">
+                        <div className="no-print opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1 absolute -left-10 md:-left-12 top-0.5 z-10 bg-white shadow-sm rounded border border-gray-100 p-1">
                             <button onClick={() => startEditing(r)} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Pencil size={12} /></button>
                             <button onClick={() => requestDeleteRecord(r.id)} className="p-1 text-red-600 hover:bg-red-50 rounded"><Trash2 size={12} /></button>
                         </div>
 
-                        <div className="flex w-full items-start relative z-10 overflow-hidden min-h-[24px]">
+                        <div className="flex w-full items-start">
                             <div className="text-sm md:text-xl font-bold uppercase tracking-wide text-gray-600 min-w-[20px] md:min-w-[32px] shrink-0 text-center leading-tight pt-0.5">
                                 {hideLabel ? '' : r.typeLabel}
                             </div>
-                            <div className="flex-1 px-1.5 min-w-0 overflow-visible">
+                            <div className="flex-1 px-1.5 min-w-0 overflow-hidden">
                                 {isWinning 
                                     ? renderWinningContent(r.description) 
                                     : renderFormattedDescription(r.description)
                                 }
                             </div>
                             
-                            <div className={`text-base md:text-2xl font-mono font-bold shrink-0 min-w-[110px] md:w-[150px] text-right leading-none pl-2 pt-0.5 ${
+                            <div className={`text-base md:text-2xl font-mono font-bold shrink-0 min-w-[120px] md:w-[160px] text-right leading-none pl-2 pt-0.5 ${
                                 r.operation === 'add' ? 'text-green-700' : 
                                 r.operation === 'subtract' ? (isMain ? 'text-red-700' : 'text-gray-900') : 
                                 'text-gray-600'
@@ -496,7 +491,7 @@ const ClientLedger: React.FC = () => {
 
   return (
     <div className="bg-gray-100 min-h-screen pb-20">
-      <div className="no-print bg-white sticky top-0 z-40 shadow-md">
+      <div className="no-print bg-white sticky top-0 z-20 shadow-md">
         <div className="flex items-center justify-between p-3 md:p-4 max-w-5xl mx-auto">
           <div className="flex items-center space-x-2 md:space-x-3">
             <Link to="/clients" className="p-2 hover:bg-gray-100 rounded-full text-gray-600 transition-colors">
