@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Printer, Trash2, Plus, Minus, Pencil, X, Check, AlertTriangle, ExternalLink, GripHorizontal, Hash, Zap, ChevronLeft, ChevronRight, ImageDown } from 'lucide-react';
@@ -401,7 +400,7 @@ const ClientLedger: React.FC = () => {
     return <span className="text-[11px] md:text-[16px] text-gray-700 font-bold leading-tight truncate">{text}</span>;
   };
 
-  const renderWinningContent = (description: string | undefined, totalAmount: number, showTotal: boolean) => {
+  const renderWinningContent = (description: string | undefined) => {
     const { dateStr, parsedLines } = parseAllWinningDetails(description || '');
     
     return (
@@ -440,14 +439,6 @@ const ClientLedger: React.FC = () => {
                     </div>
                 ))}
             </div>
-
-            {showTotal && (
-                <div className="mt-2 border-t border-black pt-1 flex justify-center w-full">
-                    <span className="text-xl md:text-4xl font-mono font-bold text-red-600 tracking-tight">
-                        {totalAmount.toLocaleString(undefined, {minimumFractionDigits: 3})}
-                    </span>
-                </div>
-            )}
         </div>
     );
   };
@@ -490,7 +481,7 @@ const ClientLedger: React.FC = () => {
                             <div className="flex-1 px-1 md:px-2 min-w-0 overflow-visible">
                                 {showDescription ? (
                                     isWinning 
-                                        ? renderWinningContent(r.description, r.amount, columnType === 'col1') 
+                                        ? renderWinningContent(r.description) 
                                         : renderFormattedDescription(r.description)
                                 ) : null}
                             </div>
@@ -732,6 +723,7 @@ const ClientLedger: React.FC = () => {
                         {editingRecord.typeLabel === '中' ? (
                             <div className="md:col-span-2 bg-gray-50 p-4 rounded-xl border border-gray-200">
                                 <div className="flex justify-between items-center mb-4">
+                                    {/* Fix: Added missing opening bracket for h3 tag */}
                                     <h3 className="font-bold text-gray-700 uppercase tracking-wider text-xs">Structured Winner Info</h3>
                                     <div className="flex items-center gap-2">
                                         <span className="text-[10px] text-gray-400 font-bold">DATE:</span>
