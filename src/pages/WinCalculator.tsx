@@ -61,7 +61,6 @@ const getPermutationCount = (str: string, mode: GameMode): number => {
 
 // Preview Component for showing weekly main ledger status
 const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, selectedDate: string }) => {
-    // ... (same as before)
     const [balance, setBalance] = useState<number | null>(null);
     const [dailyRecords, setDailyRecords] = useState<LedgerRecord[]>([]);
     const [loading, setLoading] = useState(true);
@@ -183,7 +182,6 @@ const WinCalculator: React.FC = () => {
     const navigate = useNavigate();
     const { currentDate, setCurrentDate } = useGlobalState();
     
-    // Format selectedDate from global context
     const currentYear = currentDate.getFullYear();
     const currentMonth = currentDate.getMonth();
     const selectedDate = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
@@ -205,7 +203,6 @@ const WinCalculator: React.FC = () => {
     const [clientWinnings, setClientWinnings] = useState<Record<string, string>>({});
     const [loadingList, setLoadingList] = useState(false);
     
-    // Preview Management
     const [previewClientId, setPreviewClientId] = useState<string | null>(null);
     const blurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -347,13 +344,13 @@ const WinCalculator: React.FC = () => {
 
         const description = entries
             .map(e => {
-                const typeStr = e.playType === 'Box' ? 'iBox' : e.playType === 'Pau' ? '包' : '';
-                const exactWinStr = e.winAmount.toFixed(2);
-                return `${e.sides.join('')} ${e.number}-${e.betAmount}-${exactWinStr} ${e.positionLabel} ${typeStr}`.trim();
+                const typeStr = e.playType === 'Box' ? 'ibox' : e.playType === 'Pau' ? '包' : '';
+                const exactWinStr = Math.floor(e.winAmount); // Floor to match image style or keep fraction? Image shows .00
+                return `${e.sides.join('')} ${e.number} - ${e.betAmount} - ${exactWinStr} ${typeStr} (${e.positionLabel})`.trim();
             })
             .join('; ');
 
-        const finalDescription = `${dateLabel} Winnings: ${description}`;
+        const finalDescription = `${dateLabel} ${description}`;
 
         await saveLedgerRecord({
             clientId: selectedClientId,
@@ -494,7 +491,6 @@ const WinCalculator: React.FC = () => {
     const totalDailyWinnings: number = (Object.values(clientWinnings) as string[]).reduce((acc: number, val: string) => acc + (parseFloat(val) || 0), 0);
 
     const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        // Parse "YYYY-MM-DD" back to Date
         const [y, m, d] = e.target.value.split('-').map(Number);
         if (y && m && d) {
             setCurrentDate(new Date(y, m - 1, d));
@@ -514,7 +510,6 @@ const WinCalculator: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                {/* Form Column - Made wider for inputs */}
                 <div className="lg:col-span-5 xl:col-span-5">
                      <div className="flex items-center space-x-3 mb-6">
                         <div className="bg-gradient-to-r from-red-500 to-orange-600 p-3 rounded-xl shadow-lg text-white"><Calculator size={24} /></div>
@@ -529,7 +524,7 @@ const WinCalculator: React.FC = () => {
                             <div className="flex bg-gray-100 p-1 rounded-lg">
                                 {['Straight', 'Box', 'Pau'].map((type) => (
                                     <button key={type} type="button" onClick={() => setPlayType(type as BetType)} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${playType === type ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}>
-                                        {type === 'Box' ? 'iBox' : type === 'Pau' ? '包' : 'Str'}
+                                        {type === 'Box' ? 'ibox' : type === 'Pau' ? '包' : 'Str'}
                                     </button>
                                 ))}
                             </div>
@@ -570,7 +565,6 @@ const WinCalculator: React.FC = () => {
                     </form>
                 </div>
 
-                {/* Results Column - Made wider for better readability */}
                 <div className="lg:col-span-7 xl:col-span-7 flex flex-col h-full">
                     <div className="bg-white p-6 rounded-2xl shadow-xl border border-gray-100 flex-1 flex flex-col">
                         <div className="flex justify-between items-center mb-4">
@@ -593,7 +587,7 @@ const WinCalculator: React.FC = () => {
                                                     <div className="font-mono text-3xl font-black text-gray-900 tracking-wider">{entry.number}</div>
                                                     <div className="flex items-center gap-3 mt-1">
                                                         <span className="text-sm font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded uppercase">{entry.sides.join('')}</span>
-                                                        <span className="text-sm text-gray-400 font-medium">Bet: ${entry.betAmount} {entry.playType !== 'Straight' ? `(${entry.playType === 'Box' ? 'iBox' : 'Pau'})` : ''}</span>
+                                                        <span className="text-sm text-gray-400 font-medium">Bet: ${entry.betAmount} {entry.playType !== 'Straight' ? `(${entry.playType === 'Box' ? 'ibox' : 'Pau'})` : ''}</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -632,7 +626,7 @@ const WinCalculator: React.FC = () => {
             <div className="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
                 <div className="p-8 border-b border-gray-50 flex flex-col md:flex-row justify-between items-center gap-6 bg-gray-50/50">
                     <div>
-                        <h2 className="text-2xl font-black text-gray-800 flex items-center uppercase tracking-tight"><Layers size={24} className="mr-3 text-blue-500" />Weekly Winnings Tracker</h2>
+                        <h2 className="text-2xl font-black text-gray-800 flex items-center uppercase tracking-tight"><Layers size={24} className="mr-3 text-blue-50" />Weekly Winnings Tracker</h2>
                         <div className="flex items-center mt-2"><p className="text-sm text-gray-500 font-medium">Tracking all payouts for period: <span className="font-bold text-gray-900 bg-white px-2 py-0.5 rounded border border-gray-200 ml-1">{weekLabel}</span></p></div>
                     </div>
                     <div className="text-right bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
@@ -671,7 +665,6 @@ const WinCalculator: React.FC = () => {
     );
 };
 
-// Helper for Loader2 missing import in context but used in string template above
 const Loader2 = ({ className, size, ...props }: any) => <RefreshCw className={`${className} animate-spin`} size={size} {...props} />;
 
 export default WinCalculator;
