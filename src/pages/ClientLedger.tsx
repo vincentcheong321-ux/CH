@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Printer, Trash2, Plus, Minus, Pencil, X, Check, AlertTriangle, ExternalLink, GripHorizontal, Hash, Zap, ChevronLeft, ChevronRight, ImageDown } from 'lucide-react';
@@ -405,53 +406,56 @@ const ClientLedger: React.FC = () => {
     
     return (
         <div className="flex flex-col w-full min-w-0 pt-0.5 overflow-visible font-mono">
-            {/* Date on Top */}
+            {/* Header Line with Date (only once) */}
             {dateStr && (
                 <div className="text-[10px] md:text-[11px] text-gray-400 select-none pb-0.5 pl-1 font-bold">
                     {dateStr}
                 </div>
             )}
             
-            <div className="flex flex-col w-full min-w-0 gap-0.5 overflow-visible">
+            <div className="flex flex-col w-full min-w-0 gap-1 overflow-visible">
                 {parsedLines.map((line, i) => (
-                    <div key={i} className="flex items-center gap-1 text-[12px] md:text-[13px] leading-none py-0.5 w-full whitespace-nowrap">
-                        {/* Sides */}
-                        <div className="w-[24px] font-extrabold text-gray-800 uppercase tracking-tighter text-left shrink-0">
-                            {line.sides}
-                        </div>
+                    <div key={i} className="flex flex-col w-full bg-white/50 rounded-sm">
                         
-                        {/* Number */}
-                        <div className="w-[34px] font-black text-gray-900 tracking-tighter text-center shrink-0">
-                            {line.number}
-                        </div>
-                        
-                        {/* Bet (Big-Small) */}
-                        <div className="w-[40px] text-gray-500 font-bold text-[10px] md:text-[11px] text-center tracking-tighter shrink-0">
-                            {line.big}-{line.small}
-                        </div>
-                        
-                        {/* Type */}
-                        <div className="w-[28px] text-gray-400 text-[9px] md:text-[10px] uppercase font-bold text-center truncate shrink-0">
-                            {line.type}
-                        </div>
-                        
-                        {/* Position in Circle */}
-                        <div className="w-[20px] flex justify-center shrink-0">
+                        {/* Row 1: Sides (if present) - Separate line for compactness */}
+                        {line.sides && (
+                             <div className="text-[11px] font-extrabold text-gray-800 uppercase tracking-tight leading-none pl-1">
+                                {line.sides}
+                             </div>
+                        )}
+
+                        {/* Row 2: Details + Amount - Flex to stick amount to details */}
+                        <div className="flex items-center gap-1.5 text-[13px] md:text-[15px] leading-none py-0.5 w-full whitespace-nowrap pl-1">
+                            {/* Number */}
+                            <div className="font-black text-gray-900 tracking-tighter">
+                                {line.number}
+                            </div>
+                            
+                            {/* Bet */}
+                            <div className="text-gray-500 font-bold text-[10px] md:text-[12px] tracking-tighter">
+                                {line.big}-{line.small}
+                            </div>
+                            
+                            {/* Type */}
+                            <div className="text-gray-400 text-[10px] md:text-[11px] uppercase font-bold">
+                                {line.type}
+                            </div>
+                            
+                            {/* Position */}
                             {line.pos && (
-                                <div className="w-4 h-4 rounded-full border border-gray-900 flex items-center justify-center bg-white shadow-sm">
+                                <div className="w-4 h-4 rounded-full border border-gray-900 flex items-center justify-center bg-white shadow-sm shrink-0">
                                     <span className="text-[9px] font-black text-gray-900 leading-none scale-90">
                                         {line.pos}
                                     </span>
                                 </div>
                             )}
-                        </div>
 
-                        {/* Dash Separator */}
-                        <div className="text-gray-300 px-1 font-light shrink-0">-</div>
+                            <div className="text-gray-300 font-light px-0.5">-</div>
 
-                        {/* Win Amount */}
-                        <div className="text-red-600 font-black text-base md:text-lg tracking-tighter shrink-0">
-                            {parseFloat(line.win) > 0 ? parseFloat(line.win).toLocaleString() : ''}
+                            {/* Win Amount - Stick to details, bold red */}
+                            <div className="text-red-600 font-black text-lg md:text-xl tracking-tighter">
+                                {parseFloat(line.win) > 0 ? parseFloat(line.win).toLocaleString() : ''}
+                            </div>
                         </div>
                     </div>
                 ))}
