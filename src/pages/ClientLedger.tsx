@@ -361,6 +361,7 @@ const ClientLedger: React.FC = () => {
 
   const LedgerColumnView = ({ data, footerLabel = "收" }: { data: ReturnType<typeof calculateColumn>, footerLabel?: string }) => {
       if (data.processed.length === 0) return <div className="flex-1 min-h-[50px]" />;
+      const isMain = footerLabel === '欠';
       const hasCalculableRecords = data.processed.some(r => r.isVisible && r.operation !== 'none');
       const isNegative = data.finalBalance < 0;
       let displayLabel = footerLabel;
@@ -377,7 +378,11 @@ const ClientLedger: React.FC = () => {
                     </div>
                     <div className="text-sm md:text-xl font-bold uppercase tracking-wide text-gray-600">{r.typeLabel}</div>
                     {r.description && <div className="text-xs md:text-sm text-gray-600 font-medium mr-1 md:mr-2 max-w-[100px] md:max-w-[150px] truncate">{r.description}</div>}
-                    <div className={`text-base md:text-2xl font-mono font-bold w-20 md:w-36 text-right ${r.operation === 'add' ? 'text-green-700' : r.operation === 'subtract' ? 'text-red-700' : 'text-gray-600'}`}>
+                    <div className={`text-base md:text-2xl font-mono font-bold w-20 md:w-36 text-right ${
+                        r.operation === 'add' ? 'text-green-700' : 
+                        r.operation === 'subtract' ? (isMain ? 'text-red-700' : 'text-gray-900') : 
+                        'text-gray-600'
+                    }`}>
                         {r.operation === 'none' ? r.amount.toLocaleString(undefined, {minimumFractionDigits: 2}) : Math.abs(r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2})}
                     </div>
                 </div>
@@ -545,7 +550,7 @@ const ClientLedger: React.FC = () => {
         <div className="flex flex-col md:flex-row gap-4 items-start relative">
             
             {/* Desktop Vertical Panel Selector Sidebar */}
-            <div className="hidden md:flex flex-col gap-2 no-print sticky top-24 z-10 w-24 shrink-0">
+            <div className="hidden md:flex flex-col gap-2 no-print sticky top-24 z-30 w-24 shrink-0">
                 <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 pl-1">Panels</div>
                 <button 
                     onClick={() => setActiveColumn('col1')} 
@@ -591,11 +596,9 @@ const ClientLedger: React.FC = () => {
 
                     {/* Ledger Content - Responsive Layout */}
                     <div className="flex flex-col md:flex-row w-full min-h-[400px] relative" ref={containerRef}>
-                        {/* Mobile Logic: On small screens, hide columns that are not active. On desktop (md), show all with set widths. */}
-                        
                         {/* Column 1 */}
                         <div 
-                            className={`relative flex flex-col p-1 md:p-2 border-r border-transparent group ${activeColumn === 'col1' ? 'block w-full' : 'hidden md:flex'}`}
+                            className={`relative flex flex-col p-1 md:p-2 border-r border-transparent group ${activeColumn === 'col1' ? 'block w-full md:flex md:w-auto' : 'hidden md:flex'}`}
                             style={{ width: window.innerWidth >= 768 ? `${colWidths[0]}%` : undefined }}
                         >
                             <LedgerColumnView data={col1Ledger} footerLabel="收"/>
@@ -604,7 +607,7 @@ const ClientLedger: React.FC = () => {
 
                         {/* Column 2 */}
                         <div 
-                            className={`relative flex flex-col p-1 md:p-2 border-r border-transparent group ${activeColumn === 'col2' ? 'block w-full' : 'hidden md:flex'}`}
+                            className={`relative flex flex-col p-1 md:p-2 border-r border-transparent group ${activeColumn === 'col2' ? 'block w-full md:flex md:w-auto' : 'hidden md:flex'}`}
                             style={{ width: window.innerWidth >= 768 ? `${colWidths[1]}%` : undefined }}
                         >
                             <LedgerColumnView data={col2Ledger} footerLabel="收"/>
@@ -613,7 +616,7 @@ const ClientLedger: React.FC = () => {
 
                         {/* Main Column */}
                         <div 
-                            className={`relative flex flex-col p-1 md:p-2 bg-gray-50/30 ${activeColumn === 'main' ? 'block w-full' : 'hidden md:flex'}`}
+                            className={`relative flex flex-col p-1 md:p-2 bg-gray-50/30 ${activeColumn === 'main' ? 'block w-full md:flex md:w-auto' : 'hidden md:flex'}`}
                             style={{ width: window.innerWidth >= 768 ? `${colWidths[2]}%` : undefined }}
                         >
                             <LedgerColumnView data={mainLedger} footerLabel="欠"/>
@@ -631,7 +634,7 @@ const ClientLedger: React.FC = () => {
 
        {isAddCatModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 no-print font-sans">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
+          <div className="bg-white rounded-xl shadow-xl w-full max-sm p-6">
             <h2 className="text-xl font-bold mb-4">Add Button Option</h2>
             <form onSubmit={handleAddCategory} className="space-y-4">
               <div><label className="block text-sm font-medium text-gray-700 mb-1">Button Name</label><input type="text" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value={newCatLabel} onChange={e => setNewCatLabel(e.target.value)} placeholder="e.g. Bonus" /></div>
