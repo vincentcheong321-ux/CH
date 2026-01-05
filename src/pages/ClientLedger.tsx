@@ -300,9 +300,8 @@ const ClientLedger: React.FC = () => {
   const col1Ledger = useMemo(() => calculateColumn('col1'), [filteredRecords]);
   const col2Ledger = useMemo(() => calculateColumn('col2'), [filteredRecords]);
 
-  // Standard formatter for regular descriptions
-  // Explicitly accepts string to avoid type errors, caller must ensure string
-  const renderFormattedDescription = (text: string) => {
+  // Updated to accept undefined to fix TS2345
+  const renderFormattedDescription = (text: string | undefined) => {
     if (!text) return null;
     const dateMatch = text.match(/^(\d{1,2}\/\d{1,2})\s+(.*)/);
     if (dateMatch) {
@@ -316,61 +315,56 @@ const ClientLedger: React.FC = () => {
     return <span className="text-[11px] md:text-[16px] text-gray-700 font-bold leading-tight break-words whitespace-normal">{text}</span>;
   };
 
-  // Special formatter for Winning descriptions
-  const parseWinningLine = (line: string) => {
-    const parts = line.split(/\s+-\s+/);
-    let head = '', bet = '', win = '', rest = '', position = '';
-    
-    // Helper to extract position from tail string like "1,833 ibox (头)"
-    const processTail = (tail: string) => {
-        const tailSplit = tail.trim().split(/\s+(.+)/);
-        const winVal = tailSplit[0];
-        let restVal = tailSplit[1] || '';
-        
-        // Extract (X) at the end
-        const posMatch = restVal.match(/\((.)\)$/);
-        let posVal = '';
-        if (posMatch) {
-            posVal = posMatch[1];
-            restVal = restVal.replace(/\s*\‍(.\‍)$/, '').trim();
-        }
-        return { win: winVal, rest: restVal, position: posVal };
-    };
-
-    if (parts.length >= 4) {
-        const [h, big, small, tail] = parts;
-        head = h;
-        bet = `${big}/${small}`;
-        const processed = processTail(tail);
-        win = processed.win;
-        rest = processed.rest;
-        position = processed.position;
-        return { valid: true, head, bet, win, rest, position };
-    }
-    
-    if (parts.length === 3) {
-        const [h, b, tail] = parts;
-        head = h;
-        bet = b;
-        const processed = processTail(tail);
-        win = processed.win;
-        rest = processed.rest;
-        position = processed.position;
-        return { valid: true, head, bet, win, rest, position };
-    }
-    
-    return { valid: false, text: line };
-  };
-
-  // Explicitly accepts string to avoid type errors
-  const renderWinningContent = (description: string) => {
-    const safeDesc = description;
+  // Updated to accept undefined to fix TS2345
+  const renderWinningContent = (description: string | undefined) => {
+    const safeDesc = description || '';
     const dateMatch = safeDesc.match(/^(\d{1,2}[\/\.]\d{1,2})\s+(.*)/);
     const date = dateMatch ? dateMatch[1] : '';
     const content = dateMatch ? dateMatch[2] : safeDesc;
     
     const lines = content.split(/;\s*/).filter(Boolean);
     
+    // Helper to parse line
+    const parseWinningLine = (line: string) => {
+        const parts = line.split(/\s+-\s+/);
+        let head = '', bet = '', win = '', rest = '', position = '';
+        
+        const processTail = (tail: string) => {
+            const tailSplit = tail.trim().split(/\s+(.+)/);
+            const winVal = tailSplit[0];
+            let restVal = tailSplit[1] || '';
+            const posMatch = restVal.match(/\((.)\)$/);
+            let posVal = '';
+            if (posMatch) {
+                posVal = posMatch[1];
+                restVal = restVal.replace(/\s*\‍(.\‍)$/, '').trim();
+            }
+            return { win: winVal, rest: restVal, position: posVal };
+        };
+
+        if (parts.length >= 4) {
+            const [h, big, small, tail] = parts;
+            head = h;
+            bet = `${big}/${small}`;
+            const processed = processTail(tail);
+            win = processed.win;
+            rest = processed.rest;
+            position = processed.position;
+            return { valid: true, head, bet, win, rest, position };
+        }
+        if (parts.length === 3) {
+            const [h, b, tail] = parts;
+            head = h;
+            bet = b;
+            const processed = processTail(tail);
+            win = processed.win;
+            rest = processed.rest;
+            position = processed.position;
+            return { valid: true, head, bet, win, rest, position };
+        }
+        return { valid: false, text: line };
+    };
+
     return (
         <div className="flex flex-col w-full min-w-0 pt-0.5">
             <div className="flex items-start gap-1">
@@ -379,10 +373,9 @@ const ClientLedger: React.FC = () => {
                     {lines.map((line, i) => {
                         const parsed = parseWinningLine(line);
                         if (parsed.valid) {
-                            const isTop3 = ['头','二','三','1','2','3'].includes(parsed.position);
+                            const isTop3 = ['头','二','三','1','2','3'].includes(parsed.position || '');
                             return (
                                 <div key={i} className="flex items-center text-[11px] md:text-sm text-gray-800 leading-none py-0.5">
-                                    {/* Logo Badge */}
                                     {parsed.position && (
                                         <div className={`
                                             w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold mr-2 shadow-sm shrink-0
@@ -391,13 +384,9 @@ const ClientLedger: React.FC = () => {
                                             {parsed.position}
                                         </div>
                                     )}
-                                    
                                     <span className="font-bold w-[75px] md:w-[90px] shrink-0 truncate mr-1 font-mono tracking-tight">{parsed.head}</span>
                                     <span className="text-gray-500 w-[45px] shrink-0 text-center mr-2 font-mono tracking-tighter text-[10px] md:text-xs bg-gray-50 rounded-sm py-0.5 border border-gray-100">{parsed.bet}</span>
-                                    
                                     <span className="text-gray-400 text-[9px] md:text-[10px] truncate uppercase font-bold mr-auto tracking-wide">{parsed.rest}</span>
-
-                                    {/* Win Amount inside the row */}
                                     <span className="text-red-600 font-black shrink-0 text-right font-mono text-[14px] md:text-[18px] ml-2 tracking-tight">
                                         {parsed.win}
                                     </span>
@@ -443,13 +432,11 @@ const ClientLedger: React.FC = () => {
                             </div>
                             <div className="flex-1 px-1.5 min-w-0">
                                 {isWinning 
-                                    ? renderWinningContent(r.description || '') 
-                                    : renderFormattedDescription(r.description || '')
+                                    ? renderWinningContent(r.description) 
+                                    : renderFormattedDescription(r.description)
                                 }
                             </div>
                             
-                            {/* Hide standard amount column for Winning records (since detailed breakdown shows amounts), 
-                                prevents overlap with long descriptions/winning details */}
                             {!isWinning && (
                                 <div className={`text-base md:text-2xl font-mono font-bold shrink-0 min-w-[120px] md:min-w-[160px] text-right leading-none pl-2 pt-0.5 ${
                                     r.operation === 'add' ? 'text-green-700' : 
