@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { 
   BarChart, 
@@ -169,7 +170,7 @@ const Dashboard: React.FC = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card 
-          title="Total Company Value" 
+          title="Total Company Balance" 
           value={stats.totalCompanyValue} 
           icon={Wallet} 
           color="text-white"

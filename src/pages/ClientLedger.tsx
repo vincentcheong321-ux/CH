@@ -361,7 +361,7 @@ const ClientLedger: React.FC = () => {
     return { valid: false, text: line };
   };
 
-  const renderWinningContent = (description: string) => {
+  const renderWinningContent = (description: string = '') => {
     const dateMatch = description.match(/^(\d{1,2}[\/\.]\d{1,2})\s+(.*)/);
     const date = dateMatch ? dateMatch[1] : '';
     const content = dateMatch ? dateMatch[2] : description;
@@ -440,12 +440,14 @@ const ClientLedger: React.FC = () => {
                             </div>
                             <div className="flex-1 px-1.5 min-w-0">
                                 {isWinning 
-                                    ? renderWinningContent(r.description) 
-                                    : renderFormattedDescription(r.description)
+                                    ? renderWinningContent(r.description || '') 
+                                    : renderFormattedDescription(r.description || '')
                                 }
                             </div>
                             
-                            {!isPanelWin && (
+                            {/* Hide standard amount column for Winning records (since detailed breakdown shows amounts), 
+                                prevents overlap with long descriptions/winning details */}
+                            {!isWinning && (
                                 <div className={`text-base md:text-2xl font-mono font-bold shrink-0 min-w-[120px] md:min-w-[160px] text-right leading-none pl-2 pt-0.5 ${
                                     r.operation === 'add' ? 'text-green-700' : 
                                     r.operation === 'subtract' ? (isMain ? 'text-red-700' : 'text-gray-900') : 
