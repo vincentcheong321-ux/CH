@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Printer, Trash2, Plus, Minus, Pencil, X, Check, AlertTriangle, ExternalLink, GripHorizontal, Hash, Zap, ChevronLeft, ChevronRight, ImageDown, Trash } from 'lucide-react';
@@ -408,8 +409,11 @@ const ClientLedger: React.FC = () => {
     return <span className="text-[11px] md:text-[16px] text-gray-700 font-bold leading-tight truncate">{text}</span>;
   };
 
-  const renderWinningContent = (description: string | undefined) => {
+  const renderWinningContent = (description: string | undefined, columnType?: LedgerColumn) => {
     const { dateStr, parsedLines } = parseAllWinningDetails(description || '');
+    
+    // Panel 1 needs strict alignment with the standard Amount column
+    const isPanel1 = columnType === 'col1';
     
     return (
         <div className="flex flex-col w-full min-w-0 pt-0.5 overflow-visible font-mono">
@@ -441,10 +445,11 @@ const ClientLedger: React.FC = () => {
                         </div>
 
                         {/* Spacious area for Win Amount - Shifted to ensure no truncation */}
-                        <div className="flex items-center justify-end flex-1 min-w-[60px] md:min-w-[100px] pr-1">
+                        {/* Modified for Panel 1 alignment */}
+                        <div className={`flex items-center justify-end pr-1 ${isPanel1 ? 'w-[110px] md:w-[160px] shrink-0' : 'flex-1 min-w-[60px] md:min-w-[100px]'}`}>
                             <span className="text-gray-300 px-1 font-light">-</span>
                             <span className="text-red-600 font-black text-right truncate text-lg md:text-3xl tracking-tighter">
-                                {parseFloat(line.win) > 0 ? parseFloat(line.win).toLocaleString() : ''}
+                                {parseFloat(line.win) > 0 ? parseFloat(line.win).toLocaleString(undefined, {minimumFractionDigits: 2}) : ''}
                             </span>
                         </div>
                     </div>
@@ -494,7 +499,7 @@ const ClientLedger: React.FC = () => {
                             <div className="flex-1 px-1 md:px-2 min-w-0 overflow-visible">
                                 {showDescription ? (
                                     isWinning 
-                                        ? renderWinningContent(r.description) 
+                                        ? renderWinningContent(r.description, columnType) 
                                         : renderFormattedDescription(r.description)
                                 ) : null}
                             </div>
