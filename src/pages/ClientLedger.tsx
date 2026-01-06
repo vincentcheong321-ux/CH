@@ -378,9 +378,21 @@ const ClientLedger: React.FC = () => {
 
   const calculateColumn = (columnKey: LedgerColumn) => {
       const colRecords = filteredRecords.filter(r => r.column === columnKey);
-      const processed = colRecords.map(r => ({ ...r, netChange: getNetAmount(r) }));
+      const clientCode = client?.code?.toUpperCase();
+      const isSpecialClient = clientCode === 'Z21' || clientCode === 'C19';
+
+      const processed = colRecords.map(r => {
+          const netChange = getNetAmount(r);
+          // NEW: For Z21 and C19 Panel 1, Quick Entries (empty label) should NOT be in calculation
+          const isCalculationExcluded = isSpecialClient && columnKey === 'col1' && r.typeLabel === '';
+          return { ...r, netChange, isCalculationExcluded };
+      });
+      
       const visibleProcessed = processed.filter(r => r.isVisible);
-      const finalBalance = visibleProcessed.reduce((acc, curr) => acc + curr.netChange, 0);
+      const finalBalance = visibleProcessed.reduce((acc, curr) => {
+          if (curr.isCalculationExcluded) return acc;
+          return acc + curr.netChange;
+      }, 0);
       return { processed, finalBalance };
   };
 
@@ -461,7 +473,7 @@ const ClientLedger: React.FC = () => {
   const LedgerColumnView = ({ data, footerLabel = "收", columnType }: { data: ReturnType<typeof calculateColumn>, footerLabel?: string, columnType: LedgerColumn }) => {
       if (data.processed.length === 0) return <div className="flex-1 min-h-[50px]" />;
       const isMain = footerLabel === '欠' || columnType === 'main';
-      const hasCalculableRecords = data.processed.some(r => r.isVisible && r.operation !== 'none');
+      const hasCalculableRecords = data.processed.some(r => r.isVisible && r.operation !== 'none' && !r.isCalculationExcluded);
       const isNegative = data.finalBalance < 0;
       
       let displayLabel = footerLabel;
@@ -472,12 +484,32 @@ const ClientLedger: React.FC = () => {
       return (
       <div className="flex flex-col w-full px-1">
           <div className="flex flex-col space-y-0.5 w-full">
-                {data.processed.map((r) => {
+                {data.processed.map((r, index) => {
                     const isWinning = r.typeLabel === '中';
                     const hideLabel = isWinning && columnType === 'col1';
                     const showDescription = !(isWinning && columnType === 'main');
                     const showAmountColumn = !(isWinning && columnType === 'col1');
                     
+                    let amountColorClass = 'text-gray-600';
+                    const clientCode = client?.code?.toUpperCase();
+
+                    if (r.isCalculationExcluded) {
+                        if (clientCode === 'C19') {
+                            amountColorClass = 'text-gray-900 font-bold'; // C19 = Always Black
+                        } else if (clientCode === 'Z21') {
+                            // Z21 = 1st record Gray, rest Black
+                            amountColorClass = index === 0 ? 'text-gray-400' : 'text-gray-900 font-bold';
+                        } else {
+                            amountColorClass = 'text-gray-400'; // Default gray for excluded
+                        }
+                    } else if (r.operation === 'none') {
+                        amountColorClass = 'text-gray-400';
+                    } else if (r.operation === 'add') {
+                        amountColorClass = 'text-green-700';
+                    } else if (r.operation === 'subtract') {
+                        amountColorClass = isMain ? 'text-red-700' : 'text-gray-900';
+                    }
+
                     return (
                     <div key={r.id} className={`group flex items-start py-1 relative gap-1 md:gap-2 w-full ${!r.isVisible ? 'opacity-30 grayscale no-print' : ''}`}>
                         <div className="no-print opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1 absolute -left-10 md:-left-12 top-0.5 z-40 bg-white shadow-sm rounded border border-gray-100 p-1">
@@ -498,12 +530,10 @@ const ClientLedger: React.FC = () => {
                             </div>
                             
                             {showAmountColumn ? (
-                                <div className={`text-base md:text-2xl font-mono font-bold shrink-0 w-[110px] md:w-[160px] text-right leading-none pl-2 pt-0.5 ${
-                                    r.operation === 'add' ? 'text-green-700' : 
-                                    r.operation === 'subtract' ? (isMain ? 'text-red-700' : 'text-gray-900') : 
-                                    'text-gray-600'
-                                }`}>
-                                    {r.operation === 'none' ? r.amount.toLocaleString(undefined, {minimumFractionDigits: 2}) : Math.abs(r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                <div className={`text-base md:text-2xl font-mono font-bold shrink-0 w-[110px] md:w-[160px] text-right leading-none pl-2 pt-0.5 ${amountColorClass}`}>
+                                    {r.isCalculationExcluded ? r.amount.toLocaleString(undefined, {minimumFractionDigits: 2}) : 
+                                     r.operation === 'none' ? r.amount.toLocaleString(undefined, {minimumFractionDigits: 2}) : 
+                                     Math.abs(r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2})}
                                 </div>
                             ) : (
                                 <div className="shrink-0 w-0" />
