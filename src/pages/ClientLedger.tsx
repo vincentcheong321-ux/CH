@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Printer, Trash2, Plus, Minus, Pencil, X, Check, AlertTriangle, ExternalLink, GripHorizontal, Hash, Zap, ChevronLeft, ChevronRight, ImageDown } from 'lucide-react';
+import { ArrowLeft, Printer, Trash2, Plus, Minus, Pencil, X, Check, AlertTriangle, ExternalLink, GripHorizontal, Hash, Zap, ChevronLeft, ChevronRight, ImageDown, Trash } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { 
   getClients, 
@@ -198,16 +198,7 @@ const ClientLedger: React.FC = () => {
   const handleQuickEntry = () => {
       const quickCat: TransactionCategory = { id: 'quick_entry', label: '', operation: 'add', color: 'bg-blue-600 text-white' };
       setActiveCategory(quickCat);
-      
-      // Default operations based on panel
-      if (activeColumn === 'col1') {
-          // Check for special clients to default to Note mode if needed, though user can change it.
-          // For now, let's default to Note for Panel 1 generally as it's often used for notes.
-          setCurrentOperation('none');
-      } else {
-          setCurrentOperation('add');
-      }
-      
+      setCurrentOperation(activeColumn === 'col1' ? 'none' : 'add');
       setAmount('');
       setDescription('');
   };
@@ -221,36 +212,17 @@ const ClientLedger: React.FC = () => {
     // Determine operation: if label is empty (Quick Entry), use local currentOperation
     let op = activeCategory.label === '' ? currentOperation : activeCategory.operation;
     
-    // --- SPECIAL CLIENT LOGIC (C19 & Z21) ---
-    const codeUpper = client?.code?.toUpperCase() || '';
-    
-    // If we are in Panel 1, and using Quick Entry (label is empty)
-    if (activeColumn === 'col1' && activeCategory.label === '') {
-        // C19: Panel 1 is display only, manual entries shouldn't calculate
-        // Z21: Panel 1 manual entries shouldn't calculate (only system carry-forward does)
-        if (codeUpper === 'C19' || codeUpper === 'Z21') {
-            op = 'none';
-        }
-    }
+    // --- CHANGE: Removed logic that forced op='none' for Panel 1 Quick Entry ---
+    // Previously: if (activeColumn === 'col1' && activeCategory.label === '') op = 'none';
+    // Now: We respect the user's choice (Add/Subtract/Note) even for Panel 1.
+    // This allows C19 and others to have calculated rows in Panel 1 if needed.
 
     const entryDate = `${currentDate.getFullYear()}-${String(currentDate.getMonth()+1).padStart(2,'0')}-${String(currentDate.getDate()).padStart(2,'0')}`;
-    
-    const newRecord: any = {
-      clientId: id, 
-      date: entryDate, 
-      description: description, 
-      typeLabel: activeCategory.label, 
-      amount: val, 
-      operation: op, 
-      column: activeColumn, 
-      isVisible: isVisible,
-      // Add a high sort weight for manual entries so they appear AFTER system carry-forward rows (usually weight 0-10)
-      sortWeight: 50 
+    const newRecord: Omit<LedgerRecord, 'id'> = {
+      clientId: id, date: entryDate, description: description, typeLabel: activeCategory.label, amount: val, operation: op, column: activeColumn, isVisible: isVisible
     };
-
     await saveLedgerRecord(newRecord);
     loadRecords();
-    
     if (activeCategory.label.trim() === '') {
         setAmount(''); setDescription('');
         setTimeout(() => { if (amountInputRef.current) amountInputRef.current.focus(); }, 10);
@@ -446,10 +418,13 @@ const ClientLedger: React.FC = () => {
 
   const renderWinningContent = (description: string | undefined, columnType?: LedgerColumn) => {
     const { dateStr, parsedLines } = parseAllWinningDetails(description || '');
+    
+    // Panel 1 needs strict alignment with the standard Amount column
     const isPanel1 = columnType === 'col1';
     
     return (
-        <div className={`flex flex-col w-full min-w-0 pt-0.5 overflow-hidden ${isPanel1 ? 'max-w-[140px] md:max-w-[200px]' : ''}`}>
+        <div className="flex flex-col w-full min-w-0 pt-0.5 overflow-visible font-mono">
+            {/* Date on Top */}
             {dateStr && (
                 <div className="text-[11px] md:text-[13px] text-gray-400 select-none pb-0.5 mb-1 pl-2 md:pl-4">
                     {dateStr}
@@ -458,25 +433,29 @@ const ClientLedger: React.FC = () => {
             
             <div className={`flex flex-col w-full min-w-0 overflow-visible ${isPanel1 ? 'gap-0.5' : 'gap-1'}`}>
                 {parsedLines.map((line, i) => (
-                    <div key={i} className={`flex items-center ${isPanel1 ? 'gap-0.5 text-[9px]' : 'gap-1.5 md:gap-4 text-[11px] md:text-[16px]'} text-gray-800 leading-none py-0.5 w-full whitespace-nowrap`}>
-                        <span className={`font-bold text-gray-800 uppercase ${isPanel1 ? 'w-[18px]' : 'w-[30px] md:w-[38px]'} shrink-0 text-left`}>{line.sides}</span>
-                        <span className={`font-bold text-gray-900 tracking-wider ${isPanel1 ? 'w-[28px]' : 'w-[44px] md:w-[54px]'} shrink-0 text-center`}>{line.number}</span>
-                        <span className={`text-gray-400 text-center font-bold ${isPanel1 ? 'w-[24px] text-[8px]' : 'w-[45px] md:w-[60px] text-[10px] md:text-[12px]'} shrink-0`}>
+                    <div key={i} className={`flex items-center ${isPanel1 ? 'gap-0.5 text-[9px] md:text-[12px]' : 'gap-1.5 md:gap-4 text-[11px] md:text-[16px]'} text-gray-800 leading-none py-0.5 w-full whitespace-nowrap`}>
+                        <span className={`font-bold text-gray-800 uppercase ${isPanel1 ? 'w-[20px] md:w-[26px]' : 'w-[30px] md:w-[38px]'} shrink-0 text-left`}>{line.sides}</span>
+                        <span className={`font-bold text-gray-900 tracking-wider ${isPanel1 ? 'w-[32px] md:w-[40px]' : 'w-[44px] md:w-[54px]'} shrink-0 text-center`}>{line.number}</span>
+                        <span className={`text-gray-400 text-center font-bold ${isPanel1 ? 'w-[32px] md:w-[42px] text-[8px] md:text-[10px]' : 'w-[45px] md:w-[60px] text-[10px] md:text-[12px]'} shrink-0`}>
                             {line.big}-{line.small}
                         </span>
-                        <span className={`text-gray-400 uppercase font-bold ${isPanel1 ? 'w-[24px] text-[8px]' : 'w-[35px] md:w-[45px] text-[10px] md:text-[11px]'} shrink-0 text-center truncate`}>{line.type}</span>
+                        <span className={`text-gray-400 uppercase font-bold ${isPanel1 ? 'w-[26px] md:w-[32px] text-[8px] md:text-[9px]' : 'w-[35px] md:w-[45px] text-[10px] md:text-[11px]'} shrink-0 text-center truncate`}>{line.type}</span>
                         
-                        <div className={`${isPanel1 ? 'w-[16px]' : 'w-[24px] md:w-[28px]'} shrink-0 flex justify-center`}>
+                        <div className={`${isPanel1 ? 'w-[18px] md:w-[22px]' : 'w-[24px] md:w-[28px]'} shrink-0 flex justify-center`}>
                             {line.pos && (
-                                <div className={`${isPanel1 ? 'w-3.5 h-3.5 text-[8px]' : 'w-6 h-6 md:w-8 md:h-8 text-[11px] md:text-[15px]'} rounded-full border border-gray-900 flex items-center justify-center bg-white shadow-sm`}>
-                                    <span className="font-black text-gray-900 leading-none">{line.pos}</span>
+                                <div className={`${isPanel1 ? 'w-4 h-4 md:w-5 md:h-5 text-[9px] md:text-[11px]' : 'w-6 h-6 md:w-8 md:h-8 text-[11px] md:text-[15px]'} rounded-full border border-gray-900 flex items-center justify-center bg-white shadow-sm`}>
+                                    <span className="font-black text-gray-900 leading-none">
+                                        {line.pos}
+                                    </span>
                                 </div>
                             )}
                         </div>
 
-                        <div className={`flex items-center justify-end pr-1 ${isPanel1 ? 'w-[60px] shrink-0' : 'flex-1 min-w-[60px] md:min-w-[100px]'}`}>
+                        {/* Spacious area for Win Amount - Shifted to ensure no truncation */}
+                        {/* Modified for Panel 1 alignment */}
+                        <div className={`flex items-center justify-end pr-1 ${isPanel1 ? 'w-[90px] md:w-[120px] shrink-0' : 'flex-1 min-w-[60px] md:min-w-[100px]'}`}>
                             <span className="text-gray-300 px-1 font-light">-</span>
-                            <span className={`text-red-600 font-black text-right truncate tracking-tighter ${isPanel1 ? 'text-[10px] md:text-xs' : 'text-base md:text-2xl'}`}>
+                            <span className={`text-red-600 font-black text-right truncate tracking-tighter ${isPanel1 ? 'text-sm md:text-lg' : 'text-base md:text-2xl'}`}>
                                 {(() => {
                                     const rawVal = parseFloat(line.win.replace(/,/g, ''));
                                     return rawVal > 0 ? rawVal.toLocaleString(undefined, {minimumFractionDigits: 2}) : '';
@@ -506,8 +485,13 @@ const ClientLedger: React.FC = () => {
           <div className="flex flex-col space-y-0.5 w-full">
                 {data.processed.map((r) => {
                     const isWinning = r.typeLabel === '中';
+                    // PANEL 1: Shift content left by hiding the type label column for winning records
                     const hideLabel = isWinning && columnType === 'col1';
+                    
+                    // MAIN PANEL: Strictly hide description for winning records
                     const showDescription = !(isWinning && columnType === 'main');
+                    
+                    // PANEL 1: Redundant amount column hidden for winners because win info is in description
                     const showAmountColumn = !(isWinning && columnType === 'col1');
                     
                     return (
@@ -518,6 +502,7 @@ const ClientLedger: React.FC = () => {
                         </div>
 
                         <div className="flex w-full items-start relative z-10 min-h-[24px]">
+                            {/* Shift to far left if label hidden */}
                             <div className={`${hideLabel ? 'w-0 overflow-hidden' : 'w-[20px] md:w-[32px]'} text-sm md:text-xl font-bold uppercase tracking-wide text-gray-600 shrink-0 text-center leading-tight pt-0.5`}>
                                 {hideLabel ? '' : r.typeLabel}
                             </div>
@@ -604,8 +589,13 @@ const ClientLedger: React.FC = () => {
       </div>
 
       <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-6">
+        {/* Responsive Layout with Side Buttons */}
         <div className="flex flex-col lg:flex-row gap-6 items-start relative">
+            
+            {/* STICKY SIDEBAR: Controls moved here */}
             <aside className="hidden lg:flex flex-col gap-6 no-print sticky top-24 z-30 w-36 shrink-0 h-[calc(100vh-120px)] overflow-y-auto pr-2 no-scrollbar">
+                
+                {/* 1. Panel Section */}
                 <div className="space-y-2">
                     <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-200 pb-1 mb-2">View Panels</div>
                     <button onClick={() => setActiveColumn('col1')} className={`w-full px-2 py-1.5 text-[10px] font-bold rounded-lg text-left transition-all border ${activeColumn === 'col1' ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'}`}>Panel 1</button>
@@ -613,15 +603,23 @@ const ClientLedger: React.FC = () => {
                     <button onClick={() => setActiveColumn('main')} className={`w-full px-2 py-1.5 text-[10px] font-bold rounded-lg text-left transition-all border ${activeColumn === 'main' ? 'bg-blue-600 text-white border-blue-600 shadow-md transform scale-105' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50 hover:text-gray-700'}`}>Main Ledger</button>
                 </div>
 
+                {/* 2. Quick Actions */}
                 <div className="space-y-2">
                     <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-200 pb-1 mb-2">Categories</div>
-                    <button onClick={handleQuickEntry} className="w-full flex items-center px-2 py-1.5 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-all text-indigo-700 text-[10px] font-bold shadow-sm">
+                    <button 
+                        onClick={handleQuickEntry}
+                        className="w-full flex items-center px-2 py-1.5 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-all text-indigo-700 text-[10px] font-bold shadow-sm"
+                    >
                         <Zap size={12} className="mr-1.5" /> Quick Entry
                     </button>
+                    
                     <div className="grid grid-cols-1 gap-1 mt-2">
                         {categories.filter(c => c.label !== '').map((cat, index) => (
                             <div key={cat.id} className="relative group">
-                                <button onClick={() => handleCategorySelect(cat)} className={`w-full flex items-center justify-between px-2 py-1.5 border rounded-lg transition-all shadow-sm active:scale-95 ${cat.color} text-[10px] font-bold ${cat.operation === 'add' ? 'border-green-100' : cat.operation === 'subtract' ? 'border-red-100' : 'border-gray-100'}`}>
+                                <button 
+                                    onClick={() => handleCategorySelect(cat)}
+                                    className={`w-full flex items-center justify-between px-2 py-1.5 border rounded-lg transition-all shadow-sm active:scale-95 ${cat.color} text-[10px] font-bold ${cat.operation === 'add' ? 'border-green-100' : cat.operation === 'subtract' ? 'border-red-100' : 'border-gray-100'}`}
+                                >
                                     <span className="truncate pr-1">{cat.label}</span>
                                     {cat.operation === 'add' ? <Plus size={8} /> : cat.operation === 'subtract' ? <Minus size={8} /> : <Hash size={8} />}
                                 </button>
@@ -629,26 +627,39 @@ const ClientLedger: React.FC = () => {
                             </div>
                         ))}
                     </div>
-                    <button onClick={() => setIsAddCatModalOpen(true)} className="w-full flex items-center justify-center py-1.5 bg-white border border-dashed border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all text-gray-500 text-[9px] font-bold uppercase mt-2">
+
+                    <button 
+                        onClick={() => setIsAddCatModalOpen(true)}
+                        className="w-full flex items-center justify-center py-1.5 bg-white border border-dashed border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all text-gray-500 text-[9px] font-bold uppercase mt-2"
+                    >
                         <Plus size={10} className="mr-1" /> New
                     </button>
                 </div>
             </aside>
 
+            {/* Main Content Area */}
             <div className="flex-1 w-full min-w-0">
+                
+                {/* Panel Selector Central - WITH CLEAR BUTTON */}
                 <div className="no-print mb-6 flex flex-col items-center space-y-4">
                     <div className="bg-white rounded-xl p-1 shadow-md border border-gray-200 flex w-full md:w-auto overflow-x-auto">
                         <button onClick={() => setActiveColumn('col1')} className={`flex-1 md:flex-none px-6 py-2.5 text-xs md:text-sm font-black rounded-lg transition-all whitespace-nowrap ${activeColumn === 'col1' ? 'bg-blue-600 text-white shadow-md transform scale-105' : 'text-gray-500 hover:bg-gray-50'}`}>Panel 1</button>
                         <button onClick={() => setActiveColumn('col2')} className={`flex-1 md:flex-none px-6 py-2.5 text-xs md:text-sm font-black rounded-lg transition-all whitespace-nowrap ${activeColumn === 'col2' ? 'bg-blue-600 text-white shadow-md transform scale-105' : 'text-gray-500 hover:bg-gray-50'}`}>Panel 2</button>
                         <button onClick={() => setActiveColumn('main')} className={`flex-1 md:flex-none px-6 py-2.5 text-xs md:text-sm font-black rounded-lg transition-all whitespace-nowrap ${activeColumn === 'main' ? 'bg-blue-600 text-white shadow-md transform scale-105' : 'text-gray-500 hover:bg-gray-50'}`}>Main Ledger</button>
                     </div>
+
+                    {/* NEW: Clear Panel 1 Button Centralized for Visibility */}
                     {activeColumn === 'col1' && col1Ledger.processed.length > 0 && (
-                        <button onClick={handleClearPanel1} className="flex items-center px-6 py-2 bg-red-50 text-red-600 border-2 border-red-200 rounded-full text-xs font-black uppercase hover:bg-red-600 hover:text-white hover:border-red-600 transition-all shadow-lg active:scale-95 animate-in slide-in-from-top-2">
+                        <button 
+                            onClick={handleClearPanel1}
+                            className="flex items-center px-6 py-2 bg-red-50 text-red-600 border-2 border-red-200 rounded-full text-xs font-black uppercase hover:bg-red-600 hover:text-white hover:border-red-600 transition-all shadow-lg active:scale-95 animate-in slide-in-from-top-2"
+                        >
                             <Trash2 size={14} className="mr-2" /> Clear All Panel 1 Entries
                         </button>
                     )}
                 </div>
 
+                {/* Entry Form (Top of ledger content) */}
                 {activeCategory && (
                 <div className="no-print mb-6 bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden animate-in slide-in-from-top-4 duration-300 ring-4 ring-blue-50/50">
                     <div className={`p-3 flex items-center justify-between ${activeCategory.label === '' ? 'bg-indigo-50 border-b border-indigo-100' : activeCategory.color}`}>
@@ -686,6 +697,7 @@ const ClientLedger: React.FC = () => {
                 </div>
                 )}
 
+                {/* Mobile Quick Category Access */}
                 <div className="lg:hidden mb-6 no-print">
                     {!activeCategory && (
                         <div className="grid grid-cols-3 gap-2">
@@ -697,6 +709,7 @@ const ClientLedger: React.FC = () => {
                     )}
                 </div>
 
+                {/* The Ledger Paper */}
                 <div id="printable-area" className="flex-1 w-full min-w-0">
                     <div className="bg-white border border-gray-200 shadow-sm min-h-[600px] relative text-lg font-serif">
                         <div style={{ height: `${verticalPadding.top}px` }} className="relative group w-full no-print-bg">
