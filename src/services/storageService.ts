@@ -431,19 +431,43 @@ export const fetchClientTotalBalance = async (clientId: string): Promise<number>
     return calculateBalanceForRecords(records, (client?.code || '').toUpperCase(), false);
 };
 
-export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: Client[]): Promise<Record<string, number>> => {
+// Updated signature to return metadata about Panel 1 usage
+export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: Client[]): Promise<Record<string, { amount: number, isPanel1: boolean }>> => {
     if (!supabase) return {};
     // Get ALL records before the start of the week
     const { data } = await supabase.from('financial_journal').select('*').lt('entry_date', dateLimit).order('entry_date', { ascending: true });
     if (!data) return {};
 
     const allRecords = data.map(mapJournalToLedgerRecord);
-    const balances: Record<string, number> = {};
+    const balances: Record<string, { amount: number, isPanel1: boolean }> = {};
 
     clients?.forEach(client => {
         const clientRecs = allRecords.filter(r => r.clientId === client.id);
+        
+        // --- Detect Panel 1 Usage (Duplicated from calculateBalanceForRecords logic) ---
+        const sorted = [...clientRecs].sort((a,b) => b.date.localeCompare(a.date) || (b.createdAt || '').localeCompare(a.createdAt || ''));
+        const latestSnapshot = sorted.find(r => 
+            (r.id.startsWith('draw_') || r.typeLabel === '上欠') && (r.column === 'main' || !r.column)
+        );
+
+        let periodRecords = clientRecs;
+        if (latestSnapshot) {
+            periodRecords = clientRecs.filter(r => {
+                if (r.id === latestSnapshot.id) return true;
+                if (r.date > latestSnapshot.date) return true;
+                if (r.date === latestSnapshot.date && r.createdAt && latestSnapshot.createdAt && r.createdAt > latestSnapshot.createdAt) return true;
+                return false;
+            });
+        }
+
+        const col1Records = periodRecords.filter(r => r.column === 'col1' && r.isVisible);
+        const col1HasNonWins = col1Records.some(r => r.typeLabel !== '中');
+        // --------------------------------------------------------------------------
+
         // Generation fetching EXCLUDES wins from Panel 1 per requirement
-        balances[client.id] = calculateBalanceForRecords(clientRecs, (client.code || '').toUpperCase(), true);
+        const amount = calculateBalanceForRecords(clientRecs, (client.code || '').toUpperCase(), true);
+        
+        balances[client.id] = { amount, isPanel1: col1HasNonWins };
     });
 
     return balances;

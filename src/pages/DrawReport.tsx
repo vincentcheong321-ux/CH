@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { getClients, getDrawBalances, saveDrawBalance, getClientBalancesPriorToDate, generateSpecialCarryForward, getLedgerRecords, getNetAmount } from '../services/storageService';
 import { Client, LedgerRecord } from '../types';
@@ -240,7 +241,7 @@ const DrawReport: React.FC = () => {
       const errors: string[] = [];
 
       try {
-          // PASS CLIENTS LIST to apply C13/Z21 Logic
+          // Returns object { amount: number, isPanel1: boolean }
           const prevBalances = await getClientBalancesPriorToDate(selectedDate, clients);
           
           const newBalances: Record<string, string> = {};
@@ -250,25 +251,28 @@ const DrawReport: React.FC = () => {
           for (const client of clients) {
               try {
                   const codeUpper = client.code?.toUpperCase();
+                  const clientData = prevBalances[client.id] || { amount: 0, isPanel1: false };
                   
                   // Special Logic for Z21 and C19 (Row Copying)
                   if (codeUpper === 'Z21' || codeUpper === 'C19') {
-                      const specialBalance = await generateSpecialCarryForward(client.id, codeUpper, selectedDate);
+                      await generateSpecialCarryForward(client.id, codeUpper, selectedDate);
                       
-                      // REQUIREMENT: C19 bring forward ONLY in panel 1, do NOT show in 上欠 (main ledger)
-                      // Logic Update: Strictly set Main Ledger debt input to 0.00
-                      if (codeUpper === 'C19') {
-                          newBalances[client.id] = '0.00';
-                          // We skip saveDrawBalance to keep main ledger at clean zero via storage calculation rules
-                      } else {
-                          newBalances[client.id] = specialBalance.toFixed(2);
-                          await saveDrawBalance(selectedDate, client.id, specialBalance);
-                      }
+                      // C19/Z21: Always set Main Ledger Draw Balance to 0
+                      newBalances[client.id] = '0.00';
+                      await saveDrawBalance(selectedDate, client.id, 0);
                   } else {
-                      // Standard Case
-                      const bal = prevBalances[client.id] || 0;
-                      newBalances[client.id] = bal.toFixed(2);
-                      await saveDrawBalance(selectedDate, client.id, bal);
+                      // Standard Client Logic
+                      if (clientData.isPanel1) {
+                          // Requirement: If Panel 1 has details, do NOT bring balance to 上欠 (Draw Balance).
+                          // This effectively zeroes out the Main Ledger opening balance for this client for this week.
+                          newBalances[client.id] = '0.00';
+                          await saveDrawBalance(selectedDate, client.id, 0);
+                      } else {
+                          // Standard: Main Ledger carry forward
+                          const bal = clientData.amount;
+                          newBalances[client.id] = bal.toFixed(2);
+                          await saveDrawBalance(selectedDate, client.id, bal);
+                      }
                   }
               } catch (err: any) {
                   const msg = `${client.name}: ${err.message || 'Error processing'}`;
