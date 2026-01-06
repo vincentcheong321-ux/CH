@@ -448,8 +448,11 @@ const ClientLedger: React.FC = () => {
                         {/* Modified for Panel 1 alignment */}
                         <div className={`flex items-center justify-end pr-1 ${isPanel1 ? 'w-[110px] md:w-[160px] shrink-0' : 'flex-1 min-w-[60px] md:min-w-[100px]'}`}>
                             <span className="text-gray-300 px-1 font-light">-</span>
-                            <span className="text-red-600 font-black text-right truncate text-lg md:text-3xl tracking-tighter">
-                                {parseFloat(line.win) > 0 ? parseFloat(line.win).toLocaleString(undefined, {minimumFractionDigits: 2}) : ''}
+                            <span className="text-red-600 font-black text-right truncate text-base md:text-2xl tracking-tighter">
+                                {(() => {
+                                    const rawVal = parseFloat(line.win.replace(/,/g, ''));
+                                    return rawVal > 0 ? rawVal.toLocaleString(undefined, {minimumFractionDigits: 2}) : '';
+                                })()}
                             </span>
                         </div>
                     </div>
@@ -524,7 +527,7 @@ const ClientLedger: React.FC = () => {
             <div className="mt-3 pt-1.5 flex flex-col items-end w-full border-t-2 border-gray-900">
                 <div className="flex items-center gap-1 md:gap-4 justify-end w-full">
                     {displayLabel && <span className="text-sm md:text-xl font-bold text-gray-900 uppercase">{displayLabel}</span>}
-                    <span className={`text-lg md:text-3xl font-mono font-bold min-w-[110px] md:min-w-[170px] text-right ${data.finalBalance >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
+                    <span className={`text-lg md:text-2xl font-mono font-bold min-w-[110px] md:min-w-[160px] text-right ${data.finalBalance >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
                         {data.finalBalance < 0 
                             ? (columnType === 'col1' 
                                 ? Math.abs(data.finalBalance).toLocaleString(undefined, {minimumFractionDigits: 2}) 
