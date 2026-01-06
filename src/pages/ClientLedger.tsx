@@ -208,8 +208,15 @@ const ClientLedger: React.FC = () => {
     if (!id || !activeCategory || !amount) return;
     const val = parseFloat(amount);
     if (isNaN(val)) return;
+    
+    // Determine operation: if label is empty (Quick Entry), use local currentOperation
     let op = activeCategory.label === '' ? currentOperation : activeCategory.operation;
-    if (activeColumn === 'col1' && activeCategory.label === '') op = 'none';
+    
+    // --- CHANGE: Removed logic that forced op='none' for Panel 1 Quick Entry ---
+    // Previously: if (activeColumn === 'col1' && activeCategory.label === '') op = 'none';
+    // Now: We respect the user's choice (Add/Subtract/Note) even for Panel 1.
+    // This allows C19 and others to have calculated rows in Panel 1 if needed.
+
     const entryDate = `${currentDate.getFullYear()}-${String(currentDate.getMonth()+1).padStart(2,'0')}-${String(currentDate.getDate()).padStart(2,'0')}`;
     const newRecord: Omit<LedgerRecord, 'id'> = {
       clientId: id, date: entryDate, description: description, typeLabel: activeCategory.label, amount: val, operation: op, column: activeColumn, isVisible: isVisible
@@ -424,20 +431,20 @@ const ClientLedger: React.FC = () => {
                 </div>
             )}
             
-            <div className="flex flex-col w-full min-w-0 gap-1 overflow-visible">
+            <div className={`flex flex-col w-full min-w-0 overflow-visible ${isPanel1 ? 'gap-0.5' : 'gap-1'}`}>
                 {parsedLines.map((line, i) => (
-                    <div key={i} className="flex items-center gap-1.5 md:gap-4 text-[11px] md:text-[16px] text-gray-800 leading-none py-0.5 w-full whitespace-nowrap">
-                        <span className="font-bold text-gray-800 uppercase w-[30px] md:w-[38px] shrink-0 text-left">{line.sides}</span>
-                        <span className="font-bold text-gray-900 tracking-wider w-[44px] md:w-[54px] shrink-0 text-center">{line.number}</span>
-                        <span className="text-gray-400 text-center text-[10px] md:text-[12px] font-bold w-[45px] md:w-[60px] shrink-0">
+                    <div key={i} className={`flex items-center ${isPanel1 ? 'gap-0.5 text-[9px] md:text-[12px]' : 'gap-1.5 md:gap-4 text-[11px] md:text-[16px]'} text-gray-800 leading-none py-0.5 w-full whitespace-nowrap`}>
+                        <span className={`font-bold text-gray-800 uppercase ${isPanel1 ? 'w-[20px] md:w-[26px]' : 'w-[30px] md:w-[38px]'} shrink-0 text-left`}>{line.sides}</span>
+                        <span className={`font-bold text-gray-900 tracking-wider ${isPanel1 ? 'w-[32px] md:w-[40px]' : 'w-[44px] md:w-[54px]'} shrink-0 text-center`}>{line.number}</span>
+                        <span className={`text-gray-400 text-center font-bold ${isPanel1 ? 'w-[32px] md:w-[42px] text-[8px] md:text-[10px]' : 'w-[45px] md:w-[60px] text-[10px] md:text-[12px]'} shrink-0`}>
                             {line.big}-{line.small}
                         </span>
-                        <span className="text-gray-400 text-[10px] md:text-[11px] uppercase font-bold w-[35px] md:w-[45px] shrink-0 text-center truncate">{line.type}</span>
+                        <span className={`text-gray-400 uppercase font-bold ${isPanel1 ? 'w-[26px] md:w-[32px] text-[8px] md:text-[9px]' : 'w-[35px] md:w-[45px] text-[10px] md:text-[11px]'} shrink-0 text-center truncate`}>{line.type}</span>
                         
-                        <div className="w-[24px] md:w-[28px] shrink-0 flex justify-center">
+                        <div className={`${isPanel1 ? 'w-[18px] md:w-[22px]' : 'w-[24px] md:w-[28px]'} shrink-0 flex justify-center`}>
                             {line.pos && (
-                                <div className="w-6 h-6 md:w-8 md:h-8 rounded-full border border-gray-900 flex items-center justify-center bg-white shadow-sm">
-                                    <span className="text-[11px] md:text-[15px] font-black text-gray-900 leading-none">
+                                <div className={`${isPanel1 ? 'w-4 h-4 md:w-5 md:h-5 text-[9px] md:text-[11px]' : 'w-6 h-6 md:w-8 md:h-8 text-[11px] md:text-[15px]'} rounded-full border border-gray-900 flex items-center justify-center bg-white shadow-sm`}>
+                                    <span className="font-black text-gray-900 leading-none">
                                         {line.pos}
                                     </span>
                                 </div>
@@ -446,9 +453,9 @@ const ClientLedger: React.FC = () => {
 
                         {/* Spacious area for Win Amount - Shifted to ensure no truncation */}
                         {/* Modified for Panel 1 alignment */}
-                        <div className={`flex items-center justify-end pr-1 ${isPanel1 ? 'w-[110px] md:w-[160px] shrink-0' : 'flex-1 min-w-[60px] md:min-w-[100px]'}`}>
+                        <div className={`flex items-center justify-end pr-1 ${isPanel1 ? 'w-[90px] md:w-[120px] shrink-0' : 'flex-1 min-w-[60px] md:min-w-[100px]'}`}>
                             <span className="text-gray-300 px-1 font-light">-</span>
-                            <span className="text-red-600 font-black text-right truncate text-base md:text-2xl tracking-tighter">
+                            <span className={`text-red-600 font-black text-right truncate tracking-tighter ${isPanel1 ? 'text-sm md:text-lg' : 'text-base md:text-2xl'}`}>
                                 {(() => {
                                     const rawVal = parseFloat(line.win.replace(/,/g, ''));
                                     return rawVal > 0 ? rawVal.toLocaleString(undefined, {minimumFractionDigits: 2}) : '';
@@ -668,13 +675,11 @@ const ClientLedger: React.FC = () => {
                     <form onSubmit={handleSubmit} className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                         {activeCategory.label === '' && (
                             <div className="md:col-span-2">
-                                {activeColumn === 'col1' ? <div className="bg-gray-100 text-gray-600 p-2 rounded-xl text-center font-bold text-xs mb-2 border border-gray-200">(Ø) Note Only Mode (No Calculation)</div> : (
-                                    <div className="flex space-x-2 mb-2">
-                                        <button type="button" onClick={() => setCurrentOperation('add')} className={`flex-1 py-1.5 rounded-lg font-bold text-xs ${currentOperation === 'add' ? 'bg-green-100 text-green-800 ring-2 ring-green-500' : 'bg-gray-100 text-gray-500'}`}>(+) Add</button>
-                                        <button type="button" onClick={() => setCurrentOperation('subtract')} className={`flex-1 py-1.5 rounded-lg font-bold text-xs ${currentOperation === 'subtract' ? 'bg-red-100 text-red-800 ring-2 ring-red-500' : 'bg-gray-100 text-gray-500'}`}>(-) Deduct</button>
-                                        <button type="button" onClick={() => setCurrentOperation('none')} className={`flex-1 py-1.5 rounded-lg font-bold text-xs ${currentOperation === 'none' ? 'bg-gray-200 text-gray-800 ring-2 ring-gray-500' : 'bg-gray-100 text-gray-500'}`}>(Ø) Note</button>
-                                    </div>
-                                )}
+                                <div className="flex space-x-2 mb-2">
+                                    <button type="button" onClick={() => setCurrentOperation('add')} className={`flex-1 py-1.5 rounded-lg font-bold text-xs ${currentOperation === 'add' ? 'bg-green-100 text-green-800 ring-2 ring-green-500' : 'bg-gray-100 text-gray-500'}`}>(+) Add</button>
+                                    <button type="button" onClick={() => setCurrentOperation('subtract')} className={`flex-1 py-1.5 rounded-lg font-bold text-xs ${currentOperation === 'subtract' ? 'bg-red-100 text-red-800 ring-2 ring-red-500' : 'bg-gray-100 text-gray-500'}`}>(-) Deduct</button>
+                                    <button type="button" onClick={() => setCurrentOperation('none')} className={`flex-1 py-1.5 rounded-lg font-bold text-xs ${currentOperation === 'none' ? 'bg-gray-200 text-gray-800 ring-2 ring-gray-500' : 'bg-gray-100 text-gray-500'}`}>(Ø) Note</button>
+                                </div>
                             </div>
                         )}
                         <div className="md:col-span-2">
