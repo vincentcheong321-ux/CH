@@ -377,30 +377,8 @@ const ClientLedger: React.FC = () => {
   };
 
   const calculateColumn = (columnKey: LedgerColumn) => {
-      let colRecords = filteredRecords.filter(r => r.column === columnKey);
-      const isZ21 = client?.code?.toUpperCase() === 'Z21';
-
-      // Sort override for Z21 Panel 1
-      if (isZ21 && columnKey === 'col1') {
-          colRecords = [...colRecords].sort((a, b) => {
-              const aIsEmpty = a.typeLabel === '';
-              const bIsEmpty = b.typeLabel === '';
-              // If one is empty and other isn't, empty goes to bottom
-              if (aIsEmpty && !bIsEmpty) return 1;
-              if (!aIsEmpty && bIsEmpty) return -1;
-              return 0; // maintain relative order from previous sort
-          });
-      }
-
-      const processed = colRecords.map(r => {
-          let netChange = getNetAmount(r);
-          // NEW: For Z21 Panel 1, Quick Entries (empty label) should NOT be in calculation
-          if (isZ21 && columnKey === 'col1' && r.typeLabel === '') {
-              netChange = 0;
-          }
-          return { ...r, netChange };
-      });
-      
+      const colRecords = filteredRecords.filter(r => r.column === columnKey);
+      const processed = colRecords.map(r => ({ ...r, netChange: getNetAmount(r) }));
       const visibleProcessed = processed.filter(r => r.isVisible);
       const finalBalance = visibleProcessed.reduce((acc, curr) => acc + curr.netChange, 0);
       return { processed, finalBalance };
