@@ -65,20 +65,20 @@ const App: React.FC = () => {
             ) : <Navigate to="/login" />
           } />
 
-          {/* New V2 Route (Default) */}
+          {/* V1 Route (Now Default) */}
           <Route path="/clients/:id" element={
             isAuthenticated ? (
               <Layout onLogout={handleLogout}>
-                <ClientLedger />
+                <ClientLedgerV1 />
               </Layout>
             ) : <Navigate to="/login" />
           } />
 
-          {/* Legacy V1 Route */}
-          <Route path="/clients/:id/v1" element={
+          {/* New V2 Route (Optional) */}
+          <Route path="/clients/:id/v2" element={
             isAuthenticated ? (
               <Layout onLogout={handleLogout}>
-                <ClientLedgerV1 />
+                <ClientLedger />
               </Layout>
             ) : <Navigate to="/login" />
           } />

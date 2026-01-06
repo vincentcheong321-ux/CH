@@ -300,8 +300,8 @@ const ClientLedger: React.FC = () => {
                       <span className="text-xs font-bold px-3 text-slate-200 w-24 text-center">{MONTH_NAMES[currentMonth].slice(0,3)} {currentYear}</span>
                       <button onClick={nextMonth} className="p-1 hover:bg-slate-700 rounded text-slate-400"><ChevronRight size={16}/></button>
                   </div>
-                  <button onClick={() => navigate(`/clients/${id}/v1`)} className="hidden md:flex items-center text-xs font-bold text-slate-400 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700 transition-colors">
-                      <LayoutTemplate size={14} className="mr-2" /> V1 View
+                  <button onClick={() => navigate(`/clients/${id}`)} className="hidden md:flex items-center text-xs font-bold text-slate-400 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg border border-slate-700 transition-colors">
+                      <LayoutTemplate size={14} className="mr-2" /> Back to Default
                   </button>
                   <button onClick={() => window.print()} className="p-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-white shadow-lg transition-colors">
                       <Printer size={18} />

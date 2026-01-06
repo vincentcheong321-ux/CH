@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Printer, Trash2, Plus, Minus, Pencil, X, Check, AlertTriangle, ExternalLink, GripHorizontal, Hash, Zap, ChevronLeft, ChevronRight, ImageDown, Trash } from 'lucide-react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Printer, Trash2, Plus, Minus, Pencil, X, Check, AlertTriangle, ExternalLink, GripHorizontal, Hash, Zap, ChevronLeft, ChevronRight, ImageDown, Trash, LayoutTemplate } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { 
   getClients, 
@@ -34,6 +34,7 @@ interface WinningLineData {
 
 const ClientLedgerV1: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { currentDate, setCurrentDate } = useGlobalState();
   const [client, setClient] = useState<Client | null>(null);
   const [records, setRecords] = useState<LedgerRecord[]>([]);
@@ -582,6 +583,9 @@ const ClientLedgerV1: React.FC = () => {
                  <button onClick={handleNextMonth} disabled={currentYear === 2026 && currentMonth === 11} className="p-1 hover:bg-white rounded disabled:opacity-30"><ChevronRight size={16}/></button>
              </div>
              <div className="flex space-x-2">
+                 <button onClick={() => navigate(`/clients/${id}/v2`)} className="bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-700 shadow-sm flex items-center hidden md:flex">
+                    <span className="font-bold text-xs">Try V2 Dashboard</span>
+                 </button>
                  <button onClick={openNewTab} className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-50 shadow-sm hidden md:block" title="Open in New Tab"><ExternalLink size={18} /></button>
                  <button onClick={handleDownloadImage} className="bg-white border border-gray-300 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-50 shadow-sm hidden md:block" title="Download as Image"><ImageDown size={18} /></button>
                  <button onClick={handlePrint} className="bg-gray-800 text-white px-3 py-2 rounded-lg hover:bg-gray-900 shadow-sm"><Printer size={18} /></button>
