@@ -378,7 +378,18 @@ const ClientLedger: React.FC = () => {
 
   const calculateColumn = (columnKey: LedgerColumn) => {
       const colRecords = filteredRecords.filter(r => r.column === columnKey);
-      const processed = colRecords.map(r => ({ ...r, netChange: getNetAmount(r) }));
+      const clientCode = client?.code?.toUpperCase();
+      const isSpecialClient = clientCode === 'Z21' || clientCode === 'C19';
+
+      const processed = colRecords.map(r => {
+          let netChange = getNetAmount(r);
+          // NEW: For Z21 and C19 Panel 1, Quick Entries (empty label) should NOT be in calculation
+          if (isSpecialClient && columnKey === 'col1' && r.typeLabel === '') {
+              netChange = 0;
+          }
+          return { ...r, netChange };
+      });
+      
       const visibleProcessed = processed.filter(r => r.isVisible);
       const finalBalance = visibleProcessed.reduce((acc, curr) => acc + curr.netChange, 0);
       return { processed, finalBalance };
@@ -764,6 +775,7 @@ const ClientLedger: React.FC = () => {
                         {editingRecord.typeLabel === '中' ? (
                             <div className="md:col-span-2 bg-gray-50 p-4 rounded-xl border border-gray-200">
                                 <div className="flex justify-between items-center mb-4">
+                                    {/* Fixed missing opening tag for h3 on line 847 */}
                                     <h3 className="font-bold text-gray-700 uppercase tracking-wider text-xs">Structured Winner Info</h3>
                                     <div className="flex items-center gap-2">
                                         <span className="text-[10px] text-gray-400 font-bold">DATE:</span>
