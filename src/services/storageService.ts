@@ -27,6 +27,12 @@ const getNoteDateScore = (text: string, entryDateStr: string) => {
 // Unified Sorter for Records
 const sortLedgerRecords = (records: LedgerRecord[]) => {
     records.sort((a, b) => {
+        // 1. High Priority: Explicit Sort Weight (Manual entries > Carry Forward > Standard)
+        const swA = (a as any).sortWeight || 0;
+        const swB = (b as any).sortWeight || 0;
+        if (swA !== swB) return swA - swB;
+
+        // 2. Note Content Date Score (For grouping winners/notes by date mentioned in text)
         const scoreA = getNoteDateScore(`${a.typeLabel} ${a.description}`, a.date);
         const scoreB = getNoteDateScore(`${b.typeLabel} ${b.description}`, b.date);
         if (scoreA !== 0 && scoreB !== 0) {
@@ -34,16 +40,15 @@ const sortLedgerRecords = (records: LedgerRecord[]) => {
         } else if (scoreA !== 0) return -1;
         else if (scoreB !== 0) return 1;
 
+        // 3. Entry Date (Chronological)
         if (a.date !== b.date) return a.date.localeCompare(b.date);
         
+        // 4. System Priority (Sale/Draw/etc)
         const pA = getRecordSortPriority(a);
         const pB = getRecordSortPriority(b);
         if (pA !== pB) return pA - pB;
 
-        const swA = (a as any).sortWeight || 0;
-        const swB = (b as any).sortWeight || 0;
-        if (swA !== swB) return swA - swB;
-
+        // 5. Creation Timestamp (Tie-breaker)
         if (a.createdAt && b.createdAt) return a.createdAt.localeCompare(b.createdAt);
         return 0;
     });
@@ -518,7 +523,8 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
     const code = clientCode.toUpperCase();
 
     if (code === 'Z21') {
-        rowsToCopy = sorted.slice(-4).map((r, i) => i === 0 ? { ...r, operation: 'none' as const } : r);
+        // Z21: Latest 4 (ALL 4 calculate, none disabled)
+        rowsToCopy = sorted.slice(-4);
     } else if (code === 'C19') {
         // C19: Latest 5
         rowsToCopy = sorted.slice(-5);
@@ -545,7 +551,7 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
                 data: { description: r.description, typeLabel: r.typeLabel, operation: r.operation, column: 'col1', isCarryForward: true, sortWeight: weightIdx }
             });
             
-            // Z21 Panel 2 logic preservation
+            // Z21 Panel 2 logic preservation (Keep sync)
             if (code === 'Z21' && weightIdx === 0) {
                  const { data: dupesP2 } = await supabase.from('financial_journal').select('id').eq('client_id', clientId).eq('entry_date', targetDate).contains('data', { description: r.description, column: 'col2' });
                  if (!dupesP2 || dupesP2.length === 0) {
