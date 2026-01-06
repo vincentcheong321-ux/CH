@@ -135,7 +135,7 @@ const ClientWinInputRow = React.memo(({
     client, 
     value, 
     onChange, 
-    onBlur, 
+    onBlur,
     onFocus,
     navState
 }: { 

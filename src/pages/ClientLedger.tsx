@@ -378,22 +378,9 @@ const ClientLedger: React.FC = () => {
 
   const calculateColumn = (columnKey: LedgerColumn) => {
       const colRecords = filteredRecords.filter(r => r.column === columnKey);
-      const clientCode = client?.code?.toUpperCase();
-      const isSpecialClient = clientCode === 'Z21' || clientCode === 'C19';
-
-      const processed = colRecords.map(r => {
-          const netChange = getNetAmount(r);
-          // NEW: Special Client Logic
-          // We show the amount in the row, but we set a flag to exclude it from the final reduce
-          const isCalculationExcluded = isSpecialClient && columnKey === 'col1' && r.typeLabel === '';
-          return { ...r, netChange, isCalculationExcluded };
-      });
-      
+      const processed = colRecords.map(r => ({ ...r, netChange: getNetAmount(r) }));
       const visibleProcessed = processed.filter(r => r.isVisible);
-      const finalBalance = visibleProcessed.reduce((acc, curr) => {
-          if (curr.isCalculationExcluded) return acc;
-          return acc + curr.netChange;
-      }, 0);
+      const finalBalance = visibleProcessed.reduce((acc, curr) => acc + curr.netChange, 0);
       return { processed, finalBalance };
   };
 
@@ -474,7 +461,7 @@ const ClientLedger: React.FC = () => {
   const LedgerColumnView = ({ data, footerLabel = "收", columnType }: { data: ReturnType<typeof calculateColumn>, footerLabel?: string, columnType: LedgerColumn }) => {
       if (data.processed.length === 0) return <div className="flex-1 min-h-[50px]" />;
       const isMain = footerLabel === '欠' || columnType === 'main';
-      const hasCalculableRecords = data.processed.some(r => r.isVisible && r.operation !== 'none' && !r.isCalculationExcluded);
+      const hasCalculableRecords = data.processed.some(r => r.isVisible && r.operation !== 'none');
       const isNegative = data.finalBalance < 0;
       
       let displayLabel = footerLabel;
@@ -512,14 +499,11 @@ const ClientLedger: React.FC = () => {
                             
                             {showAmountColumn ? (
                                 <div className={`text-base md:text-2xl font-mono font-bold shrink-0 w-[110px] md:w-[160px] text-right leading-none pl-2 pt-0.5 ${
-                                    r.isCalculationExcluded || r.operation === 'none' ? 'text-gray-400' :
                                     r.operation === 'add' ? 'text-green-700' : 
                                     r.operation === 'subtract' ? (isMain ? 'text-red-700' : 'text-gray-900') : 
                                     'text-gray-600'
                                 }`}>
-                                    {r.isCalculationExcluded ? r.amount.toLocaleString(undefined, {minimumFractionDigits: 2}) : 
-                                     r.operation === 'none' ? r.amount.toLocaleString(undefined, {minimumFractionDigits: 2}) : 
-                                     Math.abs(r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                    {r.operation === 'none' ? r.amount.toLocaleString(undefined, {minimumFractionDigits: 2}) : Math.abs(r.netChange).toLocaleString(undefined, {minimumFractionDigits: 2})}
                                 </div>
                             ) : (
                                 <div className="shrink-0 w-0" />
