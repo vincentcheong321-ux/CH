@@ -4,7 +4,8 @@ import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import ClientList from './pages/ClientList';
-import ClientLedger from './pages/ClientLedger';
+import ClientLedger from './pages/ClientLedger'; // The New V2
+import ClientLedgerV1 from './pages/ClientLedgerV1'; // The Old V1
 import DrawReport from './pages/DrawReport';
 import CashAdvanceCredit from './pages/CashAdvanceCredit';
 import Summary from './pages/Summary';
@@ -64,10 +65,20 @@ const App: React.FC = () => {
             ) : <Navigate to="/login" />
           } />
 
+          {/* New V2 Route (Default) */}
           <Route path="/clients/:id" element={
             isAuthenticated ? (
               <Layout onLogout={handleLogout}>
                 <ClientLedger />
+              </Layout>
+            ) : <Navigate to="/login" />
+          } />
+
+          {/* Legacy V1 Route */}
+          <Route path="/clients/:id/v1" element={
+            isAuthenticated ? (
+              <Layout onLogout={handleLogout}>
+                <ClientLedgerV1 />
               </Layout>
             ) : <Navigate to="/login" />
           } />
