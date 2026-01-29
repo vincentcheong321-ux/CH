@@ -134,7 +134,12 @@ export const deleteClient = async (id: string) => {
 
 // --- 3. Ledger Records ---
 
-const mapJournalToLedgerRecord = (row: any): LedgerRecord => {
+const mapJournalToLedgerRecord = (row: any): LedgerRecord | null => {
+    // FILTER: Do not map system records with 0 amount to LedgerRecords
+    if (row.amount === 0 && row.entry_type !== 'MANUAL') {
+        return null;
+    }
+
     const isAdd = row.amount >= 0; 
     let baseRecord: LedgerRecord = {
         id: row.id,
@@ -188,7 +193,7 @@ export const getLedgerRecords = async (clientId: string): Promise<LedgerRecord[]
     if (supabase) {
         const { data } = await supabase.from('financial_journal').select('*').eq('client_id', clientId);
         if (data) {
-            const records = data.map(mapJournalToLedgerRecord);
+            const records = data.map(mapJournalToLedgerRecord).filter((r): r is LedgerRecord => r !== null);
             return sortLedgerRecords(records);
         }
     }
@@ -199,7 +204,7 @@ export const getAllLedgerRecords = async (): Promise<LedgerRecord[]> => {
     if (supabase) {
         const { data } = await supabase.from('financial_journal').select('*');
         if (data) {
-            const records = data.map(mapJournalToLedgerRecord);
+            const records = data.map(mapJournalToLedgerRecord).filter((r): r is LedgerRecord => r !== null);
             return sortLedgerRecords(records);
         }
     }
@@ -222,7 +227,10 @@ export const saveLedgerRecord = async (record: Omit<LedgerRecord, 'id'>): Promis
                 sortWeight: (record as any).sortWeight || 0
             }
         }]).select();
-        if (data && data[0]) return mapJournalToLedgerRecord(data[0]);
+        if (data && data[0]) {
+            const mapped = mapJournalToLedgerRecord(data[0]);
+            return mapped || ({} as LedgerRecord);
+        }
     }
     return {} as LedgerRecord;
 };
@@ -282,6 +290,13 @@ export const getSalesForDates = async (dates: string[]): Promise<SaleRecord[]> =
 export const saveSaleRecord = async (record: Omit<SaleRecord, 'id'>) => {
     if (supabase) {
         const netAmount = (record.b || 0) + (record.s || 0) + (record.a || 0) + (record.c || 0);
+        
+        // If everything is 0, delete the record to keep ledger clean
+        if (netAmount === 0 && !record.mobileRaw && !record.mobileRawData) {
+            await supabase.from('financial_journal').delete().eq('client_id', record.clientId).eq('entry_date', record.date).eq('entry_type', 'SALE');
+            return;
+        }
+
         const { data: existing } = await supabase.from('financial_journal').select('id, data').eq('client_id', record.clientId).eq('entry_date', record.date).eq('entry_type', 'SALE').maybeSingle();
         if (existing) {
              const newData = { ...existing.data, b: record.b, s: record.s, a: record.a, c: record.c };
@@ -310,6 +325,12 @@ export const getCashAdvances = async (date: string): Promise<Record<string, numb
 
 export const saveCashAdvance = async (date: string, clientId: string, amount: number) => {
     if (supabase) {
+        // If amount is 0, delete any existing record to clear it from the ledger
+        if (amount === 0) {
+            await supabase.from('financial_journal').delete().eq('client_id', clientId).eq('entry_date', date).eq('entry_type', 'ADVANCE');
+            return;
+        }
+
         const { data: existing } = await supabase.from('financial_journal').select('id').eq('client_id', clientId).eq('entry_date', date).eq('entry_type', 'ADVANCE').maybeSingle();
         if (existing) await supabase.from('financial_journal').update({ amount }).eq('id', existing.id);
         else await supabase.from('financial_journal').insert({ client_id: clientId, entry_date: date, entry_type: 'ADVANCE', amount, data: {} });
@@ -328,6 +349,12 @@ export const getCashCredits = async (date: string): Promise<Record<string, numbe
 
 export const saveCashCredit = async (date: string, clientId: string, amount: number) => {
     if (supabase) {
+        // If amount is 0, delete any existing record to clear it from the ledger
+        if (amount === 0) {
+            await supabase.from('financial_journal').delete().eq('client_id', clientId).eq('entry_date', date).eq('entry_type', 'CREDIT');
+            return;
+        }
+
         const { data: existing } = await supabase.from('financial_journal').select('id').eq('client_id', clientId).eq('entry_date', date).eq('entry_type', 'CREDIT').maybeSingle();
         if (existing) await supabase.from('financial_journal').update({ amount }).eq('id', existing.id);
         else await supabase.from('financial_journal').insert({ client_id: clientId, entry_date: date, entry_type: 'CREDIT', amount, data: {} });
@@ -347,6 +374,12 @@ export const getDrawBalances = async (date: string): Promise<Record<string, numb
 
 export const saveDrawBalance = async (date: string, clientId: string, balance: number) => {
     if (supabase) {
+        // If balance is 0, delete to keep ledger clean
+        if (balance === 0) {
+            await supabase.from('financial_journal').delete().eq('client_id', clientId).eq('entry_date', date).eq('entry_type', 'DRAW');
+            return;
+        }
+
         const { data: existing } = await supabase.from('financial_journal').select('id').eq('client_id', clientId).eq('entry_date', date).eq('entry_type', 'DRAW').maybeSingle();
         if (existing) await supabase.from('financial_journal').update({ amount: balance }).eq('id', existing.id);
         else await supabase.from('financial_journal').insert({ client_id: clientId, entry_date: date, entry_type: 'DRAW', amount: balance, data: {} });
@@ -438,7 +471,7 @@ export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: 
     const { data } = await supabase.from('financial_journal').select('*').lt('entry_date', dateLimit).order('entry_date', { ascending: true });
     if (!data) return {};
 
-    const allRecords = data.map(mapJournalToLedgerRecord);
+    const allRecords = data.map(mapJournalToLedgerRecord).filter((r): r is LedgerRecord => r !== null);
     const balances: Record<string, { amount: number, isPanel1: boolean }> = {};
 
     clients?.forEach(client => {
@@ -507,7 +540,7 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
 
     if (!recentRecords || recentRecords.length === 0) return 0;
 
-    const col1Records = recentRecords.filter(r => r.data?.column === 'col1').map(mapJournalToLedgerRecord);
+    const col1Records = recentRecords.filter(r => r.data?.column === 'col1').map(row => mapJournalToLedgerRecord(row)).filter((r): r is LedgerRecord => r !== null);
     if (col1Records.length === 0) return 0;
 
     // 3. Sort and Pick Latest 5
