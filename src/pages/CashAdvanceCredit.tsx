@@ -28,7 +28,7 @@ const LedgerPreviewOverlay = ({ clientId, selectedDate }: { clientId: string, se
             const startObj = new Date(dateObj);
             startObj.setDate(dateObj.getDate() - diffToMon);
             const endObj = new Date(startObj);
-            endObj.setDate(startObj.getDate() + 6);
+            endObj.setDate(endObj.getDate() + 6);
             
             const startStr = startObj.toISOString().split('T')[0];
             const endStr = endObj.toISOString().split('T')[0];
@@ -174,6 +174,7 @@ const CashAdvanceCredit: React.FC = () => {
         setPreviewClientId(cid);
     }, []);
 
+    // Stabilized Blur Handler to prevent data loss or accidental row deletion
     const handleInputBlur = useCallback(async (cid: string, type: 'ADV' | 'CRED') => {
         if (autoFocusClientId === cid) setAutoFocusClientId(null);
 
@@ -184,17 +185,28 @@ const CashAdvanceCredit: React.FC = () => {
         }, 150);
 
         if (type === 'ADV') {
-            const val = parseFloat(advances[cid]) || 0;
-            await saveCashAdvance(selectedDate, cid, val);
-            if (val === 0) setAdvances(prev => { const n = {...prev}; delete n[cid]; return n; });
-            else setAdvances(prev => ({...prev, [cid]: val.toFixed(2)}));
+            setAdvances(prev => {
+                const rawVal = prev[cid];
+                const numVal = parseFloat(rawVal) || 0;
+                // Save to DB
+                saveCashAdvance(selectedDate, cid, numVal);
+                
+                // Return updated state with formatted number
+                // Fix: Removed auto-deletion logic so rows stay visible even if 0/empty
+                return { ...prev, [cid]: numVal === 0 && rawVal === '' ? '' : numVal.toFixed(2) };
+            });
         } else {
-            const val = parseFloat(credits[cid]) || 0;
-            await saveCashCredit(selectedDate, cid, val);
-            if (val === 0) setCredits(prev => { const n = {...prev}; delete n[cid]; return n; });
-            else setCredits(prev => ({...prev, [cid]: val.toFixed(2)}));
+            setCredits(prev => {
+                const rawVal = prev[cid];
+                const numVal = parseFloat(rawVal) || 0;
+                // Save to DB
+                saveCashCredit(selectedDate, cid, numVal);
+                
+                // Return updated state with formatted number
+                return { ...prev, [cid]: numVal === 0 && rawVal === '' ? '' : numVal.toFixed(2) };
+            });
         }
-    }, [selectedDate, advances, credits, autoFocusClientId]);
+    }, [selectedDate, autoFocusClientId]);
 
     const handleRemoveClient = useCallback(async (cid: string, type: 'ADV' | 'CRED') => {
         if (type === 'ADV') {
