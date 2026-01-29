@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Search, ChevronLeft, ChevronRight, Loader2, Calendar, Smartphone, FileText, DollarSign, RefreshCw, FileSpreadsheet, Zap, CheckCircle, TrendingUp, Info } from 'lucide-react';
@@ -10,13 +11,24 @@ import { useGlobalState } from '../context/GlobalStateContext';
 const PAPER_Z_CODES = ['Z03', 'Z05', 'Z07', 'Z15', 'Z19', 'Z20'];
 const PAPER_C_CODES = ['C03', 'C04', 'C06', 'C09', 'C13', 'C15', 'C17'];
 
-// Mapping: Mobile Code -> Paper Code (Case Insensitive)
+// Mapping: Mobile ID -> Paper Client Code (Case Insensitive)
 const MOBILE_TO_PAPER_MAP: Record<string, string> = {
-    'sk3964': 'z07',  // SINGER -> 顺
-    'sk3818': 'z19',  // MOOI -> 妹
-    'sk3619': 'c13',  // ZHONG -> 中
-    'sk8959': 'c17',  // YEE -> 仪
-    'vc9486': '9486'  // vincent -> 张
+    'sk3619': 'c13',
+    'sk3818': 'z19',
+    'sk3964': 'z07',
+    'sk8959': 'c17',
+    'vc9486': '9486',
+    'g8sv8239': 'z03',
+    'mrcc04': 'c04',
+    'pt217': 'pt217',
+    'sk0922': 'z05',
+    'sk2839': '2839',
+    'sk3715': '伍',
+    'sk5611': 'c09',
+    'sk8264': 'c19',
+    'sk8385': '8385',
+    'skc009': 'c08',
+    'skc15': 'c15'
 };
 
 // FIX: Utility function for numeric formatting in tables

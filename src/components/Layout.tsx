@@ -94,9 +94,10 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
                        {item.chineseChar}
                    </div>
                 ) : (
-                   <Icon size={20} className="mr-3" />
+                   <Icon size={20} className={isActive ? 'text-white' : 'mr-3 text-gray-400 group-hover:text-white'} />
                 )}
-                <span className="font-medium">{item.label}</span>
+                {!item.chineseChar && <span className="font-medium">{item.label}</span>}
+                {item.chineseChar && <span className="font-medium ml-3">{item.label}</span>}
               </Link>
             );
           })}

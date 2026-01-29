@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, RefreshCw, Save, CheckCircle, AlertCircle, History, FileText, Loader2, Zap, Calendar } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -5,21 +6,24 @@ import { getClients, saveSaleRecord, saveMobileReportHistory, getMobileReportHis
 import { Client, LedgerRecord } from '../types';
 import { useGlobalState } from '../context/GlobalStateContext';
 
-// Mapping: Mobile Code/Name -> Paper Code (Case Insensitive)
+// Mapping: Mobile ID -> Paper Client Code (Case Insensitive)
 const MOBILE_TO_PAPER_MAP: Record<string, string> = {
-    // Codes
-    'sk3964': 'z07',  // 顺
-    'sk3818': 'z19',  // 妹
-    'sk3619': 'c13',  // 中
-    'sk8959': 'c17',  // 仪
-    'vc9486': '9486', // 张
-
-    // Names (Just in case parser picks name as ID or user manually corrects)
-    'singer': 'z07',
-    'mooi': 'z19',
-    'zhong': 'c13',
-    'yee': 'c17',
-    'vincent': '9486'
+    'sk3619': 'c13',
+    'sk3818': 'z19',
+    'sk3964': 'z07',
+    'sk8959': 'c17',
+    'vc9486': '9486',
+    'g8sv8239': 'z03',
+    'mrcc04': 'c04',
+    'pt217': 'pt217',
+    'sk0922': 'z05',
+    'sk2839': '2839',
+    'sk3715': '伍',
+    'sk5611': 'c09',
+    'sk8264': 'c19',
+    'sk8385': '8385',
+    'skc009': 'c08',
+    'skc15': 'c15'
 };
 
 const MobileReport: React.FC = () => {
@@ -180,12 +184,8 @@ const MobileReport: React.FC = () => {
           }
 
           // 2. Special Paper Client "Dian" (电) Cross-Posting
-          // Try matching ID
+          // Match by ID primarily
           let mappedPaperCode = MOBILE_TO_PAPER_MAP[row.id.toLowerCase()];
-          // If not found, try matching Name
-          if (!mappedPaperCode && row.name) {
-              mappedPaperCode = MOBILE_TO_PAPER_MAP[row.name.toLowerCase()];
-          }
           
           if (mappedPaperCode) {
               const paperClient = clients.find(c => c.code.toLowerCase() === mappedPaperCode.toLowerCase());
@@ -272,9 +272,6 @@ const MobileReport: React.FC = () => {
             if (row.id === '总额') continue;
             
             let mappedPaperCode = MOBILE_TO_PAPER_MAP[row.id.toLowerCase()];
-            if (!mappedPaperCode && row.name) {
-                mappedPaperCode = MOBILE_TO_PAPER_MAP[row.name.toLowerCase()];
-            }
 
             if (mappedPaperCode) {
                 const paperClient = clients.find(c => c.code.toLowerCase() === mappedPaperCode.toLowerCase());
@@ -295,7 +292,7 @@ const MobileReport: React.FC = () => {
                         // Find ALL '电' records for this date
                         const existingDianRecords = existingRecords.filter(r => 
                             r.date === targetDate && 
-                            r.typeLabel === '电' &&
+                            r.typeLabel === '电' && 
                             r.column === 'main'
                         );
 
@@ -458,7 +455,7 @@ const MobileReport: React.FC = () => {
                                         </thead>
                                         <tbody className="divide-y divide-gray-100">
                                             {parsedData.map((row, idx) => {
-                                                const mappedCode = MOBILE_TO_PAPER_MAP[row.id.toLowerCase()] || MOBILE_TO_PAPER_MAP[row.name?.toLowerCase()];
+                                                const mappedCode = MOBILE_TO_PAPER_MAP[row.id.toLowerCase()];
                                                 return (
                                                 <tr key={idx} className={`hover:bg-gray-50 ${mappedCode ? 'bg-blue-50/50' : ''}`}>
                                                     <td className="p-2 font-mono text-gray-600">
