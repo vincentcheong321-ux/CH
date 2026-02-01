@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, ChevronLeft, ChevronRight, Loader2, Smartphone, FileText, RefreshCw, FileSpreadsheet, Zap, CheckCircle, TrendingUp, DollarSign, Wallet, Briefcase } from 'lucide-react';
+// Added LayoutTemplate to the imports from lucide-react
+import { Search, ChevronLeft, ChevronRight, Loader2, Smartphone, FileText, RefreshCw, FileSpreadsheet, Zap, CheckCircle, TrendingUp, DollarSign, Wallet, Briefcase, User, Hash, Phone, ChevronRight as ChevronRightIcon, LayoutTemplate } from 'lucide-react';
 import { getClients, getSalesForDates, saveSaleRecord, getLedgerRecords, updateLedgerRecord, saveLedgerRecord, deleteLedgerRecord } from '../services/storageService';
 import { Client, SaleRecord } from '../types';
 import { MONTH_NAMES, getWeeksForMonth } from '../utils/reportUtils';
@@ -14,7 +15,6 @@ const MOBILE_TO_PAPER_MAP: Record<string, string> = {
     'sk3715': '伍', 'sk5611': 'c09', 'sk8264': 'c19', 'sk8385': '8385', 'skc009': 'c08', 'skc15': 'c15'
 };
 
-// UPDATED: Lists for Spreadsheet Layout matching user request
 const Z_CLIENT_CODES = ['Z03', 'Z05', 'Z07', 'Z15', 'Z19', 'Z20'];
 const C_CLIENT_CODES = ['C03', 'C04', 'C06', 'C07', 'C09', 'C13', 'C15', 'C17'];
 
@@ -106,7 +106,13 @@ const DailySpreadsheetTable: React.FC<{
                                     <td className="w-36 px-3 font-black text-gray-800 border-r border-gray-300 bg-gray-50/50 uppercase text-xs">
                                         <div className="flex flex-col">
                                             <span className="text-blue-600">{row.code}</span>
-                                            <span className="text-[9px] text-gray-500 truncate font-bold">{row.client?.name || 'N/A'}</span>
+                                            {row.client ? (
+                                                <Link to={`/clients/${row.client.id}`} className="text-[9px] text-gray-500 hover:text-blue-700 underline truncate font-bold decoration-dotted">
+                                                    {row.client.name}
+                                                </Link>
+                                            ) : (
+                                                <span className="text-[9px] text-gray-300 font-bold italic">N/A</span>
+                                            )}
                                         </div>
                                     </td>
                                     <td className="border-r border-gray-300 w-24 relative p-0 h-12">
@@ -131,7 +137,6 @@ const DailySpreadsheetTable: React.FC<{
                                     </td>
                                 </tr>
                             ))}
-                            {/* Z Summary Box */}
                             <tr className="bg-white h-20">
                                 <td colSpan={3} className="p-4 border-t-2 border-black">
                                     <div className="flex flex-col items-center">
@@ -139,9 +144,7 @@ const DailySpreadsheetTable: React.FC<{
                                             <div className="flex-1 p-1 text-center font-mono font-bold text-sm bg-gray-50">{zTotals.wan || ''}</div>
                                             <div className="flex-1 p-1 text-center font-mono font-bold text-sm bg-gray-50">{zTotals.qian || ''}</div>
                                         </div>
-                                        <div className="border-2 border-black w-48 p-1 text-center font-mono font-black text-lg">
-                                            {zTotals.total || ''}
-                                        </div>
+                                        <div className="border-2 border-black w-48 p-1 text-center font-mono font-black text-lg">{zTotals.total || ''}</div>
                                     </div>
                                 </td>
                             </tr>
@@ -158,7 +161,13 @@ const DailySpreadsheetTable: React.FC<{
                                     <td className="w-36 px-3 font-black text-gray-800 border-r border-gray-300 bg-gray-50/50 uppercase text-xs">
                                         <div className="flex flex-col">
                                             <span className="text-emerald-600">{row.code}</span>
-                                            <span className="text-[9px] text-gray-500 truncate font-bold">{row.client?.name || 'N/A'}</span>
+                                            {row.client ? (
+                                                <Link to={`/clients/${row.client.id}`} className="text-[9px] text-gray-500 hover:text-blue-700 underline truncate font-bold decoration-dotted">
+                                                    {row.client.name}
+                                                </Link>
+                                            ) : (
+                                                <span className="text-[9px] text-gray-300 font-bold italic">N/A</span>
+                                            )}
                                         </div>
                                     </td>
                                     <td className="border-r border-gray-300 w-24 relative p-0 h-12">
@@ -183,7 +192,6 @@ const DailySpreadsheetTable: React.FC<{
                                     </td>
                                 </tr>
                             ))}
-                            {/* C Summary Box */}
                             <tr className="bg-white h-20">
                                 <td colSpan={3} className="p-4 border-t-2 border-black">
                                     <div className="flex flex-col items-center">
@@ -191,9 +199,7 @@ const DailySpreadsheetTable: React.FC<{
                                             <div className="flex-1 p-1 text-center font-mono font-bold text-sm bg-gray-50">{cTotals.wan || ''}</div>
                                             <div className="flex-1 p-1 text-center font-mono font-bold text-sm bg-gray-50">{cTotals.qian || ''}</div>
                                         </div>
-                                        <div className="border-2 border-black w-48 p-1 text-center font-mono font-black text-lg">
-                                            {cTotals.total || ''}
-                                        </div>
+                                        <div className="border-2 border-black w-48 p-1 text-center font-mono font-black text-lg">{cTotals.total || ''}</div>
                                     </div>
                                 </td>
                             </tr>
@@ -259,7 +265,6 @@ const SalesIndex: React.FC = () => {
     await saveSaleRecord({ clientId, date, b, a, s: 0, c: 0 });
   }, []);
 
-  // UPDATED: Earning Calculation logic back on top
   const earnings = useMemo(() => {
       let paper = 0;
       let mobile = 0;
@@ -344,6 +349,8 @@ const SalesIndex: React.FC = () => {
       return `${formatDate(days[0])} - ${formatDate(days[days.length - 1])}`;
   };
 
+  const paperClients = useMemo(() => clients.filter(c => (c.category || 'paper') === 'paper'), [clients]);
+
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-gray-50">
       <div className="bg-white border-b border-gray-200 z-20 shadow-sm flex-shrink-0">
@@ -354,8 +361,7 @@ const SalesIndex: React.FC = () => {
                     <button onClick={() => setActiveTab('mobile')} className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'mobile' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}><Smartphone size={16} className="mr-2 inline" />Mobile</button>
                  </div>
                  
-                 {/* Summary Cards Row - Restored Top Earning View */}
-                 <div className="hidden md:flex items-center gap-3 overflow-x-auto no-scrollbar">
+                 <div className="hidden md:flex items-center gap-3 overflow-x-auto no-scrollbar flex-shrink-0">
                      <div className="flex items-center px-4 py-2 bg-blue-50 rounded-xl border border-blue-100 flex-shrink-0 min-w-[140px]">
                         <Briefcase size={14} className="mr-2 text-blue-600" />
                         <div className="flex flex-col">
@@ -411,21 +417,63 @@ const SalesIndex: React.FC = () => {
         {loading ? (
             <div className="flex justify-center items-center h-full"><Loader2 className="animate-spin text-gray-400" /></div>
         ) : activeTab === 'paper' ? (
-            <div className="max-w-7xl mx-auto">
-                {drawDates.map(date => (
-                    <DailySpreadsheetTable 
-                        key={date} 
-                        dateStr={date} 
-                        clients={clients} 
-                        sales={salesData} 
-                        onUpdate={handlePaperUpdate} 
-                    />
-                ))}
-                {drawDates.length === 0 && (
-                    <div className="p-12 text-center text-gray-400 font-bold bg-white rounded-2xl border-2 border-dashed border-gray-200">
-                        No draw dates found for this week.
+            <div className="max-w-7xl mx-auto space-y-12">
+                {/* 1. New Spreadsheet Board Layout */}
+                <section>
+                    <div className="mb-6 border-b border-gray-300 pb-2">
+                        <h2 className="text-xl font-black text-gray-800 uppercase tracking-widest flex items-center">
+                            <FileText size={20} className="mr-2 text-blue-600" />
+                            Weekly Opening Board
+                        </h2>
                     </div>
-                )}
+                    {drawDates.map(date => (
+                        <DailySpreadsheetTable 
+                            key={date} 
+                            dateStr={date} 
+                            clients={clients} 
+                            sales={salesData} 
+                            onUpdate={handlePaperUpdate} 
+                        />
+                    ))}
+                    {drawDates.length === 0 && (
+                        <div className="p-12 text-center text-gray-400 font-bold bg-white rounded-2xl border-2 border-dashed border-gray-200">
+                            No draw dates found for this week.
+                        </div>
+                    )}
+                </section>
+
+                {/* 2. Restored Classic Client Grid Layout */}
+                <section>
+                    <div className="mb-6 border-b border-gray-300 pb-2">
+                        <h2 className="text-xl font-black text-gray-800 uppercase tracking-widest flex items-center">
+                            {/* Fixed missing import error for LayoutTemplate */}
+                            <LayoutTemplate size={20} className="mr-2 text-purple-600" />
+                            Paper Client List (Classic View)
+                        </h2>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                        {paperClients.map(client => (
+                            <Link 
+                                key={client.id}
+                                to={`/clients/${client.id}/sales`}
+                                className="bg-white rounded-xl border-2 border-gray-100 shadow-sm hover:shadow-md hover:border-blue-200 transition-all p-5 flex flex-col items-center justify-center text-center space-y-3 group"
+                            >
+                                <div className="w-14 h-14 rounded-full bg-gray-50 flex items-center justify-center text-xl font-bold group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                                    {client.name.substring(0, 1).toUpperCase()}
+                                </div>
+                                <div className="w-full">
+                                    <h3 className="font-bold text-gray-900 truncate px-2">{client.name}</h3>
+                                    <div className="flex items-center justify-center space-x-2 mt-1">
+                                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-gray-100 text-gray-500 border border-gray-200">{client.code}</span>
+                                    </div>
+                                </div>
+                                <div className="pt-2 border-t border-gray-50 w-full flex items-center justify-center text-blue-500 group-hover:text-blue-700 font-bold text-xs">
+                                    View Details <ChevronRightIcon size={14} className="ml-1" />
+                                </div>
+                            </Link>
+                        ))}
+                    </div>
+                </section>
             </div>
         ) : (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
