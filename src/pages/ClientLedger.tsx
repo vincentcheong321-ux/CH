@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Printer, Trash2, Plus, Minus, Pencil, X, Check, AlertTriangle, ExternalLink, GripHorizontal, Hash, Zap, ChevronLeft, ChevronRight, ImageDown, Loader2 } from 'lucide-react';
@@ -335,7 +336,7 @@ const ClientLedger: React.FC = () => {
 
   const requestDeleteCategory = (e: React.MouseEvent, catId: string) => {
     e.stopPropagation();
-    setConfirmModal({ isOpen: true, type: 'DELETE_CATEGORY', targetId: catId, title: 'Delete Button', message: 'Remove this category button?' });
+    setConfirmModal({ isOpen: true, type: 'DELETE_CATEGORY', targetId: recordId, title: 'Delete Button', message: 'Remove this category button?' });
   };
 
   const requestDeleteRecord = (recordId: string) => {
@@ -692,7 +693,7 @@ const ClientLedger: React.FC = () => {
             <div className="bg-gray-50 border-t-2 border-black">
                 {/* Gross Sub Row */}
                 <div className="flex border-b border-black h-11 items-center font-mono">
-                    <div className="w-[20%] border-r border-black bg-gray-50 h-full flex items-center justify-end pr-2 text-[11px] text-gray-300 font-black tracking-tighter uppercase">SUB</div>
+                    <div className="w-[20%] border-r border-black bg-gray-50 h-full flex items-center justify-center text-[11px] text-gray-300 font-black tracking-tighter uppercase">SUB</div>
                     <div className="w-[40%] text-center border-r border-black font-black bg-white h-full flex items-center justify-center text-gray-300">
                         {totals.wan > 0 ? totals.wan : ''}
                     </div>
@@ -793,7 +794,7 @@ const ClientLedger: React.FC = () => {
                                     <span className="truncate pr-1">{cat.label}</span>
                                     {cat.operation === 'add' ? <Plus size={8} /> : cat.operation === 'subtract' ? <Minus size={8} /> : <Hash size={8} />}
                                 </button>
-                                <button onClick={(e) => requestDeleteCategory(e, cat.id)} className="absolute -top-1 -right-1 text-gray-400 hover:text-red-600 bg-white rounded-full p-0.5 shadow-md opacity-0 group-hover:opacity-100 transition-opacity"><X size={8} /></button>
+                                <button onClick={(e) => requestDeleteCategory(e, cat.id)} className="absolute -top-1 -right-1 text-gray-400 hover:text-red-600 bg-white rounded-full p-0.5 shadow-md opacity-0 group-hover:opacity-100 transition-opacity"><X size={14} /></button>
                             </div>
                         ))}
                     </div>
@@ -1034,4 +1035,6 @@ const ClientLedger: React.FC = () => {
   );
 };
 
+/* DO add comment above each fix */
+/* Fix: Exporting ClientLedger instead of undefined ClientLedgerV1 */
 export default ClientLedger;
