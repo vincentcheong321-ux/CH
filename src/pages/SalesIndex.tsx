@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, ChevronLeft, ChevronRight, Loader2, Smartphone, FileText, RefreshCw, FileSpreadsheet, Zap, CheckCircle, TrendingUp } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Loader2, Smartphone, FileText, RefreshCw, FileSpreadsheet, Zap, CheckCircle, TrendingUp, DollarSign, Wallet, Briefcase } from 'lucide-react';
 import { getClients, getSalesForDates, saveSaleRecord, getLedgerRecords, updateLedgerRecord, saveLedgerRecord, deleteLedgerRecord } from '../services/storageService';
 import { Client, SaleRecord } from '../types';
 import { MONTH_NAMES, getWeeksForMonth } from '../utils/reportUtils';
@@ -13,9 +14,9 @@ const MOBILE_TO_PAPER_MAP: Record<string, string> = {
     'sk3715': '伍', 'sk5611': 'c09', 'sk8264': 'c19', 'sk8385': '8385', 'skc009': 'c08', 'skc15': 'c15'
 };
 
-// Fixed Lists for Spreadsheet Layout
-const LEFT_CLIENT_CODES = ['Z07', 'Z15', 'Z19', 'Z20', 'C03', 'C06', 'C13', 'C17', 'Z21'];
-const RIGHT_CLIENT_CODES = ['C01', 'C02', 'C03', 'C04', 'C06', 'C07', 'C09', 'C10', 'C11', 'C13', 'C14', 'C15', 'C16', 'C17', 'C19'];
+// UPDATED: Lists for Spreadsheet Layout matching user request
+const Z_CLIENT_CODES = ['Z03', 'Z05', 'Z07', 'Z15', 'Z19', 'Z20'];
+const C_CLIENT_CODES = ['C03', 'C04', 'C06', 'C07', 'C09', 'C13', 'C15', 'C17'];
 
 const SpreadsheetInput = React.memo(({ 
     value, 
@@ -51,7 +52,6 @@ const SpreadsheetInput = React.memo(({
     );
 });
 
-// FIX: Changed component definition to use React.FC to correctly handle React's special 'key' prop when used in lists.
 const DailySpreadsheetTable: React.FC<{ 
     dateStr: string, 
     clients: Client[], 
@@ -74,8 +74,8 @@ const DailySpreadsheetTable: React.FC<{
         });
     };
 
-    const leftData = getRowData(LEFT_CLIENT_CODES);
-    const rightData = getRowData(RIGHT_CLIENT_CODES);
+    const zData = getRowData(Z_CLIENT_CODES);
+    const cData = getRowData(C_CLIENT_CODES);
 
     const calcTotals = (data: any[]) => {
         let wan = 0, qian = 0;
@@ -86,27 +86,30 @@ const DailySpreadsheetTable: React.FC<{
         return { wan, qian, total: wan + qian };
     };
 
-    const leftTotals = calcTotals(leftData);
-    const rightTotals = calcTotals(rightData);
+    const zTotals = calcTotals(zData);
+    const cTotals = calcTotals(cData);
 
     return (
-        <div className="bg-white border-2 border-black mb-12 shadow-md max-w-4xl mx-auto overflow-hidden">
+        <div className="bg-white border-2 border-black mb-12 shadow-md max-w-6xl mx-auto overflow-hidden">
             <div className="grid grid-cols-2 bg-gray-100 border-b-2 border-black">
-                <div className="p-2 text-center font-black text-xl border-r-2 border-black uppercase tracking-widest">{displayDate}</div>
-                <div className="p-2 text-center font-black text-xl uppercase tracking-widest">{displayDate}</div>
+                <div className="p-2 text-center font-black text-xl border-r-2 border-black uppercase tracking-widest">{displayDate} - Z GROUP</div>
+                <div className="p-2 text-center font-black text-xl uppercase tracking-widest">{displayDate} - C GROUP</div>
             </div>
 
             <div className="grid grid-cols-2">
-                {/* Left Column Group */}
+                {/* Z GROUP Column */}
                 <div className="border-r-2 border-black">
                     <table className="w-full border-collapse">
                         <tbody>
-                            {leftData.map((row, idx) => (
-                                <tr key={idx} className="h-10 border-b border-gray-300 last:border-0 hover:bg-gray-50 transition-colors">
-                                    <td className="w-20 px-3 font-black text-gray-800 border-r border-gray-300 bg-gray-50/50 uppercase text-sm">
-                                        {row.code}
+                            {zData.map((row, idx) => (
+                                <tr key={idx} className="h-12 border-b border-gray-300 last:border-0 hover:bg-gray-50 transition-colors">
+                                    <td className="w-36 px-3 font-black text-gray-800 border-r border-gray-300 bg-gray-50/50 uppercase text-xs">
+                                        <div className="flex flex-col">
+                                            <span className="text-blue-600">{row.code}</span>
+                                            <span className="text-[9px] text-gray-500 truncate font-bold">{row.client?.name || 'N/A'}</span>
+                                        </div>
                                     </td>
-                                    <td className="border-r border-gray-300 w-24 relative p-0 h-10">
+                                    <td className="border-r border-gray-300 w-24 relative p-0 h-12">
                                         {row.client && (
                                             <SpreadsheetInput 
                                                 value={row.sale?.b || 0} 
@@ -116,7 +119,7 @@ const DailySpreadsheetTable: React.FC<{
                                             />
                                         )}
                                     </td>
-                                    <td className="w-24 relative p-0 h-10">
+                                    <td className="w-24 relative p-0 h-12">
                                         {row.client && (
                                             <SpreadsheetInput 
                                                 value={row.sale?.a || 0} 
@@ -128,16 +131,16 @@ const DailySpreadsheetTable: React.FC<{
                                     </td>
                                 </tr>
                             ))}
-                            {/* Left Summary Box */}
+                            {/* Z Summary Box */}
                             <tr className="bg-white h-20">
                                 <td colSpan={3} className="p-4 border-t-2 border-black">
                                     <div className="flex flex-col items-center">
                                         <div className="flex border-2 border-black divide-x-2 divide-black w-48 mb-2">
-                                            <div className="flex-1 p-1 text-center font-mono font-bold text-sm bg-gray-50">{leftTotals.wan || ''}</div>
-                                            <div className="flex-1 p-1 text-center font-mono font-bold text-sm bg-gray-50">{leftTotals.qian || ''}</div>
+                                            <div className="flex-1 p-1 text-center font-mono font-bold text-sm bg-gray-50">{zTotals.wan || ''}</div>
+                                            <div className="flex-1 p-1 text-center font-mono font-bold text-sm bg-gray-50">{zTotals.qian || ''}</div>
                                         </div>
                                         <div className="border-2 border-black w-48 p-1 text-center font-mono font-black text-lg">
-                                            {leftTotals.total || ''}
+                                            {zTotals.total || ''}
                                         </div>
                                     </div>
                                 </td>
@@ -146,16 +149,19 @@ const DailySpreadsheetTable: React.FC<{
                     </table>
                 </div>
 
-                {/* Right Column Group */}
+                {/* C GROUP Column */}
                 <div>
                     <table className="w-full border-collapse">
                         <tbody>
-                            {rightData.map((row, idx) => (
-                                <tr key={idx} className="h-10 border-b border-gray-300 last:border-0 hover:bg-gray-50 transition-colors">
-                                    <td className="w-20 px-3 font-black text-gray-800 border-r border-gray-300 bg-gray-50/50 uppercase text-sm">
-                                        {row.code}
+                            {cData.map((row, idx) => (
+                                <tr key={idx} className="h-12 border-b border-gray-300 last:border-0 hover:bg-gray-50 transition-colors">
+                                    <td className="w-36 px-3 font-black text-gray-800 border-r border-gray-300 bg-gray-50/50 uppercase text-xs">
+                                        <div className="flex flex-col">
+                                            <span className="text-emerald-600">{row.code}</span>
+                                            <span className="text-[9px] text-gray-500 truncate font-bold">{row.client?.name || 'N/A'}</span>
+                                        </div>
                                     </td>
-                                    <td className="border-r border-gray-300 w-24 relative p-0 h-10">
+                                    <td className="border-r border-gray-300 w-24 relative p-0 h-12">
                                         {row.client && (
                                             <SpreadsheetInput 
                                                 value={row.sale?.b || 0} 
@@ -165,7 +171,7 @@ const DailySpreadsheetTable: React.FC<{
                                             />
                                         )}
                                     </td>
-                                    <td className="w-24 relative p-0 h-10">
+                                    <td className="w-24 relative p-0 h-12">
                                         {row.client && (
                                             <SpreadsheetInput 
                                                 value={row.sale?.a || 0} 
@@ -177,16 +183,16 @@ const DailySpreadsheetTable: React.FC<{
                                     </td>
                                 </tr>
                             ))}
-                            {/* Right Summary Box */}
+                            {/* C Summary Box */}
                             <tr className="bg-white h-20">
                                 <td colSpan={3} className="p-4 border-t-2 border-black">
                                     <div className="flex flex-col items-center">
                                         <div className="flex border-2 border-black divide-x-2 divide-black w-48 mb-2">
-                                            <div className="flex-1 p-1 text-center font-mono font-bold text-sm bg-gray-50">{rightTotals.wan || ''}</div>
-                                            <div className="flex-1 p-1 text-center font-mono font-bold text-sm bg-gray-50">{rightTotals.qian || ''}</div>
+                                            <div className="flex-1 p-1 text-center font-mono font-bold text-sm bg-gray-50">{cTotals.wan || ''}</div>
+                                            <div className="flex-1 p-1 text-center font-mono font-bold text-sm bg-gray-50">{cTotals.qian || ''}</div>
                                         </div>
                                         <div className="border-2 border-black w-48 p-1 text-center font-mono font-black text-lg">
-                                            {rightTotals.total || ''}
+                                            {cTotals.total || ''}
                                         </div>
                                     </div>
                                 </td>
@@ -253,6 +259,24 @@ const SalesIndex: React.FC = () => {
     await saveSaleRecord({ clientId, date, b, a, s: 0, c: 0 });
   }, []);
 
+  // UPDATED: Earning Calculation logic back on top
+  const earnings = useMemo(() => {
+      let paper = 0;
+      let mobile = 0;
+      salesData.forEach(r => {
+          const c = clients.find(cl => cl.id === r.clientId);
+          if (!c) return;
+          if (c.category === 'paper') {
+              const rawTotal = (r.b || 0) + (r.s || 0) + (r.a || 0) + (r.c || 0);
+              paper += Math.abs(rawTotal * 0.86 - rawTotal * 0.83);
+          } else if (c.category === 'mobile' && r.mobileRawData) {
+              const shareholderTotal = parseFloat(String(r.mobileRawData[11]).replace(/,/g, '')) || 0;
+              mobile += Math.abs(shareholderTotal);
+          }
+      });
+      return { paper, mobile, total: paper + mobile };
+  }, [salesData, clients]);
+
   const handleRegenerateDianFromList = async () => {
       if (salesData.length === 0) return;
       setIsRegenerating(true); setRegenMessage(null);
@@ -312,23 +336,6 @@ const SalesIndex: React.FC = () => {
       if (days && days.length > 0) setCurrentDate(new Date(days[0]));
   };
 
-  const mobileClients = useMemo(() => clients.filter(c => c.category === 'mobile'), [clients]);
-  const filteredMobileClients = mobileClients.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()) || c.code.toLowerCase().includes(searchTerm.toLowerCase()));
-
-  const mobileColumnTotals = useMemo(() => {
-      const totals = new Array(17).fill(0);
-      filteredMobileClients.forEach(client => {
-          const clientRecords = salesData.filter(r => r.clientId === client.id);
-          const record = clientRecords[clientRecords.length - 1]; 
-          if (record?.mobileRawData) {
-              record.mobileRawData.forEach((val, idx) => {
-                  if (idx < 17) totals[idx] += parseFloat(String(val).replace(/,/g, '')) || 0;
-              });
-          }
-      });
-      return totals;
-  }, [filteredMobileClients, salesData]);
-
   const sortedWeekKeys = Object.keys(weeksData).map(Number).sort((a,b) => a-b);
   const getWeekRangeLabel = (weekNum: number) => {
       const days = weeksData[weekNum];
@@ -340,17 +347,42 @@ const SalesIndex: React.FC = () => {
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-gray-50">
       <div className="bg-white border-b border-gray-200 z-20 shadow-sm flex-shrink-0">
-          <div className="px-4 py-3 flex flex-col sm:flex-row justify-between items-center gap-3">
-             <div className="flex items-center w-full sm:w-auto">
-                 <div className="flex bg-gray-100 p-1 rounded-lg w-full sm:w-auto">
-                    <button onClick={() => setActiveTab('paper')} className={`flex-1 sm:flex-none flex items-center justify-center px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'paper' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}><FileText size={16} className="mr-2" />Paper</button>
-                    <button onClick={() => setActiveTab('mobile')} className={`flex-1 sm:flex-none flex items-center justify-center px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'mobile' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}><Smartphone size={16} className="mr-2" />Mobile</button>
+          <div className="px-4 py-3 flex flex-col lg:flex-row justify-between items-center gap-4">
+             <div className="flex items-center space-x-4 w-full lg:w-auto">
+                 <div className="flex bg-gray-100 p-1 rounded-lg">
+                    <button onClick={() => setActiveTab('paper')} className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'paper' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}><FileText size={16} className="mr-2 inline" />Paper</button>
+                    <button onClick={() => setActiveTab('mobile')} className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'mobile' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}><Smartphone size={16} className="mr-2 inline" />Mobile</button>
+                 </div>
+                 
+                 {/* Summary Cards Row - Restored Top Earning View */}
+                 <div className="hidden md:flex items-center gap-3 overflow-x-auto no-scrollbar">
+                     <div className="flex items-center px-4 py-2 bg-blue-50 rounded-xl border border-blue-100 flex-shrink-0 min-w-[140px]">
+                        <Briefcase size={14} className="mr-2 text-blue-600" />
+                        <div className="flex flex-col">
+                            <span className="text-[9px] font-bold text-blue-800 uppercase leading-none mb-0.5">Paper Profit</span>
+                            <span className="text-xs font-mono font-bold text-blue-600 leading-none">${earnings.paper.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                        </div>
+                    </div>
+                    <div className="flex items-center px-4 py-2 bg-purple-50 rounded-xl border border-purple-100 flex-shrink-0 min-w-[140px]">
+                        <TrendingUp size={14} className="mr-2 text-purple-600" />
+                        <div className="flex flex-col">
+                            <span className="text-[9px] font-bold text-purple-800 uppercase leading-none mb-0.5">Mobile Profit</span>
+                            <span className="text-xs font-mono font-bold text-purple-600 leading-none">${earnings.mobile.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                        </div>
+                    </div>
+                    <div className="flex items-center px-4 py-2 bg-emerald-600 rounded-xl shadow-lg shadow-emerald-100 flex-shrink-0 min-w-[140px]">
+                        <DollarSign size={14} className="mr-2 text-white" />
+                        <div className="flex flex-col">
+                            <span className="text-[9px] font-bold text-emerald-100 uppercase leading-none mb-0.5">Net Weekly</span>
+                            <span className="text-xs font-mono font-bold text-white leading-none">${earnings.total.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                        </div>
+                    </div>
                  </div>
              </div>
-             <div className="flex items-center space-x-3 w-full sm:w-auto">
+             <div className="flex items-center space-x-3 w-full lg:w-auto">
                 {activeTab === 'mobile' && (
                     <>
-                        <div className="relative flex-1 sm:w-64">
+                        <div className="relative flex-1 lg:w-64">
                             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
                             <input type="text" placeholder="Search mobile..." className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                         </div>
@@ -379,7 +411,7 @@ const SalesIndex: React.FC = () => {
         {loading ? (
             <div className="flex justify-center items-center h-full"><Loader2 className="animate-spin text-gray-400" /></div>
         ) : activeTab === 'paper' ? (
-            <div className="max-w-6xl mx-auto">
+            <div className="max-w-7xl mx-auto">
                 {drawDates.map(date => (
                     <DailySpreadsheetTable 
                         key={date} 
@@ -409,7 +441,7 @@ const SalesIndex: React.FC = () => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {filteredMobileClients.map(client => {
+                            {clients.filter(c => c.category === 'mobile').filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()) || c.code.toLowerCase().includes(searchTerm.toLowerCase())).map(client => {
                                 const clientRecords = salesData.filter(r => r.clientId === client.id);
                                 const record = clientRecords[clientRecords.length - 1]; 
                                 const raw = record?.mobileRawData || [];
