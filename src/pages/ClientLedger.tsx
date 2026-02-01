@@ -79,7 +79,7 @@ const RegistryInput = React.memo(({
             />
             {isSaving && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-white/10">
-                    <Loader2 size={10} className="animate-spin text-gray-400" />
+                    <Loader2 size={12} className="animate-spin text-gray-400" />
                 </div>
             )}
         </div>
@@ -652,21 +652,21 @@ const ClientLedger: React.FC = () => {
     const grandTotal = discWan + discQian;
 
     return (
-        <div className="mb-6 max-w-sm mx-auto border-2 border-black bg-white shadow-sm overflow-hidden">
-            {/* Header: Sales Title and Wan/Qian labels */}
-            <div className="flex border-b-2 border-black h-8 bg-gray-50/50">
-                <div className="w-[20%] border-r border-black flex items-center justify-center font-black text-[11px] text-gray-400 uppercase tracking-tighter">
+        <div className="mb-8 max-w-lg mx-auto border-2 border-black bg-white shadow-sm overflow-hidden">
+            {/* Header: Large Wan/Qian labels */}
+            <div className="flex border-b-2 border-black h-12 bg-gray-50/50">
+                <div className="w-[20%] border-r border-black flex items-center justify-center font-black text-xs text-gray-400 uppercase tracking-tighter">
                     REG
                 </div>
-                <div className="w-[40%] border-r border-black flex items-center justify-center font-serif italic text-2xl">万</div>
-                <div className="w-[40%] flex items-center justify-center font-serif italic text-2xl">千</div>
+                <div className="w-[40%] border-r border-black flex items-center justify-center font-serif italic text-3xl">万</div>
+                <div className="w-[40%] flex items-center justify-center font-serif italic text-3xl">千</div>
             </div>
             
             {/* Column Title Row */}
-            <div className="flex border-b border-black text-[9px] font-black bg-gray-100/50 text-gray-400 uppercase tracking-tighter leading-none h-4 items-center">
-                <div className="w-[20%] text-center border-r border-black">Date</div>
-                <div className="w-[40%] text-center border-r border-black">Wan Slip</div>
-                <div className="w-[40%] text-center">Qian Slip</div>
+            <div className="flex border-b border-black text-[10px] font-black bg-gray-100/50 text-gray-400 uppercase tracking-tighter leading-none h-5 items-center">
+                <div className="w-[20%] text-center border-r border-black">DATE</div>
+                <div className="w-[40%] text-center border-r border-black">WAN SLIP</div>
+                <div className="w-[40%] text-center">QIAN SLIP</div>
             </div>
 
             {/* Content Rows */}
@@ -674,13 +674,13 @@ const ClientLedger: React.FC = () => {
                 {registryRows.map((row, idx) => {
                     const dateLabel = `${String(row.date.getDate()).padStart(2,'0')}-${MONTH_NAMES[row.date.getMonth()].slice(0,3)}`;
                     return (
-                        <div key={idx} className="flex h-8 hover:bg-blue-50/20 items-stretch">
-                            <div className="w-[20%] flex items-center justify-center border-r border-black text-xs font-mono font-bold text-gray-400 bg-gray-50/20">{dateLabel}</div>
+                        <div key={idx} className="flex h-11 hover:bg-blue-50/20 items-stretch">
+                            <div className="w-[20%] flex items-center justify-center border-r border-black text-xs font-mono font-bold text-gray-400 bg-gray-50/20 uppercase">{dateLabel}</div>
                             <div className="w-[40%] border-r border-black relative">
-                                <RegistryInput value={row.record?.b || 0} onChange={(v) => handleSaleUpdate(row.dateStr, v, row.record?.a || 0)} colorClass="text-blue-800 text-lg"/>
+                                <RegistryInput value={row.record?.b || 0} onChange={(v) => handleSaleUpdate(row.dateStr, v, row.record?.a || 0)} colorClass="text-blue-800 text-xl"/>
                             </div>
                             <div className="w-[40%] relative">
-                                <RegistryInput value={row.record?.a || 0} onChange={(v) => handleSaleUpdate(row.dateStr, row.record?.b || 0, v)} colorClass="text-red-700 text-lg"/>
+                                <RegistryInput value={row.record?.a || 0} onChange={(v) => handleSaleUpdate(row.dateStr, row.record?.b || 0, v)} colorClass="text-red-700 text-xl"/>
                             </div>
                         </div>
                     );
@@ -690,25 +690,25 @@ const ClientLedger: React.FC = () => {
             {/* Compact Footer */}
             <div className="bg-gray-50 border-t-2 border-black">
                 {/* Gross Sub Row */}
-                <div className="flex border-b border-black text-[9px] font-black text-gray-300 uppercase font-mono h-4 items-center">
-                    <div className="w-[20%] text-right pr-1 border-r border-black tracking-tighter">SUB</div>
-                    <div className="w-[40%] text-center border-r border-black">{totals.wan > 0 ? totals.wan : ''}</div>
-                    <div className="w-[40%] text-center">{totals.qian > 0 ? totals.qian : ''}</div>
+                <div className="flex border-b border-black text-[10px] font-black text-gray-300 uppercase font-mono h-5 items-center">
+                    <div className="w-[20%] text-right pr-2 border-r border-black tracking-tighter">SUB</div>
+                    <div className="w-[40%] text-center border-r border-black font-black">{totals.wan > 0 ? totals.wan : ''}</div>
+                    <div className="w-[40%] text-center font-black">{totals.qian > 0 ? totals.qian : ''}</div>
                 </div>
 
                 {/* Discounted Net Row */}
-                <div className="flex border-b border-black h-8 items-center font-mono bg-white">
-                    <div className="w-[20%] border-r border-black bg-gray-50 h-full flex items-center justify-center text-[10px] text-gray-300 font-black tracking-tighter uppercase">-14%</div>
-                    <div className="w-[40%] text-center border-r border-black text-blue-900 font-bold text-xl">
+                <div className="flex border-b border-black h-11 items-center font-mono bg-white">
+                    <div className="w-[20%] border-r border-black bg-gray-50 h-full flex items-center justify-center text-[11px] text-gray-300 font-black tracking-tighter uppercase">-14%</div>
+                    <div className="w-[40%] text-center border-r border-black text-blue-900 font-black text-2xl">
                         {discWan > 0 ? discWan.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1}) : ''}
                     </div>
-                    <div className="w-[40%] text-center text-red-800 font-bold text-xl">
+                    <div className="w-[40%] text-center text-red-800 font-black text-2xl">
                         {discQian > 0 ? discQian.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1}) : ''}
                     </div>
                 </div>
 
                 {/* Final Week Total for Registry */}
-                <div className="text-center py-1.5 text-3xl font-black text-gray-900 bg-white font-mono tracking-tighter leading-none border-b-2 border-black">
+                <div className="text-center py-2.5 text-4xl font-black text-gray-900 bg-white font-mono tracking-tighter leading-none border-b-2 border-black">
                     {grandTotal.toLocaleString(undefined, {minimumFractionDigits: 2})}
                 </div>
             </div>
