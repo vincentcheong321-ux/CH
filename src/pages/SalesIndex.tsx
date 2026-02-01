@@ -11,7 +11,7 @@ import { useGlobalState } from '../context/GlobalStateContext';
 const MOBILE_TO_PAPER_MAP: Record<string, string> = {
     'sk3619': 'c13', 'sk3818': 'z19', 'sk3964': 'z07', 'sk8959': 'c17', 'vc9486': '9486',
     'g8sv8239': 'z03', 'mrcc04': 'c04', 'pt217': 'pt217', 'sk0922': 'z05', 'sk2839': '2839',
-    'sk3715': '伍', 'sk5611': 'c09', 'sk8264': 'c19', 'sk8385': '8385', 'skc009': 'c08', 'skc15': 'c15'
+    'sk3715': '伍', 'sk5611': 'c09', 'sk8264': 'c19', 'skc009': 'c08', 'skc15': 'c15'
 };
 
 const Z_CLIENT_CODES = ['Z03', 'Z05', 'Z07', 'Z15', 'Z19', 'Z20'];
@@ -31,16 +31,19 @@ const SpreadsheetInput = React.memo(({
     const [local, setLocal] = useState(value === 0 ? '' : value.toString());
     const [isSaving, setIsSaving] = useState(false);
 
+    // Sync when value changes externally (e.g. from DB load)
     useEffect(() => {
         setLocal(value === 0 ? '' : value.toString());
         setIsSaving(false);
     }, [value]);
 
-    const handleConfirm = () => {
+    const handleConfirm = async () => {
         const num = parseFloat(local) || 0;
         if (num !== value) {
             setIsSaving(true);
-            onChange(num);
+            await onChange(num);
+            // We don't necessarily set isSaving back to false here because
+            // the value prop update from parent will handle it via the useEffect.
         }
         onBlur();
     };
@@ -56,10 +59,15 @@ const SpreadsheetInput = React.memo(({
                 onKeyDown={(e) => {
                     if (e.key === 'Enter') handleConfirm();
                 }}
+                disabled={isSaving}
                 className={`w-full h-full text-center bg-transparent outline-none focus:bg-blue-50 font-mono text-base font-bold transition-all ${colorClass} ${isSaving ? 'opacity-30' : ''}`}
                 placeholder=""
             />
-            {isSaving && <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><Loader2 size={12} className="animate-spin text-gray-400" /></div>}
+            {isSaving && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-white/20">
+                    <Loader2 size={12} className="animate-spin text-gray-400" />
+                </div>
+            )}
         </div>
     );
 });
@@ -68,7 +76,7 @@ const DailySpreadsheetTable: React.FC<{
     dateStr: string, 
     clients: Client[], 
     sales: SaleRecord[], 
-    onUpdate: (clientId: string, date: string, b: number, a: number) => void 
+    onUpdate: (clientId: string, date: string, b: number, a: number) => Promise<void> 
 }> = ({ 
     dateStr, 
     clients, 
@@ -265,7 +273,10 @@ const SalesIndex: React.FC = () => {
   const selectedDate = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
 
   const handlePaperUpdate = useCallback(async (clientId: string, date: string, b: number, a: number) => {
-    // UPDATED: More robust auto-save state logic
+    // 1. Persist to DB
+    await saveSaleRecord({ clientId, date, b, a, s: 0, c: 0 });
+    
+    // 2. Refresh local state to ensure all components (especially the ledger) see the update
     setSalesData(prev => {
         const idx = prev.findIndex(s => s.clientId === clientId && s.date === date);
         if (idx >= 0) {
@@ -275,8 +286,6 @@ const SalesIndex: React.FC = () => {
         }
         return [...prev, { id: `temp-${clientId}-${date}`, clientId, date, b, a, s: 0, c: 0 }];
     });
-    // Final storage commit
-    await saveSaleRecord({ clientId, date, b, a, s: 0, c: 0 });
   }, []);
 
   const earnings = useMemo(() => {
@@ -380,21 +389,21 @@ const SalesIndex: React.FC = () => {
                         <Briefcase size={14} className="mr-2 text-blue-600" />
                         <div className="flex flex-col">
                             <span className="text-[9px] font-bold text-blue-800 uppercase leading-none mb-0.5">Paper Profit</span>
-                            <span className="text-xs font-mono font-bold text-blue-600 leading-none">${earnings.paper.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                            <span className="text-sm font-mono font-bold text-blue-600 leading-none">${earnings.paper.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                         </div>
                     </div>
                     <div className="flex items-center px-4 py-2 bg-purple-50 rounded-xl border border-purple-100 flex-shrink-0 min-w-[140px]">
                         <TrendingUp size={14} className="mr-2 text-purple-600" />
                         <div className="flex flex-col">
                             <span className="text-[9px] font-bold text-purple-800 uppercase leading-none mb-0.5">Mobile Profit</span>
-                            <span className="text-xs font-mono font-bold text-purple-600 leading-none">${earnings.mobile.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                            <span className="text-sm font-mono font-bold text-purple-600 leading-none">${earnings.mobile.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                         </div>
                     </div>
                     <div className="flex items-center px-4 py-2 bg-emerald-600 rounded-xl shadow-lg shadow-emerald-100 flex-shrink-0 min-w-[140px]">
                         <DollarSign size={14} className="mr-2 text-white" />
                         <div className="flex flex-col">
                             <span className="text-[9px] font-bold text-emerald-100 uppercase leading-none mb-0.5">Net Weekly</span>
-                            <span className="text-xs font-mono font-bold text-white leading-none">${earnings.total.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                            <span className="text-sm font-mono font-bold text-white leading-none">${earnings.total.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                         </div>
                     </div>
                  </div>
@@ -456,26 +465,23 @@ const SalesIndex: React.FC = () => {
                     )}
                 </section>
 
-                {/* 2. RE-RESTORED CLASSIC GRID LAYOUT (DECEMBER VERSION) */}
+                {/* 2. RESTORED DECEMBER CLASSIC GRID LAYOUT (FLAT SQUARES) */}
                 <section className="pb-20">
                     <div className="mb-6 border-b border-gray-300 pb-2">
-                        <h2 className="text-xl font-black text-gray-800 uppercase tracking-widest flex items-center">
-                            <LayoutTemplate size={20} className="mr-2 text-gray-400" />
-                            Paper Client List (Classic Grid)
+                        <h2 className="text-sm font-black text-gray-400 uppercase tracking-widest flex items-center">
+                            <LayoutTemplate size={16} className="mr-2" />
+                            Paper Client List
                         </h2>
                     </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                         {paperClients.map(client => (
                             <Link 
                                 key={client.id}
                                 to={`/clients/${client.id}/sales`}
-                                className="bg-white rounded-lg border border-gray-200 p-4 flex flex-col items-center justify-center text-center shadow-sm hover:border-blue-500 hover:shadow transition-all group"
+                                className="bg-white rounded-lg border border-gray-200 p-5 flex flex-col items-center justify-center text-center shadow-sm hover:border-blue-500 hover:shadow-md transition-all group"
                             >
-                                <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center text-lg font-bold text-gray-400 group-hover:bg-blue-50 group-hover:text-blue-500 mb-2">
-                                    {client.name.charAt(0).toUpperCase()}
-                                </div>
-                                <div className="font-bold text-gray-800 truncate w-full px-1">{client.name}</div>
-                                <div className="mt-1 px-2 py-0.5 bg-gray-100 text-[10px] font-bold text-gray-500 rounded uppercase tracking-tighter">
+                                <div className="font-bold text-gray-800 text-lg mb-1">{client.name}</div>
+                                <div className="px-2 py-0.5 bg-gray-100 text-[10px] font-black text-gray-500 rounded uppercase tracking-tighter border border-gray-200">
                                     {client.code}
                                 </div>
                             </Link>

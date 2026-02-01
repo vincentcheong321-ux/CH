@@ -73,12 +73,12 @@ const getSundayOfDate = (dateStr: string) => {
 const aggregateSalesWeekly = (rows: any[]): LedgerRecord[] => {
     const saleRows = rows.filter(r => r.entry_type === 'SALE');
     
-    // DEDUPLICATION: Ensure we only count one record per client per date (use the latest one by ID)
+    // DEDUPLICATION: Use the latest record for each client/date combination
     const uniqueSales: Record<string, any> = {};
     saleRows.forEach(row => {
         const key = `${row.client_id}_${row.entry_date}`;
-        // If multiple exist, take the one with the higher ID or created_at (most recent)
-        if (!uniqueSales[key] || row.id > uniqueSales[key].id) {
+        // If multiple rows exist for the same day, pick the absolute latest one by ID or timestamp
+        if (!uniqueSales[key] || (row.created_at && uniqueSales[key].created_at && row.created_at > uniqueSales[key].created_at)) {
             uniqueSales[key] = row;
         }
     });
@@ -90,7 +90,7 @@ const aggregateSalesWeekly = (rows: any[]): LedgerRecord[] => {
         const key = `${row.client_id}_${sun}`;
         
         const rawTotal = (Number(row.data?.b) || 0) + (Number(row.data?.s) || 0) + (Number(row.data?.a) || 0) + (Number(row.data?.c) || 0);
-        // Calculate amount client owes (Paper = 86%, Mobile = 100% of Agent Total)
+        // Calculate Receive amount (Paper = 86%)
         const finalTotal = (!row.data?.mobileRaw && !row.data?.mobileRawData) ? rawTotal * 0.86 : rawTotal;
 
         if (!grouped[key]) {
@@ -101,7 +101,7 @@ const aggregateSalesWeekly = (rows: any[]): LedgerRecord[] => {
     });
 
     return Object.entries(grouped)
-        .filter(([_, data]) => Math.abs(data.amount) > 0.001) // Ensure zeroed weeks are removed
+        .filter(([_, data]) => Math.abs(data.amount) > 0.001)
         .map(([key, data]) => ({
             id: `agg_sale_week_${key}`,
             clientId: data.clientId,
@@ -335,20 +335,30 @@ export const getSalesForDates = async (dates: string[]): Promise<SaleRecord[]> =
 export const saveSaleRecord = async (record: Omit<SaleRecord, 'id'>) => {
     if (supabase) {
         const netAmount = (record.b || 0) + (record.s || 0) + (record.a || 0) + (record.c || 0);
-        if (netAmount === 0 && !record.mobileRaw && !record.mobileRawData) {
-            await supabase.from('financial_journal').delete().eq('client_id', record.clientId).eq('entry_date', record.date).eq('entry_type', 'SALE');
-            return;
-        }
-        const { data: existing } = await supabase.from('financial_journal').select('id, data').eq('client_id', record.clientId).eq('entry_date', record.date).eq('entry_type', 'SALE').maybeSingle();
-        if (existing) {
-             const newData = { ...existing.data, b: record.b, s: record.s, a: record.a, c: record.c };
-             if (record.mobileRaw !== undefined) newData.mobileRaw = record.mobileRaw;
-             if (record.mobileRawData !== undefined) newData.mobileRawData = record.mobileRawData;
-             await supabase.from('financial_journal').update({ amount: netAmount, data: newData }).eq('id', existing.id);
-        } else {
+        
+        // 1. DEDUPLICATION STEP: Delete ALL existing sale records for this client/date 
+        // to ensure we never aggregate multiple rows into a single "收" total.
+        await supabase.from('financial_journal')
+            .delete()
+            .eq('client_id', record.clientId)
+            .eq('entry_date', record.date)
+            .eq('entry_type', 'SALE');
+
+        // 2. Insert new record only if it has content
+        if (netAmount !== 0 || record.mobileRaw || record.mobileRawData) {
              await supabase.from('financial_journal').insert({
-                client_id: record.clientId, entry_date: record.date, entry_type: 'SALE', amount: netAmount,
-                data: { b: record.b, s: record.s, a: record.a, c: record.c, mobileRaw: record.mobileRaw, mobileRawData: record.mobileRawData }
+                client_id: record.clientId, 
+                entry_date: record.date, 
+                entry_type: 'SALE', 
+                amount: netAmount,
+                data: { 
+                    b: record.b, 
+                    s: record.s, 
+                    a: record.a, 
+                    c: record.c, 
+                    mobileRaw: record.mobileRaw, 
+                    mobileRawData: record.mobileRawData 
+                }
              });
         }
     }
