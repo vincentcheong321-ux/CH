@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Printer, Trash2, Plus, Minus, Pencil, X, Check, AlertTriangle, ExternalLink, GripHorizontal, Hash, Zap, ChevronLeft, ChevronRight, ImageDown } from 'lucide-react';
+import { ArrowLeft, Printer, Trash2, Plus, Minus, Pencil, X, Check, AlertTriangle, ExternalLink, GripHorizontal, Hash, Zap, ChevronLeft, ChevronRight, ImageDown, Loader2 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { 
   getClients, 
@@ -14,9 +14,12 @@ import {
   deleteCategory,
   saveCategoriesOrder,
   getNetAmount,
-  fetchClientTotalBalance
+  fetchClientTotalBalance,
+  getSalesForDates,
+  saveSaleRecord
 } from '../services/storageService';
-import { Client, LedgerRecord, TransactionCategory } from '../types';
+// Fix: Added TransactionCategory to the imports from '../types'
+import { Client, LedgerRecord, SaleRecord, TransactionCategory } from '../types';
 import { useGlobalState } from '../context/GlobalStateContext';
 import { getWeeksForMonth, getWeekRangeString, MONTH_NAMES } from '../utils/reportUtils';
 
@@ -32,14 +35,70 @@ interface WinningLineData {
     pos: string;
 }
 
+// Simple Input Component for the Registry table
+const RegistryInput = React.memo(({ 
+    value, 
+    onChange, 
+    colorClass 
+}: { 
+    value: number, 
+    onChange: (val: number) => Promise<void>, 
+    colorClass: string 
+}) => {
+    const [local, setLocal] = useState(value === 0 ? '' : value.toString());
+    const [isSaving, setIsSaving] = useState(false);
+    const lastValue = useRef(value);
+
+    useEffect(() => {
+        setLocal(value === 0 ? '' : value.toString());
+        setIsSaving(false);
+        lastValue.current = value;
+    }, [value]);
+
+    const handleConfirm = async () => {
+        const num = parseFloat(local) || 0;
+        if (num !== lastValue.current) {
+            setIsSaving(true);
+            await onChange(num);
+            lastValue.current = num;
+        }
+    };
+
+    return (
+        <div className="w-full h-full relative">
+            <input 
+                type="text"
+                inputMode="decimal"
+                value={local}
+                onChange={(e) => setLocal(e.target.value)}
+                onBlur={handleConfirm}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleConfirm();
+                }}
+                disabled={isSaving}
+                className={`w-full h-full text-center bg-transparent outline-none focus:bg-blue-50 font-mono font-black transition-all ${colorClass} ${isSaving ? 'opacity-30' : ''}`}
+                placeholder=""
+            />
+            {isSaving && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-white/10">
+                    <Loader2 size={12} className="animate-spin text-gray-400" />
+                </div>
+            )}
+        </div>
+    );
+});
+
 const ClientLedger: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { currentDate, setCurrentDate } = useGlobalState();
   const [client, setClient] = useState<Client | null>(null);
   const [records, setRecords] = useState<LedgerRecord[]>([]);
+  const [saleRecords, setSaleRecords] = useState<SaleRecord[]>([]);
+  // Fix: Categories state now correctly uses the TransactionCategory type
   const [categories, setCategories] = useState<TransactionCategory[]>([]);
   const [totalOwed, setTotalOwed] = useState(0);
   
+  // Fix: activeCategory state now correctly uses the TransactionCategory type
   const [activeCategory, setActiveCategory] = useState<TransactionCategory | null>(null);
   const [activeColumn, setActiveColumn] = useState<LedgerColumn>('main');
   const [amount, setAmount] = useState('');
@@ -86,6 +145,9 @@ const ClientLedger: React.FC = () => {
       return foundWeek ? parseInt(foundWeek) : 1;
   }, [weeksData, currentDate, currentYear, currentMonth]);
 
+  const activeWeekDays = useMemo(() => weeksData[selectedWeekNum] || [], [weeksData, selectedWeekNum]);
+  const activeDateStrings = useMemo(() => activeWeekDays.map(d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`), [activeWeekDays]);
+
   const handleWeekSelect = (weekNum: number) => {
       const days = weeksData[weekNum];
       if (days && days.length > 0) setCurrentDate(new Date(days[0]));
@@ -123,6 +185,12 @@ const ClientLedger: React.FC = () => {
     }
   }, [id]);
 
+  useEffect(() => {
+      if (id && activeDateStrings.length > 0) {
+          fetchSales();
+      }
+  }, [id, activeDateStrings]);
+
   const loadRecords = async () => {
     if (id) {
       const recs = await getLedgerRecords(id);
@@ -131,15 +199,25 @@ const ClientLedger: React.FC = () => {
     }
   };
 
+  const fetchSales = async () => {
+      if (!id) return;
+      const sales = await getSalesForDates(activeDateStrings);
+      setSaleRecords(sales.filter(s => s.clientId === id));
+  };
+
+  const handleSaleUpdate = async (date: string, b: number, a: number) => {
+      if (!id) return;
+      await saveSaleRecord({ clientId: id, date, b, a, s: 0, c: 0 });
+      fetchSales();
+      loadRecords(); // Reload ledger since sales aggregate into '收'
+  };
+
   const filteredRecords = useMemo(() => {
-      const days = weeksData[selectedWeekNum];
-      if (!days || days.length === 0) return [];
-      const start = days[0];
-      const end = days[days.length - 1];
-      const startStr = `${start.getFullYear()}-${String(start.getMonth()+1).padStart(2,'0')}-${String(start.getDate()).padStart(2,'0')}`;
-      const endStr = `${end.getFullYear()}-${String(end.getMonth()+1).padStart(2,'0')}-${String(end.getDate()).padStart(2,'0')}`;
+      if (activeDateStrings.length === 0) return [];
+      const startStr = activeDateStrings[0];
+      const endStr = activeDateStrings[activeDateStrings.length - 1];
       return records.filter(r => r.date >= startStr && r.date <= endStr);
-  }, [records, weeksData, selectedWeekNum]);
+  }, [records, activeDateStrings]);
 
   const onMouseMove = useCallback((e: MouseEvent) => {
     if (!dragInfo.current) return;
@@ -188,6 +266,7 @@ const ClientLedger: React.FC = () => {
       document.body.style.userSelect = 'none';
   };
 
+  // Fix: Added TransactionCategory type to handleCategorySelect parameter
   const handleCategorySelect = (cat: TransactionCategory) => {
     setActiveCategory(cat);
     setCurrentOperation(cat.operation);
@@ -196,6 +275,7 @@ const ClientLedger: React.FC = () => {
   };
 
   const handleQuickEntry = () => {
+      // Fix: Added TransactionCategory type to quickCat variable
       const quickCat: TransactionCategory = { id: 'quick_entry', label: '', operation: 'add', color: 'bg-blue-600 text-white' };
       setActiveCategory(quickCat);
       setCurrentOperation(activeColumn === 'col1' ? 'none' : 'add');
@@ -558,6 +638,75 @@ const ClientLedger: React.FC = () => {
       </div>
   )};
 
+  const RegistrySection = () => {
+    const registryRows = activeWeekDays.map(date => {
+        const dateStr = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+        const record = saleRecords.find(s => s.date === dateStr);
+        return { date, dateStr, record };
+    });
+
+    const totals = registryRows.reduce((acc, row) => ({
+        wan: acc.wan + (row.record?.b || 0),
+        qian: acc.qian + (row.record?.a || 0),
+    }), { wan: 0, qian: 0 });
+
+    const discWan = totals.wan * 0.86;
+    const discQian = totals.qian * 0.86;
+    const grandTotal = discWan + discQian;
+
+    return (
+        <div className="mb-12 max-w-4xl mx-auto border-2 border-black bg-white">
+            <div className="flex border-b-2 border-black h-12 bg-gray-50/50">
+                <div className="w-[20%] border-r border-black flex items-center justify-center font-bold text-gray-500 uppercase text-xs tracking-widest">
+                    Sales
+                </div>
+                <div className="w-[40%] border-r border-black flex items-center justify-center font-serif italic text-3xl">万</div>
+                <div className="w-[40%] flex items-center justify-center font-serif italic text-3xl">千</div>
+            </div>
+            <div className="flex border-b border-black text-[10px] font-black bg-gray-100/50 text-gray-400 uppercase tracking-tighter">
+                <div className="w-[20%] text-center py-1 border-r border-black">Date</div>
+                <div className="w-[40%] text-center py-1 border-r border-black">Wan Group</div>
+                <div className="w-[40%] text-center py-1">Qian Group</div>
+            </div>
+            <div>
+                {registryRows.map((row, idx) => {
+                    const dateLabel = `${String(row.date.getDate()).padStart(2,'0')}-${MONTH_NAMES[row.date.getMonth()].slice(0,3)}`;
+                    return (
+                        <div key={idx} className="flex border-b border-gray-100 h-10 hover:bg-blue-50/20">
+                            <div className="w-[20%] flex items-center justify-center border-r border-black text-xs font-mono font-bold text-gray-400 bg-gray-50/30">{dateLabel}</div>
+                            <div className="w-[40%] border-r border-black relative">
+                                <RegistryInput value={row.record?.b || 0} onChange={(v) => handleSaleUpdate(row.dateStr, v, row.record?.a || 0)} colorClass="text-blue-700 text-lg"/>
+                            </div>
+                            <div className="w-[40%] relative">
+                                <RegistryInput value={row.record?.a || 0} onChange={(v) => handleSaleUpdate(row.dateStr, row.record?.b || 0, v)} colorClass="text-red-600 text-lg"/>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+            <div className="bg-gray-50 border-t-2 border-black">
+                <div className="flex border-b border-black text-[10px] font-bold text-gray-400 uppercase font-mono">
+                    <div className="w-[20%] text-right pr-2 py-1 border-r border-black uppercase tracking-tighter">Sub</div>
+                    <div className="w-[40%] text-center py-1 border-r border-black">{totals.wan > 0 ? totals.wan : ''}</div>
+                    <div className="w-[40%] text-center py-1">{totals.qian > 0 ? totals.qian : ''}</div>
+                </div>
+                <div className="flex border-b border-black h-10 items-center font-mono bg-white">
+                    <div className="w-[20%] border-r border-black bg-gray-50 h-full flex items-center justify-center text-[9px] text-gray-400 font-black">-14%</div>
+                    <div className="w-[40%] text-center border-r border-black text-blue-800 font-bold text-lg">
+                        {discWan > 0 ? discWan.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1}) : ''}
+                    </div>
+                    <div className="w-[40%] text-center text-red-700 font-bold text-lg">
+                        {discQian > 0 ? discQian.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1}) : ''}
+                    </div>
+                </div>
+                <div className="text-center py-3 text-3xl font-black text-gray-900 bg-white font-mono tracking-tighter">
+                    {grandTotal.toLocaleString(undefined, {minimumFractionDigits: 2})}
+                </div>
+            </div>
+        </div>
+    );
+  };
+
   if (!client) return <div className="p-8 text-center text-gray-500">Loading client...</div>;
 
   return (
@@ -727,6 +876,9 @@ const ClientLedger: React.FC = () => {
                                 <div className="text-sm font-bold text-blue-600 uppercase">{activeColumn === 'main' ? 'Main Ledger' : activeColumn === 'col1' ? 'Panel 1' : 'Panel 2'}</div>
                             </div>
                         </div>
+
+                        {/* Paper Registry - 3 Column Sales Data on Top */}
+                        <RegistrySection />
 
                         <div className="flex flex-col md:flex-row w-full min-h-[400px] relative" ref={containerRef}>
                             <div className={`relative flex flex-col p-1 md:p-2 border-r border-transparent group ${activeColumn === 'col1' ? 'block w-full md:flex md:w-auto' : 'hidden md:flex'}`} style={{ width: window.innerWidth >= 1024 ? `${colWidths[0]}%` : undefined }}>
