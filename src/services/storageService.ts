@@ -73,12 +73,12 @@ const getSundayOfDate = (dateStr: string) => {
 const aggregateSalesWeekly = (rows: any[]): LedgerRecord[] => {
     const saleRows = rows.filter(r => r.entry_type === 'SALE');
     
-    // DEDUPLICATION: Use the latest record for each client/date combination
+    // DEDUPLICATION: Crucial to prevent "收 keep increase"
     const uniqueSales: Record<string, any> = {};
     saleRows.forEach(row => {
         const key = `${row.client_id}_${row.entry_date}`;
-        // If multiple rows exist for the same day, pick the absolute latest one by ID or timestamp
-        if (!uniqueSales[key] || (row.created_at && uniqueSales[key].created_at && row.created_at > uniqueSales[key].created_at)) {
+        // If multiple rows exist for the same day, pick the absolute latest one by ID
+        if (!uniqueSales[key] || row.id > uniqueSales[key].id) {
             uniqueSales[key] = row;
         }
     });
@@ -90,7 +90,7 @@ const aggregateSalesWeekly = (rows: any[]): LedgerRecord[] => {
         const key = `${row.client_id}_${sun}`;
         
         const rawTotal = (Number(row.data?.b) || 0) + (Number(row.data?.s) || 0) + (Number(row.data?.a) || 0) + (Number(row.data?.c) || 0);
-        // Calculate Receive amount (Paper = 86%)
+        // Calculate amount client owes (Paper = 86%, Mobile = 100% of Agent Total)
         const finalTotal = (!row.data?.mobileRaw && !row.data?.mobileRawData) ? rawTotal * 0.86 : rawTotal;
 
         if (!grouped[key]) {
@@ -101,7 +101,7 @@ const aggregateSalesWeekly = (rows: any[]): LedgerRecord[] => {
     });
 
     return Object.entries(grouped)
-        .filter(([_, data]) => Math.abs(data.amount) > 0.001)
+        .filter(([_, data]) => Math.abs(data.amount) > 0.001) // Filter out zeroed weeks
         .map(([key, data]) => ({
             id: `agg_sale_week_${key}`,
             clientId: data.clientId,
@@ -336,29 +336,21 @@ export const saveSaleRecord = async (record: Omit<SaleRecord, 'id'>) => {
     if (supabase) {
         const netAmount = (record.b || 0) + (record.s || 0) + (record.a || 0) + (record.c || 0);
         
-        // 1. DEDUPLICATION STEP: Delete ALL existing sale records for this client/date 
-        // to ensure we never aggregate multiple rows into a single "收" total.
+        // 1. DEDUPLICATION: Delete all existing sale records for this client/date first
         await supabase.from('financial_journal')
             .delete()
             .eq('client_id', record.clientId)
             .eq('entry_date', record.date)
             .eq('entry_type', 'SALE');
 
-        // 2. Insert new record only if it has content
+        // 2. Insert new record only if it has a non-zero amount or metadata
         if (netAmount !== 0 || record.mobileRaw || record.mobileRawData) {
              await supabase.from('financial_journal').insert({
                 client_id: record.clientId, 
                 entry_date: record.date, 
                 entry_type: 'SALE', 
                 amount: netAmount,
-                data: { 
-                    b: record.b, 
-                    s: record.s, 
-                    a: record.a, 
-                    c: record.c, 
-                    mobileRaw: record.mobileRaw, 
-                    mobileRawData: record.mobileRawData 
-                }
+                data: { b: record.b, s: record.s, a: record.a, c: record.c, mobileRaw: record.mobileRaw, mobileRawData: record.mobileRawData }
              });
         }
     }

@@ -24,32 +24,32 @@ const SpreadsheetInput = React.memo(({
     colorClass 
 }: { 
     value: number, 
-    onChange: (val: number) => void, 
+    onChange: (val: number) => Promise<void>, 
     onBlur: () => void,
     colorClass: string 
 }) => {
     const [local, setLocal] = useState(value === 0 ? '' : value.toString());
     const [isSaving, setIsSaving] = useState(false);
+    const lastValue = useRef(value);
 
-    // Sync when value changes externally (e.g. from DB load)
     useEffect(() => {
         setLocal(value === 0 ? '' : value.toString());
         setIsSaving(false);
+        lastValue.current = value;
     }, [value]);
 
     const handleConfirm = async () => {
         const num = parseFloat(local) || 0;
-        if (num !== value) {
+        if (num !== lastValue.current) {
             setIsSaving(true);
             await onChange(num);
-            // We don't necessarily set isSaving back to false here because
-            // the value prop update from parent will handle it via the useEffect.
+            lastValue.current = num;
         }
         onBlur();
     };
 
     return (
-        <div className="w-full h-full relative group">
+        <div className="w-full h-full relative">
             <input 
                 type="text"
                 inputMode="decimal"
@@ -60,11 +60,11 @@ const SpreadsheetInput = React.memo(({
                     if (e.key === 'Enter') handleConfirm();
                 }}
                 disabled={isSaving}
-                className={`w-full h-full text-center bg-transparent outline-none focus:bg-blue-50 font-mono text-base font-bold transition-all ${colorClass} ${isSaving ? 'opacity-30' : ''}`}
+                className={`w-full h-full text-center bg-transparent outline-none focus:bg-blue-50 font-mono text-lg font-black transition-all ${colorClass} ${isSaving ? 'opacity-30' : ''}`}
                 placeholder=""
             />
             {isSaving && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-white/20">
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-white/10">
                     <Loader2 size={12} className="animate-spin text-gray-400" />
                 </div>
             )}
@@ -110,32 +110,32 @@ const DailySpreadsheetTable: React.FC<{
     const cTotals = calcTotals(cData);
 
     return (
-        <div className="bg-white border-2 border-black mb-12 shadow-md max-w-6xl mx-auto overflow-hidden">
-            <div className="grid grid-cols-2 bg-gray-100 border-b-2 border-black">
-                <div className="p-2 text-center font-black text-xl border-r-2 border-black uppercase tracking-widest">{displayDate} - Z GROUP</div>
-                <div className="p-2 text-center font-black text-xl uppercase tracking-widest">{displayDate} - C GROUP</div>
-            </div>
-
-            <div className="grid grid-cols-2">
+        <div className="bg-white border-2 border-black mb-16 shadow-md max-w-6xl mx-auto overflow-hidden">
+            {/* Desktop View: Side by Side | Mobile View: Stacked */}
+            <div className="flex flex-col lg:flex-row">
+                
                 {/* Z GROUP Column */}
-                <div className="border-r-2 border-black">
+                <div className="flex-1 lg:border-r-2 lg:border-black">
+                    <div className="bg-blue-600 text-white p-2 text-center font-black text-xl uppercase tracking-widest border-b-2 border-black">
+                        {displayDate} - Z GROUP
+                    </div>
                     <table className="w-full border-collapse">
                         <tbody>
                             {zData.map((row, idx) => (
-                                <tr key={idx} className="h-12 border-b border-gray-300 last:border-0 hover:bg-gray-50 transition-colors">
-                                    <td className="w-36 px-3 font-black text-gray-800 border-r border-gray-300 bg-gray-50/50 uppercase text-xs">
+                                <tr key={idx} className="h-14 border-b border-gray-400 last:border-0 hover:bg-gray-50 transition-colors">
+                                    <td className="w-40 px-3 font-black text-gray-800 border-r border-gray-400 bg-gray-50/50 uppercase text-xs">
                                         <div className="flex flex-col">
-                                            <span className="text-blue-600">{row.code}</span>
+                                            <span className="text-blue-700 text-sm">{row.code}</span>
                                             {row.client ? (
-                                                <Link to={`/clients/${row.client.id}`} className="text-[9px] text-gray-500 hover:text-blue-700 underline truncate font-bold decoration-dotted">
+                                                <Link to={`/clients/${row.client.id}`} className="text-[10px] text-gray-500 hover:text-blue-700 underline truncate font-bold decoration-dotted">
                                                     {row.client.name}
                                                 </Link>
                                             ) : (
-                                                <span className="text-[9px] text-gray-300 font-bold italic">N/A</span>
+                                                <span className="text-[10px] text-gray-300 font-bold italic">N/A</span>
                                             )}
                                         </div>
                                     </td>
-                                    <td className="border-r border-gray-300 w-24 relative p-0 h-12">
+                                    <td className="border-r border-gray-400 w-28 p-0 h-14">
                                         {row.client && (
                                             <SpreadsheetInput 
                                                 value={row.sale?.b || 0} 
@@ -145,26 +145,26 @@ const DailySpreadsheetTable: React.FC<{
                                             />
                                         )}
                                     </td>
-                                    <td className="w-24 relative p-0 h-12">
+                                    <td className="w-28 p-0 h-14">
                                         {row.client && (
                                             <SpreadsheetInput 
                                                 value={row.sale?.a || 0} 
                                                 onChange={(v) => onUpdate(row.client!.id, dateStr, row.sale?.b || 0, v)}
                                                 onBlur={() => {}}
-                                                colorClass="text-red-700"
+                                                colorClass="text-red-600"
                                             />
                                         )}
                                     </td>
                                 </tr>
                             ))}
-                            <tr className="bg-white h-20">
+                            <tr className="bg-gray-100 h-24">
                                 <td colSpan={3} className="p-4 border-t-2 border-black">
                                     <div className="flex flex-col items-center">
-                                        <div className="flex border-2 border-black divide-x-2 divide-black w-48 mb-2">
-                                            <div className="flex-1 p-1 text-center font-mono font-bold text-sm bg-gray-50">{zTotals.wan || ''}</div>
-                                            <div className="flex-1 p-1 text-center font-mono font-bold text-sm bg-gray-50">{zTotals.qian || ''}</div>
+                                        <div className="flex border-2 border-black divide-x-2 divide-black w-56 mb-2 bg-white">
+                                            <div className="flex-1 p-1 text-center font-mono font-black text-lg text-blue-700">{zTotals.wan || ''}</div>
+                                            <div className="flex-1 p-1 text-center font-mono font-black text-lg text-red-600">{zTotals.qian || ''}</div>
                                         </div>
-                                        <div className="border-2 border-black w-48 p-1 text-center font-mono font-black text-lg">{zTotals.total || ''}</div>
+                                        <div className="border-2 border-black w-56 p-1 text-center font-mono font-black text-2xl bg-white">{zTotals.total.toLocaleString(undefined, {minimumFractionDigits: 2}) || ''}</div>
                                     </div>
                                 </td>
                             </tr>
@@ -173,24 +173,27 @@ const DailySpreadsheetTable: React.FC<{
                 </div>
 
                 {/* C GROUP Column */}
-                <div>
+                <div className="flex-1">
+                    <div className="bg-red-600 text-white p-2 text-center font-black text-xl uppercase tracking-widest border-b-2 border-black border-t-2 lg:border-t-0">
+                        {displayDate} - C GROUP
+                    </div>
                     <table className="w-full border-collapse">
                         <tbody>
                             {cData.map((row, idx) => (
-                                <tr key={idx} className="h-12 border-b border-gray-300 last:border-0 hover:bg-gray-50 transition-colors">
-                                    <td className="w-36 px-3 font-black text-gray-800 border-r border-gray-300 bg-gray-50/50 uppercase text-xs">
+                                <tr key={idx} className="h-14 border-b border-gray-400 last:border-0 hover:bg-gray-50 transition-colors">
+                                    <td className="w-40 px-3 font-black text-gray-800 border-r border-gray-400 bg-gray-50/50 uppercase text-xs">
                                         <div className="flex flex-col">
-                                            <span className="text-emerald-600">{row.code}</span>
+                                            <span className="text-emerald-700 text-sm">{row.code}</span>
                                             {row.client ? (
-                                                <Link to={`/clients/${row.client.id}`} className="text-[9px] text-gray-500 hover:text-blue-700 underline truncate font-bold decoration-dotted">
+                                                <Link to={`/clients/${row.client.id}`} className="text-[10px] text-gray-500 hover:text-blue-700 underline truncate font-bold decoration-dotted">
                                                     {row.client.name}
                                                 </Link>
                                             ) : (
-                                                <span className="text-[9px] text-gray-300 font-bold italic">N/A</span>
+                                                <span className="text-[10px] text-gray-300 font-bold italic">N/A</span>
                                             )}
                                         </div>
                                     </td>
-                                    <td className="border-r border-gray-300 w-24 relative p-0 h-12">
+                                    <td className="border-r border-gray-400 w-28 p-0 h-14">
                                         {row.client && (
                                             <SpreadsheetInput 
                                                 value={row.sale?.b || 0} 
@@ -200,26 +203,26 @@ const DailySpreadsheetTable: React.FC<{
                                             />
                                         )}
                                     </td>
-                                    <td className="w-24 relative p-0 h-12">
+                                    <td className="w-28 p-0 h-14">
                                         {row.client && (
                                             <SpreadsheetInput 
                                                 value={row.sale?.a || 0} 
                                                 onChange={(v) => onUpdate(row.client!.id, dateStr, row.sale?.b || 0, v)}
                                                 onBlur={() => {}}
-                                                colorClass="text-red-700"
+                                                colorClass="text-red-600"
                                             />
                                         )}
                                     </td>
                                 </tr>
                             ))}
-                            <tr className="bg-white h-20">
+                            <tr className="bg-gray-100 h-24">
                                 <td colSpan={3} className="p-4 border-t-2 border-black">
                                     <div className="flex flex-col items-center">
-                                        <div className="flex border-2 border-black divide-x-2 divide-black w-48 mb-2">
-                                            <div className="flex-1 p-1 text-center font-mono font-bold text-sm bg-gray-50">{cTotals.wan || ''}</div>
-                                            <div className="flex-1 p-1 text-center font-mono font-bold text-sm bg-gray-50">{cTotals.qian || ''}</div>
+                                        <div className="flex border-2 border-black divide-x-2 divide-black w-56 mb-2 bg-white">
+                                            <div className="flex-1 p-1 text-center font-mono font-black text-lg text-blue-700">{cTotals.wan || ''}</div>
+                                            <div className="flex-1 p-1 text-center font-mono font-black text-lg text-red-600">{cTotals.qian || ''}</div>
                                         </div>
-                                        <div className="border-2 border-black w-48 p-1 text-center font-mono font-black text-lg">{cTotals.total || ''}</div>
+                                        <div className="border-2 border-black w-56 p-1 text-center font-mono font-black text-2xl bg-white">{cTotals.total.toLocaleString(undefined, {minimumFractionDigits: 2}) || ''}</div>
                                     </div>
                                 </td>
                             </tr>
@@ -273,10 +276,10 @@ const SalesIndex: React.FC = () => {
   const selectedDate = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
 
   const handlePaperUpdate = useCallback(async (clientId: string, date: string, b: number, a: number) => {
-    // 1. Persist to DB
+    // 1. Pessimistic Update for Stability: Write to DB first
     await saveSaleRecord({ clientId, date, b, a, s: 0, c: 0 });
     
-    // 2. Refresh local state to ensure all components (especially the ledger) see the update
+    // 2. Sync local state for UI consistency
     setSalesData(prev => {
         const idx = prev.findIndex(s => s.clientId === clientId && s.date === date);
         if (idx >= 0) {
@@ -375,7 +378,7 @@ const SalesIndex: React.FC = () => {
   const paperClients = useMemo(() => clients.filter(c => (c.category || 'paper') === 'paper'), [clients]);
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-gray-50">
+    <div className="flex flex-col h-screen overflow-hidden bg-gray-100">
       <div className="bg-white border-b border-gray-200 z-20 shadow-sm flex-shrink-0">
           <div className="px-4 py-3 flex flex-col lg:flex-row justify-between items-center gap-4">
              <div className="flex items-center space-x-4 w-full lg:w-auto">
@@ -384,26 +387,27 @@ const SalesIndex: React.FC = () => {
                     <button onClick={() => setActiveTab('mobile')} className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'mobile' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}><Smartphone size={16} className="mr-2 inline" />Mobile</button>
                  </div>
                  
-                 <div className="hidden md:flex items-center gap-3 overflow-x-auto no-scrollbar flex-shrink-0">
-                     <div className="flex items-center px-4 py-2 bg-blue-50 rounded-xl border border-blue-100 flex-shrink-0 min-w-[140px]">
+                 {/* PROFIT SUMMARY BAR - ALWAYS VISIBLE (SCROLLABLE ON MOBILE) */}
+                 <div className="flex items-center gap-3 overflow-x-auto no-scrollbar flex-shrink-0 w-full lg:w-auto pb-1 lg:pb-0">
+                     <div className="flex items-center px-4 py-2 bg-blue-50 rounded-xl border border-blue-200 flex-shrink-0 min-w-[130px] lg:min-w-[150px]">
                         <Briefcase size={14} className="mr-2 text-blue-600" />
                         <div className="flex flex-col">
-                            <span className="text-[9px] font-bold text-blue-800 uppercase leading-none mb-0.5">Paper Profit</span>
-                            <span className="text-sm font-mono font-bold text-blue-600 leading-none">${earnings.paper.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                            <span className="text-[9px] font-black text-blue-800 uppercase leading-none mb-1">Paper Prof</span>
+                            <span className="text-sm font-mono font-black text-blue-600 leading-none">${earnings.paper.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                         </div>
                     </div>
-                    <div className="flex items-center px-4 py-2 bg-purple-50 rounded-xl border border-purple-100 flex-shrink-0 min-w-[140px]">
+                    <div className="flex items-center px-4 py-2 bg-purple-50 rounded-xl border border-purple-200 flex-shrink-0 min-w-[130px] lg:min-w-[150px]">
                         <TrendingUp size={14} className="mr-2 text-purple-600" />
                         <div className="flex flex-col">
-                            <span className="text-[9px] font-bold text-purple-800 uppercase leading-none mb-0.5">Mobile Profit</span>
-                            <span className="text-sm font-mono font-bold text-purple-600 leading-none">${earnings.mobile.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                            <span className="text-[9px] font-black text-purple-800 uppercase leading-none mb-1">Mobile Prof</span>
+                            <span className="text-sm font-mono font-black text-purple-600 leading-none">${earnings.mobile.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                         </div>
                     </div>
-                    <div className="flex items-center px-4 py-2 bg-emerald-600 rounded-xl shadow-lg shadow-emerald-100 flex-shrink-0 min-w-[140px]">
+                    <div className="flex items-center px-4 py-2 bg-emerald-600 rounded-xl shadow-lg shadow-emerald-100 flex-shrink-0 min-w-[130px] lg:min-w-[150px]">
                         <DollarSign size={14} className="mr-2 text-white" />
                         <div className="flex flex-col">
-                            <span className="text-[9px] font-bold text-emerald-100 uppercase leading-none mb-0.5">Net Weekly</span>
-                            <span className="text-sm font-mono font-bold text-white leading-none">${earnings.total.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
+                            <span className="text-[9px] font-black text-emerald-100 uppercase leading-none mb-1">Net Weekly</span>
+                            <span className="text-sm font-mono font-black text-white leading-none">${earnings.total.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
                         </div>
                     </div>
                  </div>
@@ -436,16 +440,16 @@ const SalesIndex: React.FC = () => {
           </div>
       </div>
 
-      <div className="flex-1 overflow-auto bg-gray-100 p-4 md:p-8">
+      <div className="flex-1 overflow-auto bg-gray-200 p-4 md:p-8">
         {loading ? (
             <div className="flex justify-center items-center h-full"><Loader2 className="animate-spin text-gray-400" /></div>
         ) : activeTab === 'paper' ? (
             <div className="max-w-7xl mx-auto space-y-16">
                 {/* 1. New Spreadsheet Board Layout */}
                 <section>
-                    <div className="mb-6 border-b border-gray-300 pb-2">
-                        <h2 className="text-xl font-black text-gray-800 uppercase tracking-widest flex items-center">
-                            <FileText size={20} className="mr-2 text-blue-600" />
+                    <div className="mb-8 border-b border-gray-400 pb-2">
+                        <h2 className="text-2xl font-black text-gray-800 uppercase tracking-widest flex items-center">
+                            <FileText size={24} className="mr-3 text-blue-600" />
                             Weekly Opening Board
                         </h2>
                     </div>
@@ -459,18 +463,18 @@ const SalesIndex: React.FC = () => {
                         />
                     ))}
                     {drawDates.length === 0 && (
-                        <div className="p-12 text-center text-gray-400 font-bold bg-white rounded-2xl border-2 border-dashed border-gray-200">
+                        <div className="p-12 text-center text-gray-400 font-bold bg-white rounded-2xl border-2 border-dashed border-gray-300">
                             No draw dates found for this week.
                         </div>
                     )}
                 </section>
 
-                {/* 2. RESTORED DECEMBER CLASSIC GRID LAYOUT (FLAT SQUARES) */}
+                {/* 2. December Style Grid Layout */}
                 <section className="pb-20">
-                    <div className="mb-6 border-b border-gray-300 pb-2">
-                        <h2 className="text-sm font-black text-gray-400 uppercase tracking-widest flex items-center">
-                            <LayoutTemplate size={16} className="mr-2" />
-                            Paper Client List
+                    <div className="mb-6 border-b border-gray-400 pb-2">
+                        <h2 className="text-lg font-black text-gray-400 uppercase tracking-widest flex items-center">
+                            <LayoutTemplate size={20} className="mr-2" />
+                            Paper Client Registry
                         </h2>
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
@@ -478,10 +482,10 @@ const SalesIndex: React.FC = () => {
                             <Link 
                                 key={client.id}
                                 to={`/clients/${client.id}/sales`}
-                                className="bg-white rounded-lg border border-gray-200 p-5 flex flex-col items-center justify-center text-center shadow-sm hover:border-blue-500 hover:shadow-md transition-all group"
+                                className="bg-white border-2 border-black p-5 flex flex-col items-center justify-center text-center shadow-sm hover:bg-gray-50 transition-all group"
                             >
-                                <div className="font-bold text-gray-800 text-lg mb-1">{client.name}</div>
-                                <div className="px-2 py-0.5 bg-gray-100 text-[10px] font-black text-gray-500 rounded uppercase tracking-tighter border border-gray-200">
+                                <div className="font-black text-gray-900 text-xl mb-1 uppercase">{client.name}</div>
+                                <div className="px-3 py-1 bg-gray-200 text-[11px] font-black text-gray-600 uppercase tracking-widest border border-gray-400">
                                     {client.code}
                                 </div>
                             </Link>
