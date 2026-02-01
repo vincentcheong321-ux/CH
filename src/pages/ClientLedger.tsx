@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Printer, Trash2, Plus, Minus, Pencil, X, Check, AlertTriangle, ExternalLink, GripHorizontal, Hash, Zap, ChevronLeft, ChevronRight, ImageDown, Loader2 } from 'lucide-react';
@@ -18,7 +17,6 @@ import {
   getSalesForDates,
   saveSaleRecord
 } from '../services/storageService';
-// Fix: Added TransactionCategory to the imports from '../types'
 import { Client, LedgerRecord, SaleRecord, TransactionCategory } from '../types';
 import { useGlobalState } from '../context/GlobalStateContext';
 import { getWeeksForMonth, getWeekRangeString, MONTH_NAMES } from '../utils/reportUtils';
@@ -94,11 +92,9 @@ const ClientLedger: React.FC = () => {
   const [client, setClient] = useState<Client | null>(null);
   const [records, setRecords] = useState<LedgerRecord[]>([]);
   const [saleRecords, setSaleRecords] = useState<SaleRecord[]>([]);
-  // Fix: Categories state now correctly uses the TransactionCategory type
   const [categories, setCategories] = useState<TransactionCategory[]>([]);
   const [totalOwed, setTotalOwed] = useState(0);
   
-  // Fix: activeCategory state now correctly uses the TransactionCategory type
   const [activeCategory, setActiveCategory] = useState<TransactionCategory | null>(null);
   const [activeColumn, setActiveColumn] = useState<LedgerColumn>('main');
   const [amount, setAmount] = useState('');
@@ -266,7 +262,6 @@ const ClientLedger: React.FC = () => {
       document.body.style.userSelect = 'none';
   };
 
-  // Fix: Added TransactionCategory type to handleCategorySelect parameter
   const handleCategorySelect = (cat: TransactionCategory) => {
     setActiveCategory(cat);
     setCurrentOperation(cat.operation);
@@ -275,7 +270,6 @@ const ClientLedger: React.FC = () => {
   };
 
   const handleQuickEntry = () => {
-      // Fix: Added TransactionCategory type to quickCat variable
       const quickCat: TransactionCategory = { id: 'quick_entry', label: '', operation: 'add', color: 'bg-blue-600 text-white' };
       setActiveCategory(quickCat);
       setCurrentOperation(activeColumn === 'col1' ? 'none' : 'add');
@@ -639,11 +633,14 @@ const ClientLedger: React.FC = () => {
   )};
 
   const RegistrySection = () => {
-    const registryRows = activeWeekDays.map(date => {
-        const dateStr = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
-        const record = saleRecords.find(s => s.date === dateStr);
-        return { date, dateStr, record };
-    });
+    // UPDATED: Filter to show only Tuesday (2), Wednesday (3), Saturday (6), Sunday (0) draw dates
+    const registryRows = activeWeekDays
+        .filter(d => [0, 2, 3, 6].includes(d.getDay()))
+        .map(date => {
+            const dateStr = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+            const record = saleRecords.find(s => s.date === dateStr);
+            return { date, dateStr, record };
+        });
 
     const totals = registryRows.reduce((acc, row) => ({
         wan: acc.wan + (row.record?.b || 0),
