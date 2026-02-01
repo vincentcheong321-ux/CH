@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Search, ChevronLeft, ChevronRight, Loader2, Smartphone, FileText, RefreshCw, FileSpreadsheet, Zap, DollarSign, Briefcase, TrendingUp, LayoutTemplate, ChevronRight as ChevronRightIcon } from 'lucide-react';
@@ -105,16 +104,16 @@ const ClientWeeklyTable: React.FC<{
         <div className="bg-white border-2 border-black shadow-sm flex flex-col h-full break-inside-avoid">
             {/* Header */}
             <div className="flex border-b-2 border-black h-14">
-                <div className="w-1/3 px-3 border-r border-black flex flex-col justify-center bg-gray-50">
+                <div className="w-[20%] px-3 border-r border-black flex flex-col justify-center bg-gray-50">
                     <Link to={`/clients/${client.id}/sales`} className="font-black text-xl uppercase leading-none text-blue-900 hover:underline truncate">
                         {client.name}
                     </Link>
                     <span className="text-[10px] font-mono text-gray-500 font-bold mt-1">{client.code}</span>
                 </div>
-                <div className="w-1/3 border-r border-black flex items-center justify-center font-serif italic text-3xl relative bg-white">
+                <div className="w-[40%] border-r border-black flex items-center justify-center font-serif italic text-3xl relative bg-white">
                     万
                 </div>
-                <div className="w-1/3 flex items-center justify-center font-serif italic text-3xl bg-white">
+                <div className="w-[40%] flex items-center justify-center font-serif italic text-3xl bg-white">
                     千
                 </div>
             </div>
@@ -122,10 +121,8 @@ const ClientWeeklyTable: React.FC<{
             {/* Column Headers */}
             <div className="flex border-b border-black text-xs font-bold bg-gray-100 text-gray-600">
                 <div className="w-[20%] text-center py-1.5 border-r border-black">DATE</div>
-                <div className="w-[20%] text-center py-1.5 border-r border-gray-300">B</div>
-                <div className="w-[20%] text-center py-1.5 border-r border-black">S</div>
-                <div className="w-[20%] text-center py-1.5 border-r border-gray-300">A</div>
-                <div className="w-[20%] text-center py-1.5">C</div>
+                <div className="w-[40%] text-center py-1.5 border-r border-black uppercase tracking-widest">Wan</div>
+                <div className="w-[40%] text-center py-1.5 uppercase tracking-widest">Qian</div>
             </div>
 
             {/* Rows */}
@@ -139,27 +136,21 @@ const ClientWeeklyTable: React.FC<{
                             <div className="w-[20%] flex items-center justify-center border-r border-black text-[11px] font-mono font-bold text-gray-500 bg-gray-50/30">
                                 {dateLabel}
                             </div>
-                            <div className="w-[20%] border-r border-gray-300 relative p-0">
+                            <div className="w-[40%] border-r border-black relative p-0">
                                 <SpreadsheetInput 
                                     value={row.record?.b || 0} 
                                     onChange={(v) => onUpdate(client.id, row.date, v, row.record?.a || 0)} 
                                     onBlur={() => {}} 
-                                    colorClass="text-blue-700 text-base"
+                                    colorClass="text-blue-700 text-lg"
                                 />
                             </div>
-                            <div className="w-[20%] border-r border-black bg-gray-50/50 flex items-center justify-center text-xs text-gray-300 font-mono">
-                                0
-                            </div>
-                            <div className="w-[20%] border-r border-gray-300 relative p-0">
+                            <div className="w-[40%] relative p-0">
                                 <SpreadsheetInput 
                                     value={row.record?.a || 0} 
                                     onChange={(v) => onUpdate(client.id, row.date, row.record?.b || 0, v)} 
                                     onBlur={() => {}} 
-                                    colorClass="text-red-600 text-base"
+                                    colorClass="text-red-600 text-lg"
                                 />
-                            </div>
-                            <div className="w-[20%] bg-gray-50/50 flex items-center justify-center text-xs text-gray-300 font-mono">
-                                0
                             </div>
                         </div>
                     );
@@ -173,10 +164,8 @@ const ClientWeeklyTable: React.FC<{
             <div className="border-t-2 border-black bg-gray-50 mt-auto">
                 <div className="flex border-b border-black text-xs font-bold text-gray-600 font-mono">
                     <div className="w-[20%] text-right pr-2 py-1 border-r border-black uppercase tracking-tighter">Sub</div>
-                    <div className="w-[20%] text-center py-1 border-r border-gray-300">{totals.b > 0 ? totals.b : ''}</div>
-                    <div className="w-[20%] text-center py-1 border-r border-black">{totals.s > 0 ? totals.s : ''}</div>
-                    <div className="w-[20%] text-center py-1 border-r border-gray-300">{totals.a > 0 ? totals.a : ''}</div>
-                    <div className="w-[20%] text-center py-1">{totals.c > 0 ? totals.c : ''}</div>
+                    <div className="w-[40%] text-center py-1 border-r border-black">{totalWan > 0 ? totalWan : ''}</div>
+                    <div className="w-[40%] text-center py-1">{totalQian > 0 ? totalQian : ''}</div>
                 </div>
                 <div className="flex border-b border-black text-xl font-bold h-9 items-center font-mono">
                     <div className="w-[20%] border-r border-black bg-gray-100 h-full"></div>
