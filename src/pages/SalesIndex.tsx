@@ -1,8 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-// Added LayoutTemplate to the imports from lucide-react
-import { Search, ChevronLeft, ChevronRight, Loader2, Smartphone, FileText, RefreshCw, FileSpreadsheet, Zap, CheckCircle, TrendingUp, DollarSign, Wallet, Briefcase, User, Hash, Phone, ChevronRight as ChevronRightIcon, LayoutTemplate } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Loader2, Smartphone, FileText, RefreshCw, FileSpreadsheet, Zap, DollarSign, Briefcase, TrendingUp, LayoutTemplate, ChevronRight as ChevronRightIcon } from 'lucide-react';
 import { getClients, getSalesForDates, saveSaleRecord, getLedgerRecords, updateLedgerRecord, saveLedgerRecord, deleteLedgerRecord } from '../services/storageService';
 import { Client, SaleRecord } from '../types';
 import { MONTH_NAMES, getWeeksForMonth } from '../utils/reportUtils';
@@ -30,25 +29,33 @@ const SpreadsheetInput = React.memo(({
     colorClass: string 
 }) => {
     const [local, setLocal] = useState(value === 0 ? '' : value.toString());
+    const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
         setLocal(value === 0 ? '' : value.toString());
+        setIsSaving(false);
     }, [value]);
 
     return (
-        <input 
-            type="text"
-            inputMode="decimal"
-            value={local}
-            onChange={(e) => setLocal(e.target.value)}
-            onBlur={() => {
-                const num = parseFloat(local) || 0;
-                if (num !== value) onChange(num);
-                onBlur();
-            }}
-            className={`w-full h-full text-center bg-transparent outline-none focus:bg-blue-50 font-mono text-base font-bold ${colorClass}`}
-            placeholder=""
-        />
+        <div className="w-full h-full relative group">
+            <input 
+                type="text"
+                inputMode="decimal"
+                value={local}
+                onChange={(e) => setLocal(e.target.value)}
+                onBlur={() => {
+                    const num = parseFloat(local) || 0;
+                    if (num !== value) {
+                        setIsSaving(true);
+                        onChange(num);
+                    }
+                    onBlur();
+                }}
+                className={`w-full h-full text-center bg-transparent outline-none focus:bg-blue-50 font-mono text-base font-bold transition-all ${colorClass} ${isSaving ? 'opacity-30' : ''}`}
+                placeholder=""
+            />
+            {isSaving && <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><Loader2 size={12} className="animate-spin text-gray-400" /></div>}
+        </div>
     );
 });
 
@@ -253,15 +260,18 @@ const SalesIndex: React.FC = () => {
   const selectedDate = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
 
   const handlePaperUpdate = useCallback(async (clientId: string, date: string, b: number, a: number) => {
+    // Robust Auto-Save with functional state update
     setSalesData(prev => {
         const idx = prev.findIndex(s => s.clientId === clientId && s.date === date);
+        const updated = [...prev];
         if (idx >= 0) {
-            const updated = [...prev];
             updated[idx] = { ...updated[idx], b, a };
-            return updated;
+        } else {
+            updated.push({ id: `temp-${clientId}-${date}`, clientId, date, b, a, s: 0, c: 0 });
         }
-        return [...prev, { id: 'temp', clientId, date, b, a, s: 0, c: 0 }];
+        return updated;
     });
+    // Fire-and-forget save to storage
     await saveSaleRecord({ clientId, date, b, a, s: 0, c: 0 });
   }, []);
 
@@ -417,7 +427,7 @@ const SalesIndex: React.FC = () => {
         {loading ? (
             <div className="flex justify-center items-center h-full"><Loader2 className="animate-spin text-gray-400" /></div>
         ) : activeTab === 'paper' ? (
-            <div className="max-w-7xl mx-auto space-y-12">
+            <div className="max-w-7xl mx-auto space-y-16">
                 {/* 1. New Spreadsheet Board Layout */}
                 <section>
                     <div className="mb-6 border-b border-gray-300 pb-2">
@@ -442,33 +452,33 @@ const SalesIndex: React.FC = () => {
                     )}
                 </section>
 
-                {/* 2. Restored Classic Client Grid Layout */}
-                <section>
-                    <div className="mb-6 border-b border-gray-300 pb-2">
+                {/* 2. Restored Grid Layout (Original Version) */}
+                <section className="pb-20">
+                    <div className="mb-8 border-b border-gray-300 pb-2">
                         <h2 className="text-xl font-black text-gray-800 uppercase tracking-widest flex items-center">
-                            {/* Fixed missing import error for LayoutTemplate */}
                             <LayoutTemplate size={20} className="mr-2 text-purple-600" />
-                            Paper Client List (Classic View)
+                            Quick Client Access
                         </h2>
                     </div>
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
                         {paperClients.map(client => (
                             <Link 
                                 key={client.id}
                                 to={`/clients/${client.id}/sales`}
-                                className="bg-white rounded-xl border-2 border-gray-100 shadow-sm hover:shadow-md hover:border-blue-200 transition-all p-5 flex flex-col items-center justify-center text-center space-y-3 group"
+                                className="bg-white rounded-2xl border-2 border-gray-100 shadow-sm hover:shadow-xl hover:border-blue-500 hover:-translate-y-1 transition-all p-6 flex flex-col items-center justify-center text-center space-y-4 group relative overflow-hidden"
                             >
-                                <div className="w-14 h-14 rounded-full bg-gray-50 flex items-center justify-center text-xl font-bold group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                                <div className="absolute top-0 right-0 w-16 h-16 -mr-8 -mt-8 bg-blue-50 rounded-full group-hover:bg-blue-100 transition-colors" />
+                                <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-2xl font-black text-slate-800 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-inner">
                                     {client.name.substring(0, 1).toUpperCase()}
                                 </div>
-                                <div className="w-full">
-                                    <h3 className="font-bold text-gray-900 truncate px-2">{client.name}</h3>
-                                    <div className="flex items-center justify-center space-x-2 mt-1">
-                                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-gray-100 text-gray-500 border border-gray-200">{client.code}</span>
+                                <div className="w-full relative z-10">
+                                    <h3 className="font-black text-gray-900 text-lg truncate px-2 mb-1">{client.name}</h3>
+                                    <div className="flex items-center justify-center">
+                                        <span className="px-3 py-1 rounded-full text-[10px] font-black bg-gray-100 text-gray-500 border border-gray-200 uppercase tracking-tighter">{client.code}</span>
                                     </div>
                                 </div>
-                                <div className="pt-2 border-t border-gray-50 w-full flex items-center justify-center text-blue-500 group-hover:text-blue-700 font-bold text-xs">
-                                    View Details <ChevronRightIcon size={14} className="ml-1" />
+                                <div className="pt-4 border-t border-gray-50 w-full flex items-center justify-center text-blue-500 group-hover:text-blue-700 font-black text-xs uppercase tracking-widest">
+                                    Open Sales <ChevronRightIcon size={14} className="ml-1" />
                                 </div>
                             </Link>
                         ))}

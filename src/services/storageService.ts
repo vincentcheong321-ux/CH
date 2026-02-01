@@ -79,6 +79,7 @@ const aggregateSalesWeekly = (rows: any[]): LedgerRecord[] => {
         const key = `${row.client_id}_${sun}`;
         
         const rawTotal = (Number(row.data?.b) || 0) + (Number(row.data?.s) || 0) + (Number(row.data?.a) || 0) + (Number(row.data?.c) || 0);
+        // Calculate amount client owes (Paper = 86%, Mobile = 100% of Agent Total)
         const finalTotal = (!row.data?.mobileRaw && !row.data?.mobileRawData) ? rawTotal * 0.86 : rawTotal;
 
         if (!grouped[key]) {
@@ -88,18 +89,20 @@ const aggregateSalesWeekly = (rows: any[]): LedgerRecord[] => {
         grouped[key].dates.push(row.entry_date);
     });
 
-    return Object.entries(grouped).map(([key, data]) => ({
-        id: `agg_sale_week_${key}`,
-        clientId: data.clientId,
-        date: key.split('_')[1],
-        amount: Math.abs(data.amount),
-        description: '', 
-        typeLabel: '收',
-        operation: data.amount >= 0 ? 'add' : 'subtract',
-        column: 'main',
-        isVisible: true,
-        createdAt: key.split('_')[1] + 'T23:59:59Z'
-    }));
+    return Object.entries(grouped)
+        .filter(([_, data]) => Math.abs(data.amount) > 0.001) // FIX: Only create record if amount is significant
+        .map(([key, data]) => ({
+            id: `agg_sale_week_${key}`,
+            clientId: data.clientId,
+            date: key.split('_')[1],
+            amount: Math.abs(data.amount),
+            description: '', 
+            typeLabel: '收',
+            operation: data.amount >= 0 ? 'add' : 'subtract',
+            column: 'main',
+            isVisible: true,
+            createdAt: key.split('_')[1] + 'T23:59:59Z'
+        }));
 };
 
 // --- 1. Categories ---
