@@ -72,9 +72,20 @@ const getSundayOfDate = (dateStr: string) => {
 
 const aggregateSalesWeekly = (rows: any[]): LedgerRecord[] => {
     const saleRows = rows.filter(r => r.entry_type === 'SALE');
+    
+    // DEDUPLICATION: Ensure we only count one record per client per date (use the latest one by ID)
+    const uniqueSales: Record<string, any> = {};
+    saleRows.forEach(row => {
+        const key = `${row.client_id}_${row.entry_date}`;
+        // If multiple exist, take the one with the higher ID or created_at (most recent)
+        if (!uniqueSales[key] || row.id > uniqueSales[key].id) {
+            uniqueSales[key] = row;
+        }
+    });
+
     const grouped: Record<string, { amount: number, dates: string[], clientId: string }> = {};
 
-    saleRows.forEach(row => {
+    Object.values(uniqueSales).forEach(row => {
         const sun = getSundayOfDate(row.entry_date);
         const key = `${row.client_id}_${sun}`;
         
@@ -90,7 +101,7 @@ const aggregateSalesWeekly = (rows: any[]): LedgerRecord[] => {
     });
 
     return Object.entries(grouped)
-        .filter(([_, data]) => Math.abs(data.amount) > 0.001) // FIX: Only create record if amount is significant
+        .filter(([_, data]) => Math.abs(data.amount) > 0.001) // Ensure zeroed weeks are removed
         .map(([key, data]) => ({
             id: `agg_sale_week_${key}`,
             clientId: data.clientId,

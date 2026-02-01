@@ -36,6 +36,15 @@ const SpreadsheetInput = React.memo(({
         setIsSaving(false);
     }, [value]);
 
+    const handleConfirm = () => {
+        const num = parseFloat(local) || 0;
+        if (num !== value) {
+            setIsSaving(true);
+            onChange(num);
+        }
+        onBlur();
+    };
+
     return (
         <div className="w-full h-full relative group">
             <input 
@@ -43,13 +52,9 @@ const SpreadsheetInput = React.memo(({
                 inputMode="decimal"
                 value={local}
                 onChange={(e) => setLocal(e.target.value)}
-                onBlur={() => {
-                    const num = parseFloat(local) || 0;
-                    if (num !== value) {
-                        setIsSaving(true);
-                        onChange(num);
-                    }
-                    onBlur();
+                onBlur={handleConfirm}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleConfirm();
                 }}
                 className={`w-full h-full text-center bg-transparent outline-none focus:bg-blue-50 font-mono text-base font-bold transition-all ${colorClass} ${isSaving ? 'opacity-30' : ''}`}
                 placeholder=""
@@ -260,18 +265,17 @@ const SalesIndex: React.FC = () => {
   const selectedDate = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
 
   const handlePaperUpdate = useCallback(async (clientId: string, date: string, b: number, a: number) => {
-    // Robust Auto-Save with functional state update
+    // UPDATED: More robust auto-save state logic
     setSalesData(prev => {
         const idx = prev.findIndex(s => s.clientId === clientId && s.date === date);
-        const updated = [...prev];
         if (idx >= 0) {
+            const updated = [...prev];
             updated[idx] = { ...updated[idx], b, a };
-        } else {
-            updated.push({ id: `temp-${clientId}-${date}`, clientId, date, b, a, s: 0, c: 0 });
+            return updated;
         }
-        return updated;
+        return [...prev, { id: `temp-${clientId}-${date}`, clientId, date, b, a, s: 0, c: 0 }];
     });
-    // Fire-and-forget save to storage
+    // Final storage commit
     await saveSaleRecord({ clientId, date, b, a, s: 0, c: 0 });
   }, []);
 
@@ -452,33 +456,27 @@ const SalesIndex: React.FC = () => {
                     )}
                 </section>
 
-                {/* 2. Restored Grid Layout (Original Version) */}
+                {/* 2. RE-RESTORED CLASSIC GRID LAYOUT (DECEMBER VERSION) */}
                 <section className="pb-20">
-                    <div className="mb-8 border-b border-gray-300 pb-2">
+                    <div className="mb-6 border-b border-gray-300 pb-2">
                         <h2 className="text-xl font-black text-gray-800 uppercase tracking-widest flex items-center">
-                            <LayoutTemplate size={20} className="mr-2 text-purple-600" />
-                            Quick Client Access
+                            <LayoutTemplate size={20} className="mr-2 text-gray-400" />
+                            Paper Client List (Classic Grid)
                         </h2>
                     </div>
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                         {paperClients.map(client => (
                             <Link 
                                 key={client.id}
                                 to={`/clients/${client.id}/sales`}
-                                className="bg-white rounded-2xl border-2 border-gray-100 shadow-sm hover:shadow-xl hover:border-blue-500 hover:-translate-y-1 transition-all p-6 flex flex-col items-center justify-center text-center space-y-4 group relative overflow-hidden"
+                                className="bg-white rounded-lg border border-gray-200 p-4 flex flex-col items-center justify-center text-center shadow-sm hover:border-blue-500 hover:shadow transition-all group"
                             >
-                                <div className="absolute top-0 right-0 w-16 h-16 -mr-8 -mt-8 bg-blue-50 rounded-full group-hover:bg-blue-100 transition-colors" />
-                                <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center text-2xl font-black text-slate-800 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-inner">
-                                    {client.name.substring(0, 1).toUpperCase()}
+                                <div className="w-12 h-12 bg-gray-50 rounded-full flex items-center justify-center text-lg font-bold text-gray-400 group-hover:bg-blue-50 group-hover:text-blue-500 mb-2">
+                                    {client.name.charAt(0).toUpperCase()}
                                 </div>
-                                <div className="w-full relative z-10">
-                                    <h3 className="font-black text-gray-900 text-lg truncate px-2 mb-1">{client.name}</h3>
-                                    <div className="flex items-center justify-center">
-                                        <span className="px-3 py-1 rounded-full text-[10px] font-black bg-gray-100 text-gray-500 border border-gray-200 uppercase tracking-tighter">{client.code}</span>
-                                    </div>
-                                </div>
-                                <div className="pt-4 border-t border-gray-50 w-full flex items-center justify-center text-blue-500 group-hover:text-blue-700 font-black text-xs uppercase tracking-widest">
-                                    Open Sales <ChevronRightIcon size={14} className="ml-1" />
+                                <div className="font-bold text-gray-800 truncate w-full px-1">{client.name}</div>
+                                <div className="mt-1 px-2 py-0.5 bg-gray-100 text-[10px] font-bold text-gray-500 rounded uppercase tracking-tighter">
+                                    {client.code}
                                 </div>
                             </Link>
                         ))}
