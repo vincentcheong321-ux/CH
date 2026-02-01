@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Printer, Trash2, Plus, Minus, Pencil, X, Check, AlertTriangle, ExternalLink, GripHorizontal, Hash, Zap, ChevronLeft, ChevronRight, ImageDown, Loader2 } from 'lucide-react';
@@ -692,10 +691,14 @@ const ClientLedger: React.FC = () => {
             {/* Compact Footer */}
             <div className="bg-gray-50 border-t-2 border-black">
                 {/* Gross Sub Row */}
-                <div className="flex border-b border-black text-[10px] font-black text-gray-300 uppercase font-mono h-5 items-center">
-                    <div className="w-[20%] text-right pr-2 border-r border-black tracking-tighter">SUB</div>
-                    <div className="w-[40%] text-center border-r border-black font-black">{totals.wan > 0 ? totals.wan : ''}</div>
-                    <div className="w-[40%] text-center font-black">{totals.qian > 0 ? totals.qian : ''}</div>
+                <div className="flex border-b border-black h-11 items-center font-mono">
+                    <div className="w-[20%] border-r border-black bg-gray-50 h-full flex items-center justify-end pr-2 text-[11px] text-gray-300 font-black tracking-tighter uppercase">SUB</div>
+                    <div className="w-[40%] text-center border-r border-black font-black bg-white h-full flex items-center justify-center text-gray-300">
+                        {totals.wan > 0 ? totals.wan : ''}
+                    </div>
+                    <div className="w-[40%] text-center font-black bg-white h-full flex items-center justify-center text-gray-300">
+                        {totals.qian > 0 ? totals.qian : ''}
+                    </div>
                 </div>
 
                 {/* Discounted Net Row */}
