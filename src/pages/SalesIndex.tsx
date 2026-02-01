@@ -96,9 +96,13 @@ const ClientWeeklyTable: React.FC<{
         c: acc.c + (row.record?.c || 0),
     }), { b: 0, s: 0, a: 0, c: 0 });
 
-    const totalWan = totals.b + totals.s;
-    const totalQian = totals.a + totals.c;
-    const grandTotal = totalWan + totalQian;
+    const totalWanRaw = totals.b + totals.s;
+    const totalQianRaw = totals.a + totals.c;
+    
+    // Apply 14% discount (0.86 rate)
+    const discountedWan = totalWanRaw * 0.86;
+    const discountedQian = totalQianRaw * 0.86;
+    const grandTotal = discountedWan + discountedQian;
 
     return (
         <div className="bg-white border-2 border-black shadow-sm flex flex-col h-full break-inside-avoid">
@@ -162,20 +166,23 @@ const ClientWeeklyTable: React.FC<{
 
             {/* Footer */}
             <div className="border-t-2 border-black bg-gray-50 mt-auto">
-                <div className="flex border-b border-black text-xs font-bold text-gray-600 font-mono">
+                {/* SUB (Gross) */}
+                <div className="flex border-b border-black text-xs font-bold text-gray-400 font-mono">
                     <div className="w-[20%] text-right pr-2 py-1 border-r border-black uppercase tracking-tighter">Sub</div>
-                    <div className="w-[40%] text-center py-1 border-r border-black">{totalWan > 0 ? totalWan : ''}</div>
-                    <div className="w-[40%] text-center py-1">{totalQian > 0 ? totalQian : ''}</div>
+                    <div className="w-[40%] text-center py-1 border-r border-black">{totalWanRaw > 0 ? totalWanRaw : ''}</div>
+                    <div className="w-[40%] text-center py-1">{totalQianRaw > 0 ? totalQianRaw : ''}</div>
                 </div>
-                <div className="flex border-b border-black text-xl font-bold h-9 items-center font-mono">
-                    <div className="w-[20%] border-r border-black bg-gray-100 h-full"></div>
+                {/* Net (86%) */}
+                <div className="flex border-b border-black text-xl font-bold h-11 items-center font-mono bg-white">
+                    <div className="w-[20%] border-r border-black bg-gray-50 h-full flex items-center justify-center text-[10px] text-gray-400 uppercase font-black">-14%</div>
                     <div className="w-[40%] text-center border-r border-black text-blue-800">
-                        {totalWan > 0 ? totalWan.toLocaleString() : ''}
+                        {discountedWan > 0 ? discountedWan.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1}) : ''}
                     </div>
                     <div className="w-[40%] text-center text-red-700">
-                        {totalQian > 0 ? totalQian.toLocaleString() : ''}
+                        {discountedQian > 0 ? discountedQian.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1}) : ''}
                     </div>
                 </div>
+                {/* Grand Total */}
                 <div className="text-center py-2 text-3xl font-black text-gray-900 bg-white font-mono tracking-tighter">
                     {grandTotal.toLocaleString(undefined, {minimumFractionDigits: 2})}
                 </div>
