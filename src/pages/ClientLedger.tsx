@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Printer, Trash2, Plus, Minus, Pencil, X, Check, AlertTriangle, ExternalLink, GripHorizontal, Hash, Zap, ChevronLeft, ChevronRight, ImageDown, Loader2 } from 'lucide-react';
@@ -113,7 +114,8 @@ const ClientLedger: React.FC = () => {
   const [editWinLines, setEditWinLines] = useState<WinningLineData[]>([]);
 
   const [colWidths, setColWidths] = useState<number[]>([35, 30, 35]);
-  const [verticalPadding, setVerticalPadding] = useState<{top: number, bottom: number}>({ top: 40, bottom: 40 });
+  // Reduced initial top padding from 40 to 10
+  const [verticalPadding, setVerticalPadding] = useState<{top: number, bottom: number}>({ top: 10, bottom: 40 });
   const containerRef = useRef<HTMLDivElement>(null);
   const dragInfo = useRef<{ 
       type: 'col' | 'top' | 'bottom';
@@ -875,9 +877,10 @@ const ClientLedger: React.FC = () => {
                             <div className="absolute bottom-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResizeVertical('top', e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div>
                         </div>
                         
-                        <div className="px-4 md:px-8 pb-2 md:pb-4 flex justify-between items-end mb-2 md:mb-4">
+                        {/* Compact Header: Reduced padding and margins to move component UP */}
+                        <div className="px-4 md:px-8 pb-1 md:pb-1 flex justify-between items-end mb-1 md:mb-1">
                             <div>
-                                <h2 className="text-2xl md:text-4xl font-bold text-gray-900 uppercase tracking-widest">{client.name}</h2>
+                                <h2 className="text-2xl md:text-4xl font-bold text-gray-900 uppercase tracking-widest leading-none">{client.name}</h2>
                                 {client.code && <p className="text-gray-600 mt-1 font-mono text-sm md:text-xl">{client.code}</p>}
                             </div>
                             <div className="md:hidden text-right">
