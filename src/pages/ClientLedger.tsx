@@ -79,7 +79,7 @@ const RegistryInput = React.memo(({
             />
             {isSaving && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-white/10">
-                    <Loader2 size={10} className="animate-spin text-gray-400" />
+                    <Loader2 size={12} className="animate-spin text-gray-400" />
                 </div>
             )}
         </div>
@@ -633,7 +633,7 @@ const ClientLedger: React.FC = () => {
   )};
 
   const RegistrySection = () => {
-    // Filter to show only Tuesday (2), Wednesday (3), Saturday (6), Sunday (0) draw dates
+    // UPDATED: Filter to show only Tuesday (2), Wednesday (3), Saturday (6), Sunday (0) draw dates
     const registryRows = activeWeekDays
         .filter(d => [0, 2, 3, 6].includes(d.getDay()))
         .map(date => {
@@ -652,63 +652,51 @@ const ClientLedger: React.FC = () => {
     const grandTotal = discWan + discQian;
 
     return (
-        <div className="mb-6 max-w-sm mx-auto border-2 border-black bg-white shadow-sm overflow-hidden">
-            {/* Header: Sales Title and Wan/Qian labels */}
-            <div className="flex border-b-2 border-black h-8 bg-gray-50/50">
-                <div className="w-[20%] border-r border-black flex items-center justify-center font-black text-[8px] text-gray-400 uppercase tracking-tighter">
-                    REG
+        <div className="mb-12 max-w-4xl mx-auto border-2 border-black bg-white">
+            <div className="flex border-b-2 border-black h-12 bg-gray-50/50">
+                <div className="w-[20%] border-r border-black flex items-center justify-center font-bold text-gray-500 uppercase text-xs tracking-widest">
+                    Sales
                 </div>
-                <div className="w-[40%] border-r border-black flex items-center justify-center font-serif italic text-lg">万</div>
-                <div className="w-[40%] flex items-center justify-center font-serif italic text-lg">千</div>
+                <div className="w-[40%] border-r border-black flex items-center justify-center font-serif italic text-3xl">万</div>
+                <div className="w-[40%] flex items-center justify-center font-serif italic text-3xl">千</div>
             </div>
-            
-            {/* Column Title Row */}
-            <div className="flex border-b border-black text-[7px] font-black bg-gray-100/50 text-gray-400 uppercase tracking-tighter leading-none h-4 items-center">
-                <div className="w-[20%] text-center border-r border-black">Date</div>
-                <div className="w-[40%] text-center border-r border-black">Wan Slip</div>
-                <div className="w-[40%] text-center">Qian Slip</div>
+            <div className="flex border-b border-black text-[10px] font-black bg-gray-100/50 text-gray-400 uppercase tracking-tighter">
+                <div className="w-[20%] text-center py-1 border-r border-black">Date</div>
+                <div className="w-[40%] text-center py-1 border-r border-black">Wan Group</div>
+                <div className="w-[40%] text-center py-1">Qian Group</div>
             </div>
-
-            {/* Content Rows */}
-            <div className="divide-y divide-gray-100">
+            <div>
                 {registryRows.map((row, idx) => {
                     const dateLabel = `${String(row.date.getDate()).padStart(2,'0')}-${MONTH_NAMES[row.date.getMonth()].slice(0,3)}`;
                     return (
-                        <div key={idx} className="flex h-8 hover:bg-blue-50/20 items-stretch">
-                            <div className="w-[20%] flex items-center justify-center border-r border-black text-[9px] font-mono font-bold text-gray-400 bg-gray-50/20">{dateLabel}</div>
+                        <div key={idx} className="flex border-b border-gray-100 h-10 hover:bg-blue-50/20">
+                            <div className="w-[20%] flex items-center justify-center border-r border-black text-xs font-mono font-bold text-gray-400 bg-gray-50/30">{dateLabel}</div>
                             <div className="w-[40%] border-r border-black relative">
-                                <RegistryInput value={row.record?.b || 0} onChange={(v) => handleSaleUpdate(row.dateStr, v, row.record?.a || 0)} colorClass="text-blue-800 text-sm"/>
+                                <RegistryInput value={row.record?.b || 0} onChange={(v) => handleSaleUpdate(row.dateStr, v, row.record?.a || 0)} colorClass="text-blue-700 text-lg"/>
                             </div>
                             <div className="w-[40%] relative">
-                                <RegistryInput value={row.record?.a || 0} onChange={(v) => handleSaleUpdate(row.dateStr, row.record?.b || 0, v)} colorClass="text-red-700 text-sm"/>
+                                <RegistryInput value={row.record?.a || 0} onChange={(v) => handleSaleUpdate(row.dateStr, row.record?.b || 0, v)} colorClass="text-red-600 text-lg"/>
                             </div>
                         </div>
                     );
                 })}
             </div>
-
-            {/* Compact Footer */}
             <div className="bg-gray-50 border-t-2 border-black">
-                {/* Gross Sub Row */}
-                <div className="flex border-b border-black text-[7px] font-black text-gray-300 uppercase font-mono h-4 items-center">
-                    <div className="w-[20%] text-right pr-1 border-r border-black tracking-tighter">SUB</div>
-                    <div className="w-[40%] text-center border-r border-black">{totals.wan > 0 ? totals.wan : ''}</div>
-                    <div className="w-[40%] text-center">{totals.qian > 0 ? totals.qian : ''}</div>
+                <div className="flex border-b border-black text-[10px] font-bold text-gray-400 uppercase font-mono">
+                    <div className="w-[20%] text-right pr-2 py-1 border-r border-black uppercase tracking-tighter">Sub</div>
+                    <div className="w-[40%] text-center py-1 border-r border-black">{totals.wan > 0 ? totals.wan : ''}</div>
+                    <div className="w-[40%] text-center py-1">{totals.qian > 0 ? totals.qian : ''}</div>
                 </div>
-
-                {/* Discounted Net Row */}
-                <div className="flex border-b border-black h-8 items-center font-mono bg-white">
-                    <div className="w-[20%] border-r border-black bg-gray-50 h-full flex items-center justify-center text-[7px] text-gray-300 font-black tracking-tighter uppercase">-14%</div>
-                    <div className="w-[40%] text-center border-r border-black text-blue-900 font-bold text-sm">
+                <div className="flex border-b border-black h-10 items-center font-mono bg-white">
+                    <div className="w-[20%] border-r border-black bg-gray-50 h-full flex items-center justify-center text-[9px] text-gray-400 font-black">-14%</div>
+                    <div className="w-[40%] text-center border-r border-black text-blue-800 font-bold text-lg">
                         {discWan > 0 ? discWan.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1}) : ''}
                     </div>
-                    <div className="w-[40%] text-center text-red-800 font-bold text-sm">
+                    <div className="w-[40%] text-center text-red-700 font-bold text-lg">
                         {discQian > 0 ? discQian.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1}) : ''}
                     </div>
                 </div>
-
-                {/* Final Week Total for Registry */}
-                <div className="text-center py-1.5 text-xl font-black text-gray-900 bg-white font-mono tracking-tighter leading-none border-b-2 border-black">
+                <div className="text-center py-3 text-3xl font-black text-gray-900 bg-white font-mono tracking-tighter">
                     {grandTotal.toLocaleString(undefined, {minimumFractionDigits: 2})}
                 </div>
             </div>
@@ -886,7 +874,7 @@ const ClientLedger: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Compact Paper Registry - 3 Column Sales Data on Top */}
+                        {/* Paper Registry - 3 Column Sales Data on Top */}
                         <RegistrySection />
 
                         <div className="flex flex-col md:flex-row w-full min-h-[400px] relative" ref={containerRef}>
