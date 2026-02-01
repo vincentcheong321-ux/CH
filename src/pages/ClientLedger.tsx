@@ -335,6 +335,7 @@ const ClientLedger: React.FC = () => {
 
   const requestDeleteCategory = (e: React.MouseEvent, catId: string) => {
     e.stopPropagation();
+    /* Fix: using catId instead of undefined recordId */
     setConfirmModal({ isOpen: true, type: 'DELETE_CATEGORY', targetId: catId, title: 'Delete Button', message: 'Remove this category button?' });
   };
 
@@ -692,11 +693,11 @@ const ClientLedger: React.FC = () => {
             <div className="bg-gray-50 border-t-2 border-black">
                 {/* Gross Sub Row */}
                 <div className="flex border-b border-black h-11 items-center font-mono">
-                    <div className="w-[20%] border-r border-black bg-gray-50 h-full flex items-center justify-center text-[11px] text-gray-300 font-black tracking-tighter uppercase">SUB</div>
-                    <div className="w-[40%] text-center border-r border-black font-black bg-white h-full flex items-center justify-center text-gray-300">
+                    <div className="w-[20%] border-r border-black bg-gray-50 h-full flex items-center justify-center text-[11px] text-gray-400 font-black tracking-tighter uppercase">SUB</div>
+                    <div className="w-[40%] text-center border-r border-black font-black bg-white h-full flex items-center justify-center text-gray-400">
                         {totals.wan > 0 ? totals.wan : ''}
                     </div>
-                    <div className="w-[40%] text-center font-black bg-white h-full flex items-center justify-center text-gray-300">
+                    <div className="w-[40%] text-center font-black bg-white h-full flex items-center justify-center text-gray-400">
                         {totals.qian > 0 ? totals.qian : ''}
                     </div>
                 </div>
@@ -1034,6 +1035,5 @@ const ClientLedger: React.FC = () => {
   );
 };
 
-/* DO add comment above each fix */
 /* Fix: Exporting ClientLedger instead of undefined ClientLedgerV1 */
 export default ClientLedger;
