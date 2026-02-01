@@ -1,256 +1,203 @@
-
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, ChevronLeft, ChevronRight, Loader2, Calendar, Smartphone, FileText, DollarSign, RefreshCw, FileSpreadsheet, Zap, CheckCircle, TrendingUp, Info } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Loader2, Smartphone, FileText, RefreshCw, FileSpreadsheet, Zap, CheckCircle, TrendingUp } from 'lucide-react';
 import { getClients, getSalesForDates, saveSaleRecord, getLedgerRecords, updateLedgerRecord, saveLedgerRecord, deleteLedgerRecord } from '../services/storageService';
 import { Client, SaleRecord } from '../types';
 import { MONTH_NAMES, getWeeksForMonth } from '../utils/reportUtils';
 import { useGlobalState } from '../context/GlobalStateContext';
 
-// Specific Display Codes
-const PAPER_Z_CODES = ['Z03', 'Z05', 'Z07', 'Z15', 'Z19', 'Z20'];
-const PAPER_C_CODES = ['C03', 'C04', 'C06', 'C09', 'C13', 'C15', 'C17'];
-
-// Mapping: Mobile ID -> Paper Client Code (Case Insensitive)
+// Mapping: Mobile ID -> Paper Client Code
 const MOBILE_TO_PAPER_MAP: Record<string, string> = {
-    'sk3619': 'c13',
-    'sk3818': 'z19',
-    'sk3964': 'z07',
-    'sk8959': 'c17',
-    'vc9486': '9486',
-    'g8sv8239': 'z03',
-    'mrcc04': 'c04',
-    'pt217': 'pt217',
-    'sk0922': 'z05',
-    'sk2839': '2839',
-    'sk3715': '伍',
-    'sk5611': 'c09',
-    'sk8264': 'c19',
-    'sk8385': '8385',
-    'skc009': 'c08',
-    'skc15': 'c15'
+    'sk3619': 'c13', 'sk3818': 'z19', 'sk3964': 'z07', 'sk8959': 'c17', 'vc9486': '9486',
+    'g8sv8239': 'z03', 'mrcc04': 'c04', 'pt217': 'pt217', 'sk0922': 'z05', 'sk2839': '2839',
+    'sk3715': '伍', 'sk5611': 'c09', 'sk8264': 'c19', 'sk8385': '8385', 'skc009': 'c08', 'skc15': 'c15'
 };
 
-// FIX: Utility function for numeric formatting in tables
-const formatTotal = (val: number) => {
-    if (!val || val === 0) return '-';
-    return val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-};
+// Fixed Lists for Spreadsheet Layout
+const LEFT_CLIENT_CODES = ['Z07', 'Z15', 'Z19', 'Z20', 'C03', 'C06', 'C13', 'C17', 'Z21'];
+const RIGHT_CLIENT_CODES = ['C01', 'C02', 'C03', 'C04', 'C06', 'C07', 'C09', 'C10', 'C11', 'C13', 'C14', 'C15', 'C16', 'C17', 'C19'];
 
-// --- Helper: Composite Input for B/S or A/C ---
-const CompositeInput = React.memo(({ 
-    val1, 
-    val2, 
+const SpreadsheetInput = React.memo(({ 
+    value, 
     onChange, 
-    colorClass
+    onBlur, 
+    colorClass 
 }: { 
-    val1: number, 
-    val2: number, 
-    onChange: (v1: number, v2: number) => void,
-    colorClass: string
+    value: number, 
+    onChange: (val: number) => void, 
+    onBlur: () => void,
+    colorClass: string 
 }) => {
-    const formatValue = (v1: number, v2: number) => {
-        if (!v1 && !v2) return '';
-        if (v2 === 0) return `${v1}`;
-        return `${v1}/${v2}`;
-    };
-
-    const [localVal, setLocalVal] = useState(formatValue(val1, val2));
+    const [local, setLocal] = useState(value === 0 ? '' : value.toString());
 
     useEffect(() => {
-        setLocalVal(formatValue(val1, val2));
-    }, [val1, val2]);
-
-    const handleBlur = () => {
-        let v1 = 0, v2 = 0;
-        
-        if (localVal.trim() === '') {
-            if (val1 !== 0 || val2 !== 0) onChange(0, 0);
-            return;
-        }
-
-        if (localVal.includes('/')) {
-            const parts = localVal.split('/');
-            v1 = parseFloat(parts[0]) || 0;
-            v2 = parseFloat(parts[1]) || 0;
-        } else {
-            v1 = parseFloat(localVal) || 0;
-            v2 = 0; 
-        }
-
-        if (v1 !== val1 || v2 !== val2) {
-            onChange(v1, v2);
-        }
-        setLocalVal(formatValue(v1, v2));
-    };
+        setLocal(value === 0 ? '' : value.toString());
+    }, [value]);
 
     return (
         <input 
             type="text"
             inputMode="decimal"
-            value={localVal}
-            onChange={(e) => setLocalVal(e.target.value)}
-            onBlur={handleBlur}
-            onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                    (e.target as HTMLInputElement).blur();
-                }
+            value={local}
+            onChange={(e) => setLocal(e.target.value)}
+            onBlur={() => {
+                const num = parseFloat(local) || 0;
+                if (num !== value) onChange(num);
+                onBlur();
             }}
-            onFocus={(e) => e.target.select()}
-            className={`w-full h-full text-center bg-transparent outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 font-mono text-base ${colorClass} ${localVal ? 'font-bold' : 'opacity-50'}`}
-            placeholder="-"
+            className={`w-full h-full text-center bg-transparent outline-none focus:bg-blue-50 font-mono text-base font-bold ${colorClass}`}
+            placeholder=""
         />
     );
 });
 
-const DetailedMobileTableRow = React.memo(({ 
-    client, 
-    record
-}: { 
-    client: Client, 
-    record?: SaleRecord
+// FIX: Changed component definition to use React.FC to correctly handle React's special 'key' prop when used in lists.
+const DailySpreadsheetTable: React.FC<{ 
+    dateStr: string, 
+    clients: Client[], 
+    sales: SaleRecord[], 
+    onUpdate: (clientId: string, date: string, b: number, a: number) => void 
+}> = ({ 
+    dateStr, 
+    clients, 
+    sales, 
+    onUpdate 
 }) => {
-    const raw = record?.mobileRawData || [];
-    const getVal = (idx: number) => raw[idx] || '';
-    const fmt = (val: string | number) => {
-        if (!val || val === '-') return '-';
-        return String(val);
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const displayDate = `${d}-${MONTH_NAMES[m-1].slice(0,3)}`;
+
+    const getRowData = (codes: string[]) => {
+        return codes.map(code => {
+            const client = clients.find(c => c.code.toUpperCase() === code.toUpperCase());
+            const sale = client ? sales.find(s => s.clientId === client.id && s.date === dateStr) : undefined;
+            return { client, code, sale };
+        });
     };
-    const getColorClass = (val: string | number) => {
-        const num = parseFloat(String(val).replace(/,/g,''));
-        if (isNaN(num)) return 'text-gray-900';
-        return num >= 0 ? 'text-green-700' : 'text-red-600';
+
+    const leftData = getRowData(LEFT_CLIENT_CODES);
+    const rightData = getRowData(RIGHT_CLIENT_CODES);
+
+    const calcTotals = (data: any[]) => {
+        let wan = 0, qian = 0;
+        data.forEach(d => {
+            wan += (d.sale?.b || 0);
+            qian += (d.sale?.a || 0);
+        });
+        return { wan, qian, total: wan + qian };
     };
+
+    const leftTotals = calcTotals(leftData);
+    const rightTotals = calcTotals(rightData);
 
     return (
-        <tr className="hover:bg-purple-50/50 transition-colors border-b border-gray-100 last:border-0 font-mono text-[10px] md:text-xs">
-            <td className="px-2 py-3 text-left bg-white sticky left-0 z-10 border-r border-gray-200 shadow-sm">
-                <div className="font-bold text-gray-900">{client.name}</div>
-                <div className="text-[9px] text-gray-500">{client.code}</div>
-            </td>
-            <td className="px-2 py-3 text-right bg-gray-50/20 font-semibold border-r border-gray-100">{fmt(getVal(0))}</td>
-            <td className="px-2 py-3 text-right">{fmt(getVal(1))}</td>
-            <td className="px-2 py-3 text-right">{fmt(getVal(2))}</td>
-            <td className="px-2 py-3 text-right">{fmt(getVal(3))}</td>
-            <td className="px-2 py-3 text-right">{fmt(getVal(4))}</td>
-            <td className={`px-2 py-3 text-right font-extrabold bg-blue-50/50 border-x border-blue-100 ${getColorClass(getVal(5))}`}>
-                {fmt(getVal(5))}
-            </td>
-            <td className="px-2 py-3 text-right">{fmt(getVal(6))}</td>
-            <td className="px-2 py-3 text-right">{fmt(getVal(7))}</td>
-            <td className="px-2 py-3 text-right">{fmt(getVal(8))}</td>
-            <td className="px-2 py-3 text-right text-orange-600 bg-orange-50/30">{fmt(getVal(9))}</td>
-            <td className="px-2 py-3 text-right">{fmt(getVal(10))}</td>
-            <td className={`px-2 py-3 text-right font-extrabold bg-indigo-50/50 border-x border-indigo-100 ${getColorClass(getVal(11))}`}>
-                {fmt(getVal(11))}
-            </td>
-            <td className="px-2 py-3 text-right">{fmt(getVal(12))}</td>
-            <td className="px-2 py-3 text-right">{fmt(getVal(13))}</td>
-            <td className="px-2 py-3 text-right">{fmt(getVal(14))}</td>
-            <td className="px-2 py-3 text-right">{fmt(getVal(15))}</td>
-            <td className={`px-2 py-3 text-right font-extrabold bg-green-50/50 border-l border-green-100 ${getColorClass(getVal(16))}`}>
-                {fmt(getVal(16))}
-            </td>
-        </tr>
-    );
-});
-
-const ClientWeeklyCard = React.memo(({ 
-    client, 
-    dateStrings, 
-    salesData, 
-    onUpdate,
-    weekState 
-}: { 
-    client: Client, 
-    dateStrings: string[], 
-    salesData: SaleRecord[], 
-    onUpdate: (clientId: string, dateStr: string, field1: 'b'|'a', val1: number, field2: 's'|'c', val2: number) => void,
-    weekState: { year: number, month: number, week: number }
-}) => {
-    const clientRecords = salesData.filter(r => r.clientId === client.id);
-    const rawTotal = clientRecords.reduce((acc, r) => acc + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
-    const totalWeek = rawTotal * 0.86;
-
-    const formatMonth = (mIndex: number) => {
-        const name = MONTH_NAMES[mIndex] || "";
-        return name.charAt(0) + name.slice(1, 3).toLowerCase();
-    };
-
-    const paperDisplayDates = dateStrings.filter(dStr => {
-        const [y, m, d] = dStr.split('-').map(Number);
-        const dateObj = new Date(y, m-1, d);
-        const day = dateObj.getDay();
-        return [0, 2, 3, 6].includes(day);
-    });
-
-    return (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col h-full hover:shadow-md transition-shadow">
-            <div className="bg-gray-50 px-4 py-3 border-b border-gray-100 flex justify-between items-center">
-                <Link 
-                    to={`/clients/${client.id}`} 
-                    state={weekState}
-                    className="flex items-center space-x-2 hover:text-blue-600 transition-colors group"
-                >
-                    <div>
-                        <div className="font-bold text-gray-800 group-hover:text-blue-600 leading-tight">{client.name}</div>
-                        <div className="text-[10px] text-gray-500 font-mono">{client.code}</div>
-                    </div>
-                </Link>
-                <div className="text-right">
-                    <div className="text-[9px] text-gray-400 uppercase tracking-wider font-semibold">Week Total (-14%)</div>
-                    <span className={`font-mono font-bold text-sm ${totalWeek > 0 ? 'text-blue-600' : 'text-gray-900'}`}>
-                        {totalWeek !== 0 ? totalWeek.toLocaleString(undefined, {minimumFractionDigits: 2}) : '-'}
-                    </span>
-                </div>
+        <div className="bg-white border-2 border-black mb-12 shadow-md max-w-4xl mx-auto overflow-hidden">
+            <div className="grid grid-cols-2 bg-gray-100 border-b-2 border-black">
+                <div className="p-2 text-center font-black text-xl border-r-2 border-black uppercase tracking-widest">{displayDate}</div>
+                <div className="p-2 text-center font-black text-xl uppercase tracking-widest">{displayDate}</div>
             </div>
 
-            <div className="flex-1 overflow-x-auto">
-                <table className="w-full text-center border-collapse">
-                    <thead className="bg-gray-50/50 text-xs text-gray-500 font-semibold uppercase tracking-wider">
-                        <tr>
-                            <th className="py-2 pl-4 text-left font-medium w-24">Date</th>
-                            <th className="py-2 text-blue-700 font-bold border-l border-gray-100 text-sm">万 <span className="opacity-40 text-[9px] font-normal">B/S</span></th>
-                            <th className="py-2 text-red-700 font-bold border-l border-gray-100 text-sm">千 <span className="opacity-40 text-[9px] font-normal">A/C</span></th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100 text-sm">
-                        {paperDisplayDates.map(dateStr => {
-                            const [y, m, d] = dateStr.split('-').map(Number);
-                            const displayDate = `${d} ${formatMonth(m-1)}`;
-                            const record = salesData.find(r => r.clientId === client.id && r.date === dateStr);
-                            
-                            return (
-                                <tr key={dateStr} className="hover:bg-gray-50/80 transition-colors">
-                                    <td className="py-2 pl-4 text-left font-bold text-gray-700 whitespace-nowrap bg-gray-50/20">
-                                        {displayDate}
+            <div className="grid grid-cols-2">
+                {/* Left Column Group */}
+                <div className="border-r-2 border-black">
+                    <table className="w-full border-collapse">
+                        <tbody>
+                            {leftData.map((row, idx) => (
+                                <tr key={idx} className="h-10 border-b border-gray-300 last:border-0 hover:bg-gray-50 transition-colors">
+                                    <td className="w-20 px-3 font-black text-gray-800 border-r border-gray-300 bg-gray-50/50 uppercase text-sm">
+                                        {row.code}
                                     </td>
-                                    <td className="p-0 h-10 border-l border-gray-100 relative">
-                                        <CompositeInput 
-                                            val1={record?.b || 0}
-                                            val2={record?.s || 0}
-                                            onChange={(b, s) => onUpdate(client.id, dateStr, 'b', b, 's', s)}
-                                            colorClass="text-blue-700"
-                                        />
+                                    <td className="border-r border-gray-300 w-24 relative p-0 h-10">
+                                        {row.client && (
+                                            <SpreadsheetInput 
+                                                value={row.sale?.b || 0} 
+                                                onChange={(v) => onUpdate(row.client!.id, dateStr, v, row.sale?.a || 0)}
+                                                onBlur={() => {}}
+                                                colorClass="text-blue-700"
+                                            />
+                                        )}
                                     </td>
-                                    <td className="p-0 h-10 border-l border-gray-100 relative">
-                                        <CompositeInput 
-                                            val1={record?.a || 0}
-                                            val2={record?.c || 0}
-                                            onChange={(a, c) => onUpdate(client.id, dateStr, 'a', a, 'c', c)}
-                                            colorClass="text-red-700"
-                                        />
+                                    <td className="w-24 relative p-0 h-10">
+                                        {row.client && (
+                                            <SpreadsheetInput 
+                                                value={row.sale?.a || 0} 
+                                                onChange={(v) => onUpdate(row.client!.id, dateStr, row.sale?.b || 0, v)}
+                                                onBlur={() => {}}
+                                                colorClass="text-red-700"
+                                            />
+                                        )}
                                     </td>
                                 </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
+                            ))}
+                            {/* Left Summary Box */}
+                            <tr className="bg-white h-20">
+                                <td colSpan={3} className="p-4 border-t-2 border-black">
+                                    <div className="flex flex-col items-center">
+                                        <div className="flex border-2 border-black divide-x-2 divide-black w-48 mb-2">
+                                            <div className="flex-1 p-1 text-center font-mono font-bold text-sm bg-gray-50">{leftTotals.wan || ''}</div>
+                                            <div className="flex-1 p-1 text-center font-mono font-bold text-sm bg-gray-50">{leftTotals.qian || ''}</div>
+                                        </div>
+                                        <div className="border-2 border-black w-48 p-1 text-center font-mono font-black text-lg">
+                                            {leftTotals.total || ''}
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                {/* Right Column Group */}
+                <div>
+                    <table className="w-full border-collapse">
+                        <tbody>
+                            {rightData.map((row, idx) => (
+                                <tr key={idx} className="h-10 border-b border-gray-300 last:border-0 hover:bg-gray-50 transition-colors">
+                                    <td className="w-20 px-3 font-black text-gray-800 border-r border-gray-300 bg-gray-50/50 uppercase text-sm">
+                                        {row.code}
+                                    </td>
+                                    <td className="border-r border-gray-300 w-24 relative p-0 h-10">
+                                        {row.client && (
+                                            <SpreadsheetInput 
+                                                value={row.sale?.b || 0} 
+                                                onChange={(v) => onUpdate(row.client!.id, dateStr, v, row.sale?.a || 0)}
+                                                onBlur={() => {}}
+                                                colorClass="text-blue-700"
+                                            />
+                                        )}
+                                    </td>
+                                    <td className="w-24 relative p-0 h-10">
+                                        {row.client && (
+                                            <SpreadsheetInput 
+                                                value={row.sale?.a || 0} 
+                                                onChange={(v) => onUpdate(row.client!.id, dateStr, row.sale?.b || 0, v)}
+                                                onBlur={() => {}}
+                                                colorClass="text-red-700"
+                                            />
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                            {/* Right Summary Box */}
+                            <tr className="bg-white h-20">
+                                <td colSpan={3} className="p-4 border-t-2 border-black">
+                                    <div className="flex flex-col items-center">
+                                        <div className="flex border-2 border-black divide-x-2 divide-black w-48 mb-2">
+                                            <div className="flex-1 p-1 text-center font-mono font-bold text-sm bg-gray-50">{rightTotals.wan || ''}</div>
+                                            <div className="flex-1 p-1 text-center font-mono font-bold text-sm bg-gray-50">{rightTotals.qian || ''}</div>
+                                        </div>
+                                        <div className="border-2 border-black w-48 p-1 text-center font-mono font-black text-lg">
+                                            {rightTotals.total || ''}
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     );
-});
-
+};
 
 const SalesIndex: React.FC = () => {
   const navigate = useNavigate();
@@ -263,60 +210,48 @@ const SalesIndex: React.FC = () => {
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [regenMessage, setRegenMessage] = useState<string | null>(null);
 
-  // Derived Date State
   const currentYear = currentDate.getFullYear();
   const currentMonth = currentDate.getMonth();
+  const weeksData = useMemo(() => getWeeksForMonth(currentYear, currentMonth), [currentYear, currentMonth]);
   
-  // Calculate Weeks
-  const weeksData = useMemo<Record<number, Date[]>>(() => getWeeksForMonth(currentYear, currentMonth), [currentYear, currentMonth]);
-  
-  // Determine selected week number
   const selectedWeekNum = useMemo(() => {
       const todayStr = `${currentYear}-${String(currentMonth+1).padStart(2,'0')}-${String(currentDate.getDate()).padStart(2,'0')}`;
-      const foundWeek = Object.keys(weeksData).find(w => {
-          return weeksData[parseInt(w)].some(d => {
-              const dStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-              return dStr === todayStr;
-          });
-      });
+      const foundWeek = Object.keys(weeksData).find(w => weeksData[parseInt(w)].some(d => {
+          const dStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+          return dStr === todayStr;
+      }));
       return foundWeek ? parseInt(foundWeek) : 1;
-  }, [weeksData, currentDate, currentYear, currentMonth]);
+  }, [weeksData, currentDate]);
 
   const activeDays = weeksData[selectedWeekNum] || [];
-  const activeDateStrings = useMemo(() => activeDays.map(d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`), [activeDays]);
+  const drawDates = useMemo(() => activeDays.filter(d => [0, 2, 3, 6].includes(d.getDay())).map(d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`), [activeDays]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
         const loadedClients = await getClients();
         setClients(loadedClients);
-        if (activeDateStrings.length > 0) {
-            const records = await getSalesForDates(activeDateStrings);
-            setSalesData(records);
-        } else {
-            setSalesData([]);
-        }
+        const records = await getSalesForDates(drawDates.length > 0 ? drawDates : [selectedDate]);
+        setSalesData(records);
     } catch (e) { console.error(e); } finally { setLoading(false); }
-  }, [activeDateStrings]);
+  }, [drawDates]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  const handleUpdate = useCallback(async (clientId: string, dateStr: string, f1: 'b'|'a', v1: number, f2: 's'|'c', v2: number) => {
-      setSalesData(prev => {
-          const idx = prev.findIndex(r => r.clientId === clientId && r.date === dateStr);
-          if (idx >= 0) {
-              const updated = [...prev];
-              updated[idx] = { ...updated[idx], [f1]: v1, [f2]: v2 };
-              return updated;
-          } else {
-              return [...prev, { id: 'temp', clientId, date: dateStr, b: f1 === 'b' ? v1 : 0, s: f2 === 's' ? v2 : 0, a: f1 === 'a' ? v1 : 0, c: f2 === 'c' ? v2 : 0 }];
-          }
-      });
-      const existing = salesData.find(r => r.clientId === clientId && r.date === dateStr);
-      const payload = existing ? { ...existing, [f1]: v1, [f2]: v2 } : { clientId, date: dateStr, b:0, s:0, a:0, c:0, [f1]: v1, [f2]: v2 };
-      const { id, ...savePayload } = payload; 
-      await saveSaleRecord(savePayload);
-  }, [salesData]);
+  const selectedDate = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
+
+  const handlePaperUpdate = useCallback(async (clientId: string, date: string, b: number, a: number) => {
+    setSalesData(prev => {
+        const idx = prev.findIndex(s => s.clientId === clientId && s.date === date);
+        if (idx >= 0) {
+            const updated = [...prev];
+            updated[idx] = { ...updated[idx], b, a };
+            return updated;
+        }
+        return [...prev, { id: 'temp', clientId, date, b, a, s: 0, c: 0 }];
+    });
+    await saveSaleRecord({ clientId, date, b, a, s: 0, c: 0 });
+  }, []);
 
   const handleRegenerateDianFromList = async () => {
       if (salesData.length === 0) return;
@@ -331,50 +266,20 @@ const SalesIndex: React.FC = () => {
               const mappedPaperCode = MOBILE_TO_PAPER_MAP[mobileClient.code.toLowerCase()];
               if (mappedPaperCode) {
                   const paperClient = clients.find(c => c.code.toLowerCase() === mappedPaperCode.toLowerCase());
-                  
-                  // Deduplication check
                   if (paperClient && !processedClientIds.has(paperClient.id)) {
                       const rawData = record.mobileRawData;
                       if (!rawData || rawData.length < 6) continue;
                       const companyAmount = parseFloat(String(rawData[5]).replace(/,/g, ''));
-                      
                       if (!isNaN(companyAmount) && companyAmount !== 0) {
-                          
                           processedClientIds.add(paperClient.id);
-
                           const records = await getLedgerRecords(paperClient.id);
-                          
-                          // Find duplicates or existing '电' records
-                          const existingDianRecords = records.filter(r => 
-                              r.date === record.date && 
-                              r.typeLabel === '电' && 
-                              r.column === 'main'
-                          );
-
-                          // Logic Updated: Company Total > 0 -> Subtract, Company Total < 0 -> Add
+                          const existingDianRecords = records.filter(r => r.date === record.date && r.typeLabel === '电' && r.column === 'main');
                           const operation = companyAmount >= 0 ? 'subtract' : 'add';
                           const amount = Math.abs(companyAmount);
-                          
                           if (existingDianRecords.length > 0) {
-                              // Update the first one
                               await updateLedgerRecord(existingDianRecords[0].id, { amount, operation });
-                              // Clean up duplicates if found
-                              if (existingDianRecords.length > 1) {
-                                  for (let i = 1; i < existingDianRecords.length; i++) {
-                                      await deleteLedgerRecord(existingDianRecords[i].id);
-                                  }
-                              }
                           } else { 
-                              await saveLedgerRecord({ 
-                                  clientId: paperClient.id, 
-                                  date: record.date, 
-                                  description: '', 
-                                  typeLabel: '电', 
-                                  amount, 
-                                  operation, 
-                                  column: 'main', 
-                                  isVisible: true 
-                              }); 
+                              await saveLedgerRecord({ clientId: paperClient.id, date: record.date, description: '', typeLabel: '电', amount, operation, column: 'main', isVisible: true }); 
                           }
                           updateCount++;
                       }
@@ -402,28 +307,12 @@ const SalesIndex: React.FC = () => {
       setCurrentDate(newDate);
   };
 
-  // Handler for week pill clicks
   const handleWeekSelect = (weekNum: number) => {
       const days = weeksData[weekNum];
-      if (days && days.length > 0) {
-          // Set date to Monday of that week
-          setCurrentDate(new Date(days[0]));
-      }
+      if (days && days.length > 0) setCurrentDate(new Date(days[0]));
   };
 
-  const paperClients = useMemo(() => clients.filter(c => (c.category || 'paper') === 'paper'), [clients]);
   const mobileClients = useMemo(() => clients.filter(c => c.category === 'mobile'), [clients]);
-
-  const { zClients, cClients } = useMemo(() => {
-      const term = searchTerm.toLowerCase();
-      const filtered = paperClients.filter(c => c.name.toLowerCase().includes(term) || c.code.toLowerCase().includes(term));
-      const zList = filtered.filter(c => PAPER_Z_CODES.includes(c.code.toUpperCase()));
-      const cList = filtered.filter(c => PAPER_C_CODES.includes(c.code.toUpperCase()));
-      zList.sort((a,b) => PAPER_Z_CODES.indexOf(a.code.toUpperCase()) - PAPER_Z_CODES.indexOf(b.code.toUpperCase()));
-      cList.sort((a,b) => PAPER_C_CODES.indexOf(a.code.toUpperCase()) - PAPER_C_CODES.indexOf(b.code.toUpperCase()));
-      return { zClients: zList, cClients: cList };
-  }, [paperClients, searchTerm]);
-
   const filteredMobileClients = mobileClients.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()) || c.code.toLowerCase().includes(searchTerm.toLowerCase()));
 
   const mobileColumnTotals = useMemo(() => {
@@ -440,30 +329,7 @@ const SalesIndex: React.FC = () => {
       return totals;
   }, [filteredMobileClients, salesData]);
 
-  // --- Header Calculations (Strict Arrangement Requested) ---
-
-  // 1. Paper Calculations
-  const allPaperClients = useMemo(() => clients.filter(c => (c.category || 'paper') === 'paper'), [clients]);
-  const totalPaperRawGlobal = allPaperClients.reduce((acc, client) => {
-      const clientRecs = salesData.filter(r => r.clientId === client.id);
-      return acc + clientRecs.reduce((sum, r) => sum + (r.b||0) + (r.s||0) + (r.a||0) + (r.c||0), 0);
-  }, 0);
-
-  const paperCompany17 = totalPaperRawGlobal * 0.83;
-  const paperClient14 = totalPaperRawGlobal * 0.86;
-  const totalPaperEarningsGlobal = Math.abs(paperClient14 - paperCompany17);
-
-  // 2. Mobile Calculations
-  const mobileCompTotal = mobileColumnTotals[5];
-  // CHANGED: mobileMemberBet summary value now refers to '总代理总额' (Agent Total, Index 16) as requested
-  const mobileMemberBet = mobileColumnTotals[16]; 
-  const totalMobileEarningsGlobal = Math.abs(mobileColumnTotals[11]); // Shareholder total is usually profit
-
-  // 3. Grand Total
-  const totalWeeklyProfit = totalPaperEarningsGlobal + totalMobileEarningsGlobal;
-
   const sortedWeekKeys = Object.keys(weeksData).map(Number).sort((a,b) => a-b);
-
   const getWeekRangeLabel = (weekNum: number) => {
       const days = weeksData[weekNum];
       if (!days || days.length === 0) return '';
@@ -473,7 +339,6 @@ const SalesIndex: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-gray-50">
-      {/* Top Header - Tabs and Navigation */}
       <div className="bg-white border-b border-gray-200 z-20 shadow-sm flex-shrink-0">
           <div className="px-4 py-3 flex flex-col sm:flex-row justify-between items-center gap-3">
              <div className="flex items-center w-full sm:w-auto">
@@ -482,22 +347,19 @@ const SalesIndex: React.FC = () => {
                     <button onClick={() => setActiveTab('mobile')} className={`flex-1 sm:flex-none flex items-center justify-center px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'mobile' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}><Smartphone size={16} className="mr-2" />Mobile</button>
                  </div>
              </div>
-
              <div className="flex items-center space-x-3 w-full sm:w-auto">
-                <div className="relative flex-1 sm:w-64">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-                    <input type="text" placeholder={`Search ${activeTab}...`} className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-                </div>
                 {activeTab === 'mobile' && (
-                    <div className="flex space-x-2">
-                        <button onClick={handleRegenerateDianFromList} disabled={isRegenerating || filteredMobileClients.length === 0} className="p-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 shadow-sm" title="Regenerate 电"><Zap size={18} className={isRegenerating ? 'animate-pulse' : ''} /></button>
-                        <button onClick={() => navigate('/sales/mobile-report')} className="p-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 shadow-sm" title="Import Mobile Report"><FileSpreadsheet size={18} /></button>
-                    </div>
+                    <>
+                        <div className="relative flex-1 sm:w-64">
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+                            <input type="text" placeholder="Search mobile..." className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                        </div>
+                        <button onClick={handleRegenerateDianFromList} disabled={isRegenerating} className="p-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 shadow-sm"><Zap size={18} className={isRegenerating ? 'animate-pulse' : ''} /></button>
+                        <button onClick={() => navigate('/sales/mobile-report')} className="p-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 shadow-sm"><FileSpreadsheet size={18} /></button>
+                    </>
                 )}
             </div>
           </div>
-
-          {/* Sub Header - Month and Week Selector */}
           <div className="border-t border-gray-100 px-4 py-2 flex items-center gap-3 overflow-x-auto no-scrollbar bg-gray-50/50">
                 <div className="flex items-center bg-white border border-gray-200 rounded-lg p-1 flex-shrink-0 shadow-sm">
                     <button onClick={handlePrevMonth} disabled={currentYear === 2025 && currentMonth === 0} className="p-1 hover:bg-gray-100 rounded disabled:opacity-30"><ChevronLeft size={18}/></button>
@@ -511,171 +373,66 @@ const SalesIndex: React.FC = () => {
                 </div>
                 <button onClick={loadData} className="ml-auto p-2 text-gray-400 hover:text-blue-600 hover:bg-white rounded-full transition-colors border border-transparent hover:border-gray-200"><RefreshCw size={16} className={loading ? 'animate-spin' : ''} /></button>
           </div>
-
-          {/* Totals Bar - SIDE BY SIDE Arrangement */}
-          <div className="bg-white border-t border-gray-100 px-4 py-2.5 overflow-x-auto no-scrollbar">
-                <div className="flex items-center min-w-max space-x-8">
-                    
-                    {/* Paper Group */}
-                    <div className="flex items-center space-x-6 bg-blue-50/50 px-4 py-1.5 rounded-xl border border-blue-100/50">
-                        <div className="flex flex-col">
-                            <span className="text-[9px] text-blue-400 font-bold uppercase tracking-widest">Total of Raw</span>
-                            <span className="font-mono font-bold text-blue-900 text-xs md:text-sm">${totalPaperRawGlobal.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                        </div>
-                        <div className="flex flex-col">
-                            <span className="text-[9px] text-blue-400 font-bold uppercase tracking-widest">Company (17%)</span>
-                            <span className="font-mono font-bold text-blue-900 text-xs md:text-sm">${paperCompany17.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                        </div>
-                        <div className="flex flex-col">
-                            <span className="text-[9px] text-blue-400 font-bold uppercase tracking-widest">Client (14%)</span>
-                            <span className="font-mono font-bold text-blue-900 text-xs md:text-sm">${paperClient14.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                        </div>
-                        <div className="flex flex-col border-l border-blue-200 pl-4">
-                            <span className="text-[9px] text-blue-600 font-black uppercase tracking-widest">Paper Earning</span>
-                            <span className="font-mono font-black text-blue-700 text-sm md:text-base">${totalPaperEarningsGlobal.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                        </div>
-                    </div>
-
-                    <div className="h-10 w-px bg-gray-200"></div>
-
-                    {/* Mobile Group */}
-                    <div className="flex items-center space-x-6 bg-purple-50/50 px-4 py-1.5 rounded-xl border border-purple-100/50">
-                        <div className="flex flex-col">
-                            <span className="text-[9px] text-purple-400 font-bold uppercase tracking-widest">公司总额</span>
-                            <span className="font-mono font-bold text-purple-900 text-xs md:text-sm">${Math.abs(mobileCompTotal).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                        </div>
-                        <div className="flex flex-col">
-                            <span className="text-[9px] text-purple-400 font-bold uppercase tracking-widest">会员总投注</span>
-                            <span className="font-mono font-bold text-purple-900 text-xs md:text-sm">${Math.abs(mobileMemberBet).toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                        </div>
-                        <div className="flex flex-col border-l border-purple-200 pl-4">
-                            <span className="text-[9px] text-purple-600 font-black uppercase tracking-widest">Mobile Earning</span>
-                            <span className="font-mono font-black text-purple-700 text-sm md:text-base">${totalMobileEarningsGlobal.toLocaleString(undefined, {minimumFractionDigits: 2})}</span>
-                        </div>
-                    </div>
-
-                    <div className="h-10 w-px bg-gray-200"></div>
-
-                    {/* Final Earning Card */}
-                    <div className="bg-emerald-600 px-6 py-2 rounded-2xl flex items-center shadow-xl shadow-emerald-200/50 border border-emerald-500">
-                        <TrendingUp size={18} className="text-emerald-100 mr-4" />
-                        <div className="flex flex-col">
-                            <span className="text-[10px] text-emerald-100 font-black uppercase tracking-tighter leading-none mb-1">Weekly Total Earning</span>
-                            <span className="font-mono font-black text-white text-base md:text-2xl leading-none">
-                                ${totalWeeklyProfit.toLocaleString(undefined, {minimumFractionDigits: 2})}
-                            </span>
-                        </div>
-                    </div>
-                </div>
-          </div>
       </div>
 
-      {regenMessage && (
-        <div className="bg-green-50 border-b border-green-200 px-4 py-2 text-green-800 text-sm font-bold flex items-center justify-center animate-in fade-in slide-in-from-top-2"><CheckCircle size={16} className="mr-2" />{regenMessage}</div>
-      )}
-
-      <div className="flex-1 overflow-auto bg-gray-100 p-4">
+      <div className="flex-1 overflow-auto bg-gray-100 p-4 md:p-8">
         {loading ? (
             <div className="flex justify-center items-center h-full"><Loader2 className="animate-spin text-gray-400" /></div>
-        ) : (
-            <div className="max-w-[1600px] mx-auto pb-20">
-                {activeTab === 'paper' ? (
-                    <div className="flex flex-col lg:flex-row gap-6">
-                        <div className="flex-1 bg-white/50 p-4 rounded-xl border border-dashed border-gray-300">
-                            <h2 className="text-lg font-bold text-gray-700 mb-4 px-2 border-b border-gray-200 pb-2">Z Series</h2>
-                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                                {zClients.map(client => (<ClientWeeklyCard key={client.id} client={client} dateStrings={activeDateStrings} salesData={salesData} onUpdate={handleUpdate} weekState={{ year: currentYear, month: currentMonth, week: selectedWeekNum }} />))}
-                                {zClients.length === 0 && <p className="text-gray-400 text-sm col-span-full text-center py-4">No Z-series clients found.</p>}
-                            </div>
-                        </div>
-                        <div className="flex-1 bg-white/50 p-4 rounded-xl border border-dashed border-gray-300">
-                            <h2 className="text-lg font-bold text-gray-700 mb-4 px-2 border-b border-gray-200 pb-2">C Series</h2>
-                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                                {cClients.map(client => (<ClientWeeklyCard key={client.id} client={client} dateStrings={activeDateStrings} salesData={salesData} onUpdate={handleUpdate} weekState={{ year: currentYear, month: currentMonth, week: selectedWeekNum }} />))}
-                                {cClients.length === 0 && <p className="text-gray-400 text-sm col-span-full text-center py-4">No C-series clients found.</p>}
-                            </div>
-                        </div>
-                    </div>
-                ) : (
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse text-xs whitespace-nowrap">
-                                <thead className="bg-gray-100 font-bold text-gray-700">
-                                    <tr className="bg-gray-200 text-gray-800 text-[10px] uppercase tracking-wider border-b border-gray-300">
-                                        <th className="px-2 py-1 sticky left-0 bg-gray-200 z-10 border-r border-gray-300"></th>
-                                        <th className="px-2 py-1 text-center border-r border-gray-300 bg-gray-200/50">Member / 会员</th>
-                                        <th colSpan={5} className="px-2 py-1 text-center border-r border-gray-300 bg-blue-50 text-blue-800">Company / 公司</th>
-                                        <th colSpan={6} className="px-2 py-1 text-center border-r border-gray-300 bg-indigo-50 text-indigo-800">Shareholder / 股东</th>
-                                        <th colSpan={5} className="px-2 py-1 text-center bg-green-50 text-green-800">Agent / 总代理</th>
-                                    </tr>
-                                    <tr className="bg-gray-100 border-b border-gray-200">
-                                        <th className="px-2 py-3 sticky left-0 bg-gray-100 z-10 border-r border-gray-200 shadow-sm text-left">登陆帐号 / 名字</th>
-                                        <th className="px-2 py-3 text-right text-gray-500 border-r border-gray-200">总投注</th>
-                                        <th className="px-2 py-3 text-right text-gray-600">营业额</th>
-                                        <th className="px-2 py-3 text-right text-gray-600">佣金</th>
-                                        <th className="px-2 py-3 text-right text-gray-600">赔出</th>
-                                        <th className="px-2 py-3 text-right text-gray-600">补费用</th>
-                                        <th className="px-2 py-3 text-right font-extrabold bg-blue-50 text-blue-800 border-x border-blue-100">总额</th>
-                                        <th className="px-2 py-3 text-right text-gray-600">营业额</th>
-                                        <th className="px-2 py-3 text-right text-gray-600">佣金</th>
-                                        <th className="px-2 py-3 text-right text-gray-600">赔出</th>
-                                        <th className="px-2 py-3 text-right text-orange-600 bg-orange-50/20">赢彩</th>
-                                        <th className="px-2 py-3 text-right text-gray-600">补费用</th>
-                                        <th className="px-2 py-3 text-right font-extrabold bg-indigo-50 text-indigo-800 border-x border-indigo-100">总额</th>
-                                        <th className="px-2 py-3 text-right text-gray-600">营业额</th>
-                                        <th className="px-2 py-3 text-right text-gray-600">佣金</th>
-                                        <th className="px-2 py-3 text-right text-gray-600">赔出</th>
-                                        <th className="px-2 py-3 text-right text-gray-600">抽费用</th>
-                                        <th className="px-2 py-3 text-right font-extrabold bg-green-100 text-green-900 border-l border-green-100">总额</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100">
-                                    {filteredMobileClients.map(client => {
-                                        const clientRecords = salesData.filter(r => r.clientId === client.id);
-                                        const record = clientRecords[clientRecords.length - 1]; 
-                                        return (<DetailedMobileTableRow key={client.id} client={client} record={record} />);
-                                    })}
-                                    {filteredMobileClients.length === 0 && (<tr><td colSpan={22} className="text-center py-8 text-gray-400">No mobile clients found.</td></tr>)}
-                                </tbody>
-                                <tfoot className="bg-gray-100 border-t-2 border-gray-300 font-mono font-bold text-[10px] md:text-xs">
-                                    <tr>
-                                        <td className="px-2 py-3 sticky left-0 bg-gray-100 z-10 border-r border-gray-300 text-left">总额</td>
-                                        <td className="px-2 py-3 text-right border-r border-gray-300 text-gray-700">{formatTotal(mobileColumnTotals[0])}</td>
-                                        <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[1])}</td>
-                                        <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[2])}</td>
-                                        <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[3])}</td>
-                                        <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[4])}</td>
-                                        <td className={`px-2 py-3 text-right bg-blue-100 border-x border-blue-200 text-blue-800`}>{formatTotal(mobileColumnTotals[5])}</td>
-                                        <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[6])}</td>
-                                        <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[7])}</td>
-                                        <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[8])}</td>
-                                        <td className="px-2 py-3 text-right text-orange-700">{formatTotal(mobileColumnTotals[9])}</td>
-                                        <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[10])}</td>
-                                        <td className={`px-2 py-3 text-right bg-indigo-100 border-x border-indigo-200 text-indigo-800`}>{formatTotal(mobileColumnTotals[11])}</td>
-                                        <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[12])}</td>
-                                        <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[13])}</td>
-                                        <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[14])}</td>
-                                        <td className="px-2 py-3 text-right">{formatTotal(mobileColumnTotals[15])}</td>
-                                        <td className={`px-2 py-3 text-right bg-green-200 border-l border-green-300 ${parseFloat(String(mobileColumnTotals[16]).replace(/,/g,'')) >= 0 ? 'text-green-800' : 'text-red-700'}`}>{formatTotal(mobileColumnTotals[16])}</td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
+        ) : activeTab === 'paper' ? (
+            <div className="max-w-6xl mx-auto">
+                {drawDates.map(date => (
+                    <DailySpreadsheetTable 
+                        key={date} 
+                        dateStr={date} 
+                        clients={clients} 
+                        sales={salesData} 
+                        onUpdate={handlePaperUpdate} 
+                    />
+                ))}
+                {drawDates.length === 0 && (
+                    <div className="p-12 text-center text-gray-400 font-bold bg-white rounded-2xl border-2 border-dashed border-gray-200">
+                        No draw dates found for this week.
                     </div>
                 )}
             </div>
+        ) : (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs whitespace-nowrap">
+                        <thead className="bg-gray-100 font-bold text-gray-700">
+                            <tr className="bg-gray-200 border-b border-gray-300">
+                                <th className="px-2 py-1 sticky left-0 bg-gray-200 z-10 border-r border-gray-300"></th>
+                                <th className="px-2 py-1 text-center border-r border-gray-300">Member</th>
+                                <th colSpan={5} className="px-2 py-1 text-center border-r border-gray-300 bg-blue-50 text-blue-800">Company</th>
+                                <th colSpan={6} className="px-2 py-1 text-center border-r border-gray-300 bg-indigo-50 text-indigo-800">Shareholder</th>
+                                <th colSpan={5} className="px-2 py-1 text-center bg-green-50 text-green-800">Agent</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {filteredMobileClients.map(client => {
+                                const clientRecords = salesData.filter(r => r.clientId === client.id);
+                                const record = clientRecords[clientRecords.length - 1]; 
+                                const raw = record?.mobileRawData || [];
+                                return (
+                                    <tr key={client.id} className="hover:bg-purple-50 transition-colors border-b border-gray-100 font-mono text-[11px]">
+                                        <td className="px-2 py-3 text-left bg-white sticky left-0 z-10 border-r border-gray-200 shadow-sm">
+                                            <div className="font-bold text-gray-900">{client.name}</div>
+                                            <div className="text-[9px] text-gray-500">{client.code}</div>
+                                        </td>
+                                        {[...Array(17)].map((_, i) => (
+                                            <td key={i} className={`px-2 py-3 text-right ${[5, 11, 16].includes(i) ? 'bg-gray-50 font-black border-x border-gray-200' : ''}`}>
+                                                {raw[i] || '-'}
+                                            </td>
+                                        ))}
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         )}
       </div>
-
-      {activeTab === 'mobile' && (
-        <div className="bg-purple-900 text-white p-4 sticky bottom-0 z-30 shadow-lg flex justify-between items-center lg:hidden">
-            <div>
-                <p className="text-xs text-purple-300 font-bold uppercase tracking-wider">Mobile Week Total</p>
-                <p className="text-xs text-purple-400 opacity-75">{MONTH_NAMES[currentMonth]} W{Object.keys(weeksData).indexOf(String(selectedWeekNum)) + 1}</p>
-            </div>
-            <p className="font-mono font-bold text-2xl">${Math.abs(totalMobileEarningsGlobal).toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
-        </div>
-      )}
     </div>
   );
 };
