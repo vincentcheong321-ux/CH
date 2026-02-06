@@ -648,6 +648,8 @@ const ClientLedger: React.FC = () => {
         qian: acc.qian + (row.record?.a || 0),
     }), { wan: 0, qian: 0 });
 
+    if (totals.wan === 0 && totals.qian === 0) return null;
+
     const discWan = totals.wan * 0.86;
     const discQian = totals.qian * 0.86;
     const grandTotal = discWan + discQian;
@@ -882,7 +884,7 @@ const ClientLedger: React.FC = () => {
                         
                         <div className="px-4 md:px-8 pb-2 md:pb-4 flex justify-between items-end mb-2 md:mb-4">
                             <div>
-                                <h2 className="text-2xl md:text-4xl font-bold text-gray-900 uppercase tracking-widest leading-none">{client.name}</h2>
+                                <h2 className="text-2xl md:text-4xl font-bold text-gray-900 uppercase tracking-widest">{client.name}</h2>
                                 {client.code && <p className="text-gray-600 mt-1 font-mono text-sm md:text-xl">{client.code}</p>}
                             </div>
                             <div className="md:hidden text-right">
@@ -922,7 +924,7 @@ const ClientLedger: React.FC = () => {
             <h2 className="text-xl font-bold mb-4">Add Button Option</h2>
             <form onSubmit={handleAddCategory} className="space-y-4">
               <div><label className="block text-sm font-medium text-gray-700 mb-1">Button Name</label><input type="text" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value={newCatLabel} onChange={e => setNewCatLabel(e.target.value)} placeholder="e.g. Bonus" /></div>
-              <div><label className="block text-sm font-medium text-gray-700 mb-1">Calculation Type</label><div className="grid grid-cols-3 gap-2"><button type="button" onClick={() => setNewCatOp('add')} className={`py-2 px-1 rounded-lg border text-xs md:text-sm font-bold ${newCatOp === 'add' ? 'bg-green-50 border-green-500 text-green-700' : 'border-gray-200 text-gray-500'}`}>(+) Add</button><button type="button" onClick={() => setNewCatOp('subtract')} className={`py-2 px-1 rounded-lg border text-xs md:text-sm font-bold ${newCatOp === 'subtract' ? 'bg-red-100 text-red-800' : 'border-gray-200 text-gray-500'}`}>(-) Deduct</button><button type="button" onClick={() => setNewCatOp('none')} className={`py-2 px-1 rounded-lg border text-xs md:text-sm font-bold ${newCatOp === 'none' ? 'bg-gray-100 border-gray-500 text-gray-700' : 'border-gray-200 text-gray-500'}`}>Gray</button></div></div>
+              <div><label className="block text-sm font-medium text-gray-700 mb-1">Calculation Type</label><div className="grid grid-cols-3 gap-2"><button type="button" onClick={() => setNewCatOp('add')} className={`py-2 px-1 rounded-lg border text-xs md:text-sm font-bold ${newCatOp === 'add' ? 'bg-green-50 border-green-500 text-green-700' : 'border-gray-200 text-gray-500'}`}>(+) Add</button><button type="button" onClick={() => setNewCatOp('subtract')} className={`py-2 px-1 rounded-lg border text-xs md:text-sm font-bold ${newCatOp === 'subtract' ? 'bg-red-50 border-red-500 text-red-700' : 'border-gray-200 text-gray-500'}`}>(-) Deduct</button><button type="button" onClick={() => setNewCatOp('none')} className={`py-2 px-1 rounded-lg border text-xs md:text-sm font-bold ${newCatOp === 'none' ? 'bg-gray-100 border-gray-500 text-gray-700' : 'border-gray-200 text-gray-500'}`}>Gray</button></div></div>
               <div className="flex justify-end space-x-3 mt-6"><button type="button" onClick={() => setIsAddCatModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button><button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Create</button></div>
             </form>
           </div>
