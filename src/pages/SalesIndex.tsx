@@ -10,7 +10,7 @@ import { useGlobalState } from '../context/GlobalStateContext';
 const MOBILE_TO_PAPER_MAP: Record<string, string> = {
     'sk3619': 'c13', 'sk3818': 'z19', 'sk3964': 'z07', 'sk8959': 'c17', 'vc9486': '9486',
     'g8sv8239': 'z03', 'mrcc04': 'c04', 'pt217': 'pt217', 'sk0922': 'z05', 'sk2839': '2839',
-    'sk3715': '伍', 'sk5611': 'c09', 'sk8264': 'c19', 'skc009': 'c08', 'skc15': 'c15'
+    'sk3715': '伍', 'sk5611': 'c09', 'sk8264': 'c19', 'sk8385': '8385', 'skc009': 'c08', 'skc15': 'c15'
 };
 
 const Z_CLIENT_CODES = ['Z03', 'Z05', 'Z07', 'Z15', 'Z19', 'Z20'];

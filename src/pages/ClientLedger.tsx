@@ -335,7 +335,6 @@ const ClientLedger: React.FC = () => {
 
   const requestDeleteCategory = (e: React.MouseEvent, catId: string) => {
     e.stopPropagation();
-    /* Fix: using catId instead of undefined recordId */
     setConfirmModal({ isOpen: true, type: 'DELETE_CATEGORY', targetId: catId, title: 'Delete Button', message: 'Remove this category button?' });
   };
 
@@ -694,10 +693,10 @@ const ClientLedger: React.FC = () => {
                 {/* Gross Sub Row */}
                 <div className="flex border-b border-black h-11 items-center font-mono">
                     <div className="w-[20%] border-r border-black bg-gray-50 h-full flex items-center justify-center text-[11px] text-gray-400 font-black tracking-tighter uppercase">SUB</div>
-                    <div className="w-[40%] text-center border-r border-black font-black bg-white h-full flex items-center justify-center text-gray-400">
+                    <div className="w-[40%] text-center border-r border-black font-black bg-white h-full flex items-center justify-center text-gray-400 text-2xl">
                         {totals.wan > 0 ? totals.wan : ''}
                     </div>
-                    <div className="w-[40%] text-center font-black bg-white h-full flex items-center justify-center text-gray-400">
+                    <div className="w-[40%] text-center font-black bg-white h-full flex items-center justify-center text-gray-400 text-2xl">
                         {totals.qian > 0 ? totals.qian : ''}
                     </div>
                 </div>
@@ -881,8 +880,7 @@ const ClientLedger: React.FC = () => {
                             <div className="absolute bottom-0 left-0 right-0 h-2 cursor-row-resize z-20 opacity-0 group-hover:opacity-100 hover:bg-blue-200/50 transition-all flex items-center justify-center no-print" onMouseDown={(e) => startResizeVertical('top', e)}><div className="w-8 h-1 bg-blue-400 rounded-full"></div></div>
                         </div>
                         
-                        {/* Compact Header: Reduced padding and margins to move component UP */}
-                        <div className="px-4 md:px-8 pb-1 md:pb-1 flex justify-between items-end mb-1 md:mb-1">
+                        <div className="px-4 md:px-8 pb-2 md:pb-4 flex justify-between items-end mb-2 md:mb-4">
                             <div>
                                 <h2 className="text-2xl md:text-4xl font-bold text-gray-900 uppercase tracking-widest leading-none">{client.name}</h2>
                                 {client.code && <p className="text-gray-600 mt-1 font-mono text-sm md:text-xl">{client.code}</p>}
@@ -893,7 +891,6 @@ const ClientLedger: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Compact Paper Registry - 3 Column Sales Data on Top */}
                         <RegistrySection />
 
                         <div className="flex flex-col md:flex-row w-full min-h-[400px] relative" ref={containerRef}>
@@ -1035,5 +1032,4 @@ const ClientLedger: React.FC = () => {
   );
 };
 
-/* Fix: Exporting ClientLedger instead of undefined ClientLedgerV1 */
 export default ClientLedger;

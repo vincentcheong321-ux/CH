@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, RefreshCw, Save, CheckCircle, AlertCircle, History, FileText, Loader2, Zap, Calendar } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { getClients, saveSaleRecord, saveMobileReportHistory, getMobileReportHistory, saveLedgerRecord, getLedgerRecords, updateLedgerRecord, deleteLedgerRecord } from '../services/storageService';
+import { getClients, saveClient, saveSaleRecord, saveMobileReportHistory, getMobileReportHistory, saveLedgerRecord, getLedgerRecords, updateLedgerRecord, deleteLedgerRecord } from '../services/storageService';
 import { Client, LedgerRecord } from '../types';
 import { useGlobalState } from '../context/GlobalStateContext';
 
@@ -133,7 +132,10 @@ const MobileReport: React.FC = () => {
       const targetDate = reportDate; // Use selected date directly
 
       let matchedCount = 0;
-      let skippedCount = 0;
+      let matchedPaperCount = 0;
+      
+      // Local copy of clients to track newly created ones during this loop
+      let currentClients = [...clients];
 
       // Track processed paper clients to avoid duplicates within the same batch
       const processedPaperClientIds = new Set<string>();
@@ -143,22 +145,13 @@ const MobileReport: React.FC = () => {
           if (row.id === '总额') continue;
 
           // 1. Standard Mobile Client Matching
-          const client = clients.find(c => c.code.toLowerCase() === row.id.toLowerCase());
+          let client = currentClients.find(c => c.code.toLowerCase() === row.id.toLowerCase());
           
           const values = row.values;
-          
-          // New Structure Indices:
-          // 0: Member Bet
-          // 1-5: Company (Total at 5)
-          // 6-11: Shareholder (Total at 11)
-          // 12-16: Agent (Total at 16)
-          
-          // Safe access
           const compTotal = values[5] || '0';
           const shareholderTotal = values[11] || '0';
           const agentTotal = values[16] || values[values.length - 1] || '0';
-
-          const val = parseFloat(String(agentTotal).replace(/,/g, ''));
+          const agentVal = parseFloat(String(agentTotal).replace(/,/g, ''));
 
           const mobileRaw = {
               memberBet: values[0] || '0',
@@ -167,44 +160,49 @@ const MobileReport: React.FC = () => {
               agentTotal: agentTotal
           };
 
-          if (client) {
-              if (!isNaN(val)) {
-                  await saveSaleRecord({
-                      clientId: client.id,
-                      date: targetDate,
-                      b: val, 
-                      s: 0, a: 0, c: 0,
-                      mobileRaw, 
-                      mobileRawData: values // Save FULL raw data
+          // AUTO-CREATE: If no client matches the ID, create a mobile client
+          if (!client) {
+              try {
+                  const newClient = await saveClient({
+                      name: row.name,
+                      code: row.id,
+                      category: 'mobile',
+                      phone: ''
                   });
-                  matchedCount++;
+                  client = newClient;
+                  currentClients.push(newClient);
+              } catch (e) {
+                  console.error("Failed to auto-create mobile client", e);
               }
-          } else {
-              skippedCount++;
+          }
+
+          if (client && !isNaN(agentVal)) {
+              await saveSaleRecord({
+                  clientId: client.id,
+                  date: targetDate,
+                  b: agentVal, 
+                  s: 0, a: 0, c: 0,
+                  mobileRaw, 
+                  mobileRawData: values 
+              });
+              matchedCount++;
           }
 
           // 2. Special Paper Client "Dian" (电) Cross-Posting
-          // Match by ID primarily
           let mappedPaperCode = MOBILE_TO_PAPER_MAP[row.id.toLowerCase()];
           
           if (mappedPaperCode) {
-              const paperClient = clients.find(c => c.code.toLowerCase() === mappedPaperCode.toLowerCase());
+              const paperClient = currentClients.find(c => c.code.toLowerCase() === mappedPaperCode.toLowerCase());
               
-              // Prevent duplicate processing for same paper client in this loop
               if (paperClient && !processedPaperClientIds.has(paperClient.id)) {
-                  
-                  const companyTotalRaw = values[5]; 
-                  const companyAmount = parseFloat(String(companyTotalRaw).replace(/,/g, ''));
+                  const companyAmount = parseFloat(String(values[5]).replace(/,/g, ''));
 
                   if (!isNaN(companyAmount) && companyAmount !== 0) {
-                      // Mark as processed immediately
                       processedPaperClientIds.add(paperClient.id);
 
-                      // Logic Updated: Company Total > 0 -> Subtract, Company Total < 0 -> Add
                       const operation = companyAmount >= 0 ? 'subtract' : 'add';
                       const amount = Math.abs(companyAmount);
 
-                      // Check for existing records to PREVENT DUPLICATES
                       const existingRecords = await getLedgerRecords(paperClient.id);
                       const existingDianRecords = existingRecords.filter(r => 
                           r.date === targetDate && 
@@ -217,7 +215,6 @@ const MobileReport: React.FC = () => {
                               amount: amount,
                               operation: operation
                           });
-                          // Cleanup duplicates
                           if (existingDianRecords.length > 1) {
                               for(let i=1; i<existingDianRecords.length; i++) {
                                   await deleteLedgerRecord(existingDianRecords[i].id);
@@ -235,6 +232,7 @@ const MobileReport: React.FC = () => {
                               isVisible: true
                           });
                       }
+                      matchedPaperCount++;
                   }
               }
           }
@@ -243,16 +241,16 @@ const MobileReport: React.FC = () => {
       try {
         await saveMobileReportHistory(targetDate, parsedData);
         loadHistory(); 
+        setClients(currentClients); // Update local state with any new clients
       } catch (e) {
           console.error("Failed to save history", e);
       }
 
       setIsSaving(false);
-      if (matchedCount > 0) {
-          setSaveStatus({ type: 'success', message: `Saved data for ${targetDate}. Updated ${matchedCount} clients.` });
-      } else {
-          setSaveStatus({ type: 'error', message: `No matching clients found. Ensure Client Codes match.` });
-      }
+      setSaveStatus({ 
+          type: 'success', 
+          message: `Import complete. Updated ${matchedCount} mobile accounts and ${matchedPaperCount} paper entries.` 
+      });
   };
 
   const handleRegenerateDian = async () => {
@@ -276,45 +274,32 @@ const MobileReport: React.FC = () => {
             if (mappedPaperCode) {
                 const paperClient = clients.find(c => c.code.toLowerCase() === mappedPaperCode.toLowerCase());
                 
-                // Deduplication Check
                 if (paperClient && !processedPaperClientIds.has(paperClient.id)) {
-                    
-                    const companyTotalRaw = row.values[5];
-                    const companyAmount = parseFloat(String(companyTotalRaw).replace(/,/g, ''));
+                    const companyAmount = parseFloat(String(row.values[5]).replace(/,/g, ''));
                     
                     if (!isNaN(companyAmount) && companyAmount !== 0) {
-                        
                         processedPaperClientIds.add(paperClient.id);
-
-                        // Fetch existing records to dedupe/update
                         const existingRecords = await getLedgerRecords(paperClient.id);
-                        
-                        // Find ALL '电' records for this date
                         const existingDianRecords = existingRecords.filter(r => 
                             r.date === targetDate && 
                             r.typeLabel === '电' && 
                             r.column === 'main'
                         );
 
-                        // Logic Updated: Company Total > 0 -> Subtract, Company Total < 0 -> Add
                         const operation = companyAmount >= 0 ? 'subtract' : 'add';
                         const amount = Math.abs(companyAmount);
 
                         if (existingDianRecords.length > 0) {
-                            // Update the FIRST one found
                             await updateLedgerRecord(existingDianRecords[0].id, {
                                 amount: amount,
                                 operation: operation
                             });
-                            
-                            // AUTO-FIX: If multiple duplicates exist, delete the extras
                             if (existingDianRecords.length > 1) {
                                 for (let i = 1; i < existingDianRecords.length; i++) {
                                     await deleteLedgerRecord(existingDianRecords[i].id);
                                 }
                             }
                         } else {
-                            // Create new if none exist
                             await saveLedgerRecord({
                                 clientId: paperClient.id,
                                 date: targetDate,
@@ -337,7 +322,6 @@ const MobileReport: React.FC = () => {
 
   const viewHistoryItem = (item: any) => {
       setParsedData(item.json_data);
-      // Set date to the report date from history
       if (item.report_date) {
           const [y, m, d] = item.report_date.split('-').map(Number);
           setCurrentDate(new Date(y, m - 1, d));
@@ -354,7 +338,6 @@ const MobileReport: React.FC = () => {
   return (
     <div className="bg-gray-50 min-h-screen p-4 md:p-8">
         <div className="max-w-[1400px] mx-auto">
-            {/* Header Section */}
             <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
                 <div className="flex items-center space-x-4">
                     <Link to="/sales" className="p-2 hover:bg-gray-200 rounded-full text-gray-600">
@@ -362,7 +345,7 @@ const MobileReport: React.FC = () => {
                     </Link>
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900">Mobile Report Importer</h1>
-                        <p className="text-gray-500 text-sm">Structure: Member(1) + Comp(5) + Share(6) + Agent(5)</p>
+                        <p className="text-gray-500 text-sm">Import and sync digital data to system accounts.</p>
                     </div>
                 </div>
                 
@@ -403,7 +386,6 @@ const MobileReport: React.FC = () => {
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[calc(100vh-200px)]">
-                        {/* Input Area */}
                         <div className="flex flex-col bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                             <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
                                 <h3 className="font-bold text-gray-700 flex items-center"><FileText size={18} className="mr-2 text-blue-500" /> Paste Report Data</h3>
@@ -420,7 +402,6 @@ const MobileReport: React.FC = () => {
                             />
                         </div>
 
-                        {/* Preview Area */}
                         <div className="flex flex-col bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                             <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
                                 <h3 className="font-bold text-gray-700 flex items-center"><Zap size={18} className="mr-2 text-yellow-500" /> Data Preview ({parsedData.length})</h3>
@@ -464,7 +445,7 @@ const MobileReport: React.FC = () => {
                                                     </td>
                                                     <td className="p-2 font-bold text-gray-800">{row.name}</td>
                                                     <td className="p-2 text-right font-mono text-gray-500">{row.values[5]}</td>
-                                                    <td className="p-2 text-right font-mono">
+                                                    <td className="p-2 text-right font-mono font-bold">
                                                         {row.values[16] || row.values[row.values.length-1]}
                                                     </td>
                                                 </tr>
