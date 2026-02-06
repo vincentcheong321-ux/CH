@@ -13,8 +13,7 @@ const MOBILE_TO_PAPER_MAP: Record<string, string> = {
     'sk3715': '伍', 'sk5611': 'c09', 'sk8264': 'c19', 'sk8385': '8385', 'skc009': 'c08', 'skc15': 'c15'
 };
 
-const Z_CLIENT_CODES = ['Z03', 'Z05', 'Z07', 'Z15', 'Z19', 'Z20'];
-const C_CLIENT_CODES = ['C03', 'C04', 'C06', 'C07', 'C09', 'C13', 'C15', 'C17'];
+const ACTIVE_CLIENT_CODES = ['Z07', 'Z15', 'Z19', 'Z20', 'C03', 'C06', 'C13', 'C17', 'Z21'];
 
 const SpreadsheetInput = React.memo(({ 
     value, 
@@ -205,16 +204,24 @@ const DailySpreadsheetTable: React.FC<{
     const [y, m, d] = dateStr.split('-').map(Number);
     const displayDate = `${d}-${MONTH_NAMES[m-1].slice(0,3)}`;
 
-    const getRowData = (codes: string[]) => {
-        return codes.map(code => {
-            const client = clients.find(c => c.code.toUpperCase() === code.toUpperCase());
-            const sale = client ? sales.find(s => s.clientId === client.id && s.date === dateStr) : undefined;
-            return { client, code, sale };
-        });
-    };
+    // Prepare Active Data
+    const activeData = ACTIVE_CLIENT_CODES.map(code => {
+        const client = clients.find(c => c.code?.toUpperCase() === code);
+        const sale = client ? sales.find(s => s.clientId === client.id && s.date === dateStr) : undefined;
+        return { client, code, sale };
+    });
 
-    const zData = getRowData(Z_CLIENT_CODES);
-    const cData = getRowData(C_CLIENT_CODES);
+    // Prepare Inactive Data (dynamically found)
+    const inactiveClients = clients.filter(c => 
+        (c.category === 'paper' || !c.category) && 
+        c.code && 
+        !ACTIVE_CLIENT_CODES.includes(c.code.toUpperCase())
+    ).sort((a, b) => a.code.localeCompare(b.code));
+
+    const inactiveData = inactiveClients.map(client => {
+        const sale = sales.find(s => s.clientId === client.id && s.date === dateStr);
+        return { client, code: client.code, sale };
+    });
 
     const calcTotals = (data: any[]) => {
         let wan = 0, qian = 0;
@@ -225,21 +232,21 @@ const DailySpreadsheetTable: React.FC<{
         return { wan, qian, total: wan + qian };
     };
 
-    const zTotals = calcTotals(zData);
-    const cTotals = calcTotals(cData);
+    const activeTotals = calcTotals(activeData);
+    const inactiveTotals = calcTotals(inactiveData);
 
     return (
         <div className="bg-white border-2 border-black mb-16 shadow-md max-w-6xl mx-auto overflow-hidden">
             <div className="flex flex-col lg:flex-row">
-                {/* Z GROUP */}
+                {/* ACTIVE CLIENTS */}
                 <div className="flex-1 lg:border-r-2 lg:border-black">
-                    <div className="bg-blue-600 text-white p-3 text-center font-black text-xl uppercase tracking-widest border-b-2 border-black">
-                        {displayDate} - Z GROUP
+                    <div className="bg-blue-700 text-white p-3 text-center font-black text-xl uppercase tracking-widest border-b-2 border-black">
+                        {displayDate} - ACTIVE
                     </div>
                     <div className="overflow-x-auto no-scrollbar">
                         <table className="w-full border-collapse min-w-[320px]">
                             <tbody>
-                                {zData.map((row, idx) => (
+                                {activeData.map((row, idx) => (
                                     <tr key={idx} className="h-14 border-b border-gray-400 last:border-0 hover:bg-gray-50 transition-colors">
                                         <td className="w-32 md:w-40 px-3 font-black text-gray-800 border-r border-gray-400 bg-gray-50/50 uppercase text-xs">
                                             <div className="flex flex-col">
@@ -277,10 +284,10 @@ const DailySpreadsheetTable: React.FC<{
                                     <td colSpan={3} className="p-4 border-t-2 border-black">
                                         <div className="flex flex-col items-center">
                                             <div className="flex border-2 border-black divide-x-2 divide-black w-full max-w-[240px] mb-2 bg-white">
-                                                <div className="flex-1 p-1 text-center font-mono font-black text-lg text-blue-700">{zTotals.wan || ''}</div>
-                                                <div className="flex-1 p-1 text-center font-mono font-black text-lg text-red-600">{zTotals.qian || ''}</div>
+                                                <div className="flex-1 p-1 text-center font-mono font-black text-lg text-blue-700">{activeTotals.wan || ''}</div>
+                                                <div className="flex-1 p-1 text-center font-mono font-black text-lg text-red-600">{activeTotals.qian || ''}</div>
                                             </div>
-                                            <div className="border-2 border-black w-full max-w-[240px] p-1 text-center font-mono font-black text-2xl bg-white">{zTotals.total.toLocaleString(undefined, {minimumFractionDigits: 2}) || ''}</div>
+                                            <div className="border-2 border-black w-full max-w-[240px] p-1 text-center font-mono font-black text-2xl bg-white">{activeTotals.total.toLocaleString(undefined, {minimumFractionDigits: 2}) || ''}</div>
                                         </div>
                                     </td>
                                 </tr>
@@ -289,45 +296,39 @@ const DailySpreadsheetTable: React.FC<{
                     </div>
                 </div>
 
-                {/* C GROUP */}
+                {/* INACTIVE CLIENTS */}
                 <div className="flex-1">
-                    <div className="bg-red-600 text-white p-3 text-center font-black text-xl uppercase tracking-widest border-b-2 border-black border-t-2 lg:border-t-0">
-                        {displayDate} - C GROUP
+                    <div className="bg-gray-700 text-white p-3 text-center font-black text-xl uppercase tracking-widest border-b-2 border-black border-t-2 lg:border-t-0">
+                        {displayDate} - INACTIVE
                     </div>
                     <div className="overflow-x-auto no-scrollbar">
                         <table className="w-full border-collapse min-w-[320px]">
                             <tbody>
-                                {cData.map((row, idx) => (
+                                {inactiveData.map((row, idx) => (
                                     <tr key={idx} className="h-14 border-b border-gray-400 last:border-0 hover:bg-gray-50 transition-colors">
                                         <td className="w-32 md:w-40 px-3 font-black text-gray-800 border-r border-gray-400 bg-gray-50/50 uppercase text-xs">
                                             <div className="flex flex-col">
-                                                <span className="text-emerald-700 text-sm">{row.code}</span>
-                                                {row.client ? (
-                                                    <Link to={`/clients/${row.client.id}`} className="text-[10px] text-gray-500 hover:text-blue-700 underline truncate font-bold">
-                                                        {row.client.name}
-                                                    </Link>
-                                                ) : <span className="text-[10px] text-gray-300 font-bold italic">N/A</span>}
+                                                <span className="text-gray-600 text-sm">{row.code}</span>
+                                                <Link to={`/clients/${row.client.id}`} className="text-[10px] text-gray-500 hover:text-blue-700 underline truncate font-bold">
+                                                    {row.client.name}
+                                                </Link>
                                             </div>
                                         </td>
                                         <td className="border-r border-gray-400 w-24 md:w-28 p-0 h-14">
-                                            {row.client && (
-                                                <SpreadsheetInput 
-                                                    value={row.sale?.b || 0} 
-                                                    onChange={(v) => onUpdate(row.client!.id, dateStr, v, row.sale?.a || 0)}
-                                                    onBlur={() => {}}
-                                                    colorClass="text-blue-700"
-                                                />
-                                            )}
+                                            <SpreadsheetInput 
+                                                value={row.sale?.b || 0} 
+                                                onChange={(v) => onUpdate(row.client.id, dateStr, v, row.sale?.a || 0)}
+                                                onBlur={() => {}}
+                                                colorClass="text-blue-700"
+                                            />
                                         </td>
                                         <td className="w-24 md:w-28 p-0 h-14">
-                                            {row.client && (
-                                                <SpreadsheetInput 
-                                                    value={row.sale?.a || 0} 
-                                                    onChange={(v) => onUpdate(row.client!.id, dateStr, row.sale?.b || 0, v)}
-                                                    onBlur={() => {}}
-                                                    colorClass="text-red-600"
-                                                />
-                                            )}
+                                            <SpreadsheetInput 
+                                                value={row.sale?.a || 0} 
+                                                onChange={(v) => onUpdate(row.client.id, dateStr, row.sale?.b || 0, v)}
+                                                onBlur={() => {}}
+                                                colorClass="text-red-600"
+                                            />
                                         </td>
                                     </tr>
                                 ))}
@@ -335,10 +336,10 @@ const DailySpreadsheetTable: React.FC<{
                                     <td colSpan={3} className="p-4 border-t-2 border-black">
                                         <div className="flex flex-col items-center">
                                             <div className="flex border-2 border-black divide-x-2 divide-black w-full max-w-[240px] mb-2 bg-white">
-                                                <div className="flex-1 p-1 text-center font-mono font-black text-lg text-blue-700">{cTotals.wan || ''}</div>
-                                                <div className="flex-1 p-1 text-center font-mono font-black text-lg text-red-600">{cTotals.qian || ''}</div>
+                                                <div className="flex-1 p-1 text-center font-mono font-black text-lg text-blue-700">{inactiveTotals.wan || ''}</div>
+                                                <div className="flex-1 p-1 text-center font-mono font-black text-lg text-red-600">{inactiveTotals.qian || ''}</div>
                                             </div>
-                                            <div className="border-2 border-black w-full max-w-[240px] p-1 text-center font-mono font-black text-2xl bg-white">{cTotals.total.toLocaleString(undefined, {minimumFractionDigits: 2}) || ''}</div>
+                                            <div className="border-2 border-black w-full max-w-[240px] p-1 text-center font-mono font-black text-2xl bg-white">{inactiveTotals.total.toLocaleString(undefined, {minimumFractionDigits: 2}) || ''}</div>
                                         </div>
                                     </td>
                                 </tr>
