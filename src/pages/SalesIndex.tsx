@@ -503,8 +503,18 @@ const SalesIndex: React.FC = () => {
           <div className="px-4 py-3 flex flex-col lg:flex-row justify-between items-center gap-4">
              <div className="flex items-center space-x-4 w-full lg:w-auto">
                  <div className="flex bg-gray-100 p-1 rounded-lg">
-                    <button onClick={() => setActiveTab('paper')} className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'paper' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}><FileText size={16} className="mr-2 inline" />Paper</button>
-                    <button onClick={() => setActiveTab('mobile')} className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === 'mobile' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}><Smartphone size={16} className="mr-2 inline" />Mobile</button>
+                    <button 
+                        onClick={() => setActiveTab('paper')} 
+                        className={`flex items-center justify-center px-4 py-2 rounded-md text-sm font-bold transition-all w-28 ${activeTab === 'paper' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                    >
+                        <FileText size={16} className="mr-2" />Paper
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('mobile')} 
+                        className={`flex items-center justify-center px-4 py-2 rounded-md text-sm font-bold transition-all w-28 ${activeTab === 'mobile' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                    >
+                        <Smartphone size={16} className="mr-2" />Mobile
+                    </button>
                  </div>
                  
                  <div className="flex items-center gap-3 overflow-x-auto no-scrollbar flex-shrink-0 w-full lg:w-auto pb-1 lg:pb-0">
