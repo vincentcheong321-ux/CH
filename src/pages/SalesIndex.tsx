@@ -174,7 +174,7 @@ const ClientWeeklyTable: React.FC<{
                 {/* Net (86%) */}
                 <div className="flex border-b border-black text-xl font-bold h-11 items-center font-mono bg-white">
                     <div className="w-[20%] border-r border-black bg-gray-50 h-full flex items-center justify-center text-[10px] text-gray-400 uppercase font-black">-14%</div>
-                    <div className="w-[40%] text-center border-r border-black text-blue-800">
+                    <div className="w-[40%] text-center border-r border-black text-blue-900">
                         {discountedWan > 0 ? discountedWan.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1}) : ''}
                     </div>
                     <div className="w-[40%] text-center text-red-700">
@@ -379,7 +379,7 @@ const SalesIndex: React.FC = () => {
   const activeDays = weeksData[selectedWeekNum] || [];
   const drawDates = useMemo(() => activeDays.filter(d => [0, 2, 3, 6].includes(d.getDay())).map(d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`), [activeDays]);
   
-  // FETCH ALL DAYS for the week when in Mobile mode to ensure imported data shows
+  // FETCH ALL DAYS for the week to ensure all data (especially imports on non-draw days) shows in totals
   const weekDates = useMemo(() => activeDays.map(d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`), [activeDays]);
 
   const loadData = useCallback(async () => {
@@ -387,11 +387,11 @@ const SalesIndex: React.FC = () => {
     try {
         const loadedClients = await getClients();
         setClients(loadedClients);
-        // Fetch specific dates based on tab
-        const records = await getSalesForDates(activeTab === 'paper' ? drawDates : weekDates);
+        // Always fetch the full week's data so totals are correct, regardless of tab view
+        const records = await getSalesForDates(weekDates);
         setSalesData(records);
     } catch (e) { console.error(e); } finally { setLoading(false); }
-  }, [drawDates, weekDates, activeTab]);
+  }, [weekDates]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
