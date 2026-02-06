@@ -377,20 +377,22 @@ const SalesIndex: React.FC = () => {
 
   const activeDays = weeksData[selectedWeekNum] || [];
   const drawDates = useMemo(() => activeDays.filter(d => [0, 2, 3, 6].includes(d.getDay())).map(d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`), [activeDays]);
+  
+  // FETCH ALL DAYS for the week when in Mobile mode to ensure imported data shows
+  const weekDates = useMemo(() => activeDays.map(d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`), [activeDays]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
         const loadedClients = await getClients();
         setClients(loadedClients);
-        const records = await getSalesForDates(drawDates.length > 0 ? drawDates : [selectedDate]);
+        // Fetch specific dates based on tab
+        const records = await getSalesForDates(activeTab === 'paper' ? drawDates : weekDates);
         setSalesData(records);
     } catch (e) { console.error(e); } finally { setLoading(false); }
-  }, [drawDates]);
+  }, [drawDates, weekDates, activeTab]);
 
   useEffect(() => { loadData(); }, [loadData]);
-
-  const selectedDate = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
 
   const handlePaperUpdate = useCallback(async (clientId: string, date: string, b: number, a: number) => {
     await saveSaleRecord({ clientId, date, b, a, s: 0, c: 0 });
@@ -434,7 +436,10 @@ const SalesIndex: React.FC = () => {
               if (!mobileClient || !mobileClient.code) continue;
               const mappedPaperCode = MOBILE_TO_PAPER_MAP[mobileClient.code.toLowerCase()];
               if (mappedPaperCode) {
-                  const paperClient = clients.find(c => c.code.toLowerCase() === mappedPaperCode.toLowerCase());
+                  const paperClient = clients.find(c => 
+                      c.code.toLowerCase() === mappedPaperCode.toLowerCase() && 
+                      (c.category || 'paper') === 'paper'
+                  );
                   if (paperClient && !processedClientIds.has(paperClient.id)) {
                       const rawData = record.mobileRawData;
                       if (!rawData || rawData.length < 6) continue;

@@ -70,10 +70,8 @@ const MobileReport: React.FC = () => {
         
         // Detect Separator
         if (line.includes('\t')) {
-            // STRICT TAB MODE: Preserve empty strings to maintain column alignment
             parts = line.split('\t').map(p => p.trim());
         } else {
-            // Fallback for space separated (less reliable for empty cols)
             parts = line.split(/[\s]+/).map(p => p.trim()).filter(p => p !== '');
         }
 
@@ -84,11 +82,9 @@ const MobileReport: React.FC = () => {
         const isNumberLike = (s: string) => /^-?[\d,]+\.?\d*$/.test(s) && s !== '';
         
         let firstStatIndex = -1;
-        // Scan for pattern: Num, Num
         for (let j = 1; j < parts.length; j++) {
             if (isNumberLike(parts[j])) {
-                // Heuristic: Name is between ID (0) and First Stat
-                if (j > 1) {
+                if (j >= 1) {
                     firstStatIndex = j;
                     break;
                 }
@@ -97,15 +93,10 @@ const MobileReport: React.FC = () => {
 
         if (firstStatIndex > 0) {
             const id = parts[0];
-            // Name is everything between ID and First Stat
-            // Filter out empty strings from name parts if any
             const nameParts = parts.slice(1, firstStatIndex).filter(p => p !== '');
             const name = nameParts.join(' ');
-            
-            // Values are everything from First Stat onwards
             const values = parts.slice(firstStatIndex);
             
-            // Should have around 17 columns based on new requirement
             if (values.length >= 10) {
                 data.push({ id, name, values });
             }
@@ -129,23 +120,20 @@ const MobileReport: React.FC = () => {
       }
       setIsSaving(true);
 
-      const targetDate = reportDate; // Use selected date directly
-
+      const targetDate = reportDate;
       let matchedCount = 0;
       let matchedPaperCount = 0;
-      
-      // Local copy of clients to track newly created ones during this loop
       let currentClients = [...clients];
-
-      // Track processed paper clients to avoid duplicates within the same batch
       const processedPaperClientIds = new Set<string>();
 
       for (const row of parsedData) {
-          // Skip the Total row from saving logic if it was parsed
           if (row.id === '总额') continue;
 
-          // 1. Standard Mobile Client Matching
-          let client = currentClients.find(c => c.code.toLowerCase() === row.id.toLowerCase());
+          // 1. Mobile Client Matching - STRICT CATEGORY CHECK
+          let client = currentClients.find(c => 
+              c.code.toLowerCase() === row.id.toLowerCase() && 
+              c.category === 'mobile'
+          );
           
           const values = row.values;
           const compTotal = values[5] || '0';
@@ -160,7 +148,7 @@ const MobileReport: React.FC = () => {
               agentTotal: agentTotal
           };
 
-          // AUTO-CREATE: If no client matches the ID, create a mobile client
+          // AUTO-CREATE: If no MOBILE category client matches the ID
           if (!client) {
               try {
                   const newClient = await saveClient({
@@ -188,33 +176,29 @@ const MobileReport: React.FC = () => {
               matchedCount++;
           }
 
-          // 2. Special Paper Client "Dian" (电) Cross-Posting
+          // 2. Special Paper Client "Dian" (电) Sync - STRICT CATEGORY CHECK
           let mappedPaperCode = MOBILE_TO_PAPER_MAP[row.id.toLowerCase()];
           
           if (mappedPaperCode) {
-              const paperClient = currentClients.find(c => c.code.toLowerCase() === mappedPaperCode.toLowerCase());
+              const paperClient = currentClients.find(c => 
+                  c.code.toLowerCase() === mappedPaperCode.toLowerCase() && 
+                  (c.category || 'paper') === 'paper'
+              );
               
               if (paperClient && !processedPaperClientIds.has(paperClient.id)) {
                   const companyAmount = parseFloat(String(values[5]).replace(/,/g, ''));
 
                   if (!isNaN(companyAmount) && companyAmount !== 0) {
                       processedPaperClientIds.add(paperClient.id);
-
                       const operation = companyAmount >= 0 ? 'subtract' : 'add';
                       const amount = Math.abs(companyAmount);
-
                       const existingRecords = await getLedgerRecords(paperClient.id);
                       const existingDianRecords = existingRecords.filter(r => 
-                          r.date === targetDate && 
-                          r.typeLabel === '电' &&
-                          r.column === 'main'
+                          r.date === targetDate && r.typeLabel === '电' && r.column === 'main'
                       );
 
                       if (existingDianRecords.length > 0) {
-                          await updateLedgerRecord(existingDianRecords[0].id, {
-                              amount: amount,
-                              operation: operation
-                          });
+                          await updateLedgerRecord(existingDianRecords[0].id, { amount, operation });
                           if (existingDianRecords.length > 1) {
                               for(let i=1; i<existingDianRecords.length; i++) {
                                   await deleteLedgerRecord(existingDianRecords[i].id);
@@ -241,10 +225,8 @@ const MobileReport: React.FC = () => {
       try {
         await saveMobileReportHistory(targetDate, parsedData);
         loadHistory(); 
-        setClients(currentClients); // Update local state with any new clients
-      } catch (e) {
-          console.error("Failed to save history", e);
-      }
+        setClients(currentClients);
+      } catch (e) { console.error("Failed to save history", e); }
 
       setIsSaving(false);
       setSaveStatus({ 
@@ -260,45 +242,31 @@ const MobileReport: React.FC = () => {
             return;
         }
         setIsSaving(true);
-
         const targetDate = reportDate;
         let updateCount = 0;
-        
         const processedPaperClientIds = new Set<string>();
 
         for (const row of parsedData) {
             if (row.id === '总额') continue;
-            
             let mappedPaperCode = MOBILE_TO_PAPER_MAP[row.id.toLowerCase()];
-
             if (mappedPaperCode) {
-                const paperClient = clients.find(c => c.code.toLowerCase() === mappedPaperCode.toLowerCase());
+                const paperClient = clients.find(c => 
+                    c.code.toLowerCase() === mappedPaperCode.toLowerCase() && 
+                    (c.category || 'paper') === 'paper'
+                );
                 
                 if (paperClient && !processedPaperClientIds.has(paperClient.id)) {
                     const companyAmount = parseFloat(String(row.values[5]).replace(/,/g, ''));
-                    
                     if (!isNaN(companyAmount) && companyAmount !== 0) {
                         processedPaperClientIds.add(paperClient.id);
                         const existingRecords = await getLedgerRecords(paperClient.id);
                         const existingDianRecords = existingRecords.filter(r => 
-                            r.date === targetDate && 
-                            r.typeLabel === '电' && 
-                            r.column === 'main'
+                            r.date === targetDate && r.typeLabel === '电' && r.column === 'main'
                         );
-
                         const operation = companyAmount >= 0 ? 'subtract' : 'add';
                         const amount = Math.abs(companyAmount);
-
                         if (existingDianRecords.length > 0) {
-                            await updateLedgerRecord(existingDianRecords[0].id, {
-                                amount: amount,
-                                operation: operation
-                            });
-                            if (existingDianRecords.length > 1) {
-                                for (let i = 1; i < existingDianRecords.length; i++) {
-                                    await deleteLedgerRecord(existingDianRecords[i].id);
-                                }
-                            }
+                            await updateLedgerRecord(existingDianRecords[0].id, { amount, operation });
                         } else {
                             await saveLedgerRecord({
                                 clientId: paperClient.id,
