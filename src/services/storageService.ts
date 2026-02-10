@@ -492,14 +492,22 @@ const calculateBalanceForRecords = (records: LedgerRecord[], clientCode: string)
         });
     }
 
-    // SPECIAL RULE: C06 uses Panel 2 (Col2) only.
+    // 1. Check Panel 1 (Col1) Priority
+    // If Panel 1 has ANY records (even hidden ones), assume Panel 1 Mode is active.
+    // Sum only the VISIBLE records for the actual balance calculation.
+    const allCol1Records = periodRecords.filter(r => r.column === 'col1');
+    if (allCol1Records.length > 0) {
+        return allCol1Records.filter(r => r.isVisible).reduce((acc, r) => acc + getNetAmount(r), 0);
+    }
+
+    // 2. Special Case C06 (Panel 2)
     if (codeUpper === 'C06') {
         const col2Records = periodRecords.filter(r => r.column === 'col2' && r.isVisible);
         if (col2Records.length > 0) return col2Records.reduce((acc, r) => acc + getNetAmount(r), 0);
     }
 
-    // DEFAULT RULE: Use Main Ledger (Main) for everyone else.
-    // This ignores Panel 1 / Panel 2 completely for standard calculations to match user expectation.
+    // 3. Fallback to Main Ledger
+    // Use Main Ledger (Main) for everyone else if Panel 1 is unused.
     const mainRecords = periodRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
     return mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
 };
@@ -529,10 +537,10 @@ export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: 
     const balances: Record<string, { amount: number, isPanel1: boolean }> = {};
     clients?.forEach(client => {
         const clientRecs = allRecords.filter(r => r.clientId === client.id);
-        const col1Records = clientRecs.filter(r => r.column === 'col1' && r.isVisible);
+        const col1Records = clientRecs.filter(r => r.column === 'col1');
         
         // This 'isPanel1' flag is preserved just in case UI needs to know if Panel 1 was active,
-        // but calculateBalanceForRecords will ignore it for balance calculation for standard clients.
+        // but calculateBalanceForRecords handles logic internally.
         const col1HasRecords = col1Records.length > 0;
         
         const amount = calculateBalanceForRecords(clientRecs, (client.code || '').toUpperCase());
