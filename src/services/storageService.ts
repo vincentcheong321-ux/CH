@@ -60,14 +60,21 @@ const getRecordSortPriority = (record: LedgerRecord): number => {
     return 7;
 };
 
-// --- Weekly Aggregation Helper ---
+// --- Weekly Aggregation Helper (Timezone Safe) ---
 const getSundayOfDate = (dateStr: string) => {
-    const d = new Date(dateStr);
-    const day = d.getDay(); // 0=Sun, 1=Mon...
+    // Parse YYYY-MM-DD explicitly to avoid timezone issues
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    const day = date.getDay(); // 0=Sun, 1=Mon...
     const diff = day === 0 ? 0 : 7 - day;
-    const sun = new Date(d);
-    sun.setDate(d.getDate() + diff);
-    return sun.toISOString().split('T')[0];
+    
+    // Add days
+    date.setDate(date.getDate() + diff);
+    
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const da = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${da}`;
 };
 
 const aggregateSalesWeekly = (rows: any[]): LedgerRecord[] => {
@@ -81,7 +88,6 @@ const aggregateSalesWeekly = (rows: any[]): LedgerRecord[] => {
         if (!uniqueSales[key] || (row.created_at && uniqueSales[key].created_at && row.created_at > uniqueSales[key].created_at)) {
             uniqueSales[key] = row;
         } else if (!uniqueSales[key] && !row.created_at) {
-             // Fallback if no created_at (unlikely with Supabase)
              uniqueSales[key] = row;
         }
     });
@@ -194,7 +200,11 @@ export const deleteClient = async (id: string) => {
 // --- 3. Ledger Records ---
 
 const mapJournalToLedgerRecord = (row: any): LedgerRecord | null => {
-    if (row.amount === 0 && row.entry_type !== 'MANUAL') return null;
+    if (row.amount === 0 && row.entry_type !== 'MANUAL') {
+        // Fallback checks for legacy data structure in 'data' column if 'amount' is 0
+        const legacyAmount = Math.abs(row.data?.amount || row.data?.shou || row.data?.zhong || 0);
+        if (legacyAmount === 0) return null;
+    }
     if (row.entry_type === 'SALE') return null; // Handled by weekly aggregation
 
     const isAdd = row.amount >= 0; 
@@ -202,7 +212,7 @@ const mapJournalToLedgerRecord = (row: any): LedgerRecord | null => {
         id: row.id,
         clientId: row.client_id,
         date: row.entry_date,
-        amount: Math.abs(row.amount),
+        amount: Math.abs(row.amount !== 0 ? row.amount : (row.data?.amount || 0)),
         description: row.data?.description || '',
         typeLabel: row.data?.typeLabel || '',
         operation: row.data?.operation || (row.amount === 0 ? 'none' : (isAdd ? 'add' : 'subtract')),
@@ -481,18 +491,7 @@ export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: 
     const balances: Record<string, { amount: number, isPanel1: boolean }> = {};
     clients?.forEach(client => {
         const clientRecs = allRecords.filter(r => r.clientId === client.id);
-        const sorted = [...clientRecs].sort((a,b) => b.date.localeCompare(a.date) || (b.createdAt || '').localeCompare(a.createdAt || ''));
-        const latestSnapshot = sorted.find(r => (r.id.startsWith('draw_') || r.typeLabel === '上欠') && (r.column === 'main' || !r.column));
-        let periodRecords = clientRecs;
-        if (latestSnapshot) {
-            periodRecords = clientRecs.filter(r => {
-                if (r.id === latestSnapshot.id) return true;
-                if (r.date > latestSnapshot.date) return true;
-                if (r.date === latestSnapshot.date && r.createdAt && latestSnapshot.createdAt && r.createdAt > latestSnapshot.createdAt) return true;
-                return false;
-            });
-        }
-        const col1Records = periodRecords.filter(r => r.column === 'col1' && r.isVisible);
+        const col1Records = clientRecs.filter(r => r.column === 'col1' && r.isVisible);
         const col1HasNonWins = col1Records.some(r => r.typeLabel !== '中');
         // CHANGED: excludeWins forced to false to correctly sum winnings into balance
         const amount = calculateBalanceForRecords(clientRecs, (client.code || '').toUpperCase(), false);
