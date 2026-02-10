@@ -247,10 +247,20 @@ const mapJournalToLedgerRecord = (row: any): LedgerRecord | null => {
 
 export const getLedgerRecords = async (clientId: string): Promise<LedgerRecord[]> => {
     if (supabase) {
+        // Fetch client category to determine if sales should be aggregated
+        const { data: clientData } = await supabase.from('clients').select('category').eq('id', clientId).single();
+        const isPaper = (clientData?.category || 'paper') === 'paper';
+
         const { data } = await supabase.from('financial_journal').select('*').eq('client_id', clientId);
         if (data) {
             const individualRecords = data.map(mapJournalToLedgerRecord).filter((r): r is LedgerRecord => r !== null);
-            const aggregatedSales = aggregateSalesWeekly(data.filter(r => r.client_id === clientId));
+            
+            // Only aggregate sales if NOT paper (Paper clients don't use auto-sales in ledger calculation usually)
+            let aggregatedSales: LedgerRecord[] = [];
+            if (!isPaper) {
+                 aggregatedSales = aggregateSalesWeekly(data.filter(r => r.client_id === clientId));
+            }
+            
             return sortLedgerRecords([...individualRecords, ...aggregatedSales]);
         }
     }
@@ -260,9 +270,16 @@ export const getLedgerRecords = async (clientId: string): Promise<LedgerRecord[]
 export const getAllLedgerRecords = async (): Promise<LedgerRecord[]> => {
     if (supabase) {
         const { data } = await supabase.from('financial_journal').select('*');
+        const { data: clientsData } = await supabase.from('clients').select('id, category');
+        const paperClientIds = new Set(clientsData?.filter((c: any) => (c.category || 'paper') === 'paper').map((c: any) => c.id));
+
         if (data) {
             const individualRecords = data.map(mapJournalToLedgerRecord).filter((r): r is LedgerRecord => r !== null);
-            const aggregatedSales = aggregateSalesWeekly(data);
+            
+            // Only aggregate sales for NON-PAPER clients
+            const salesRows = data.filter(r => !paperClientIds.has(r.client_id));
+            const aggregatedSales = aggregateSalesWeekly(salesRows);
+            
             return sortLedgerRecords([...individualRecords, ...aggregatedSales]);
         }
     }
@@ -482,6 +499,7 @@ const calculateBalanceForRecords = (records: LedgerRecord[], clientCode: string,
 };
 
 export const fetchClientTotalBalance = async (clientId: string): Promise<number> => {
+    // getLedgerRecords now handles paper client filtering
     const records = await getLedgerRecords(clientId);
     const clients = await getClients();
     const client = clients.find(c => c.id === clientId);
@@ -494,7 +512,11 @@ export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: 
     if (!data) return {};
 
     // Special aggregation for calculation
-    const aggregatedSales = aggregateSalesWeekly(data);
+    // FIX: Filter out sales for PAPER clients from aggregation
+    const paperClientIds = new Set(clients?.filter(c => (c.category || 'paper') === 'paper').map(c => c.id));
+    const mobileSalesRows = data.filter(r => !paperClientIds.has(r.client_id));
+    
+    const aggregatedSales = aggregateSalesWeekly(mobileSalesRows);
     const individualRecords = data.map(mapJournalToLedgerRecord).filter((r): r is LedgerRecord => r !== null);
     const allRecords = [...individualRecords, ...aggregatedSales];
     
