@@ -200,24 +200,33 @@ export const deleteClient = async (id: string) => {
 // --- 3. Ledger Records ---
 
 const mapJournalToLedgerRecord = (row: any): LedgerRecord | null => {
-    if (row.amount === 0 && row.entry_type !== 'MANUAL') {
+    // Robust amount extraction: handle potential nulls from DB
+    let rawAmount = row.amount;
+    if (rawAmount === null || rawAmount === undefined) rawAmount = 0;
+
+    if (rawAmount === 0 && row.entry_type !== 'MANUAL') {
         // Fallback checks for legacy data structure in 'data' column if 'amount' is 0
+        // We only return null if it's NOT manual. Manual records with 0 amount (notes) should be kept.
         const legacyAmount = Math.abs(row.data?.amount || row.data?.shou || row.data?.zhong || 0);
         if (legacyAmount === 0) return null;
+        rawAmount = legacyAmount;
     }
+    
     if (row.entry_type === 'SALE') return null; // Handled by weekly aggregation
 
-    const isAdd = row.amount >= 0; 
+    const isAdd = rawAmount >= 0; 
     let baseRecord: LedgerRecord = {
         id: row.id,
         clientId: row.client_id,
         date: row.entry_date,
-        amount: Math.abs(row.amount !== 0 ? row.amount : (row.data?.amount || 0)),
+        // Ensure amount is positive for LedgerRecord structure
+        amount: Math.abs(rawAmount !== 0 ? rawAmount : (row.data?.amount || 0)),
         description: row.data?.description || '',
         typeLabel: row.data?.typeLabel || '',
-        operation: row.data?.operation || (row.amount === 0 ? 'none' : (isAdd ? 'add' : 'subtract')),
+        // If data.operation is present, use it. Otherwise derive from raw amount sign.
+        operation: row.data?.operation || (rawAmount === 0 ? 'none' : (isAdd ? 'add' : 'subtract')),
         column: row.data?.column || 'main',
-        isVisible: true,
+        isVisible: row.data?.isVisible !== undefined ? row.data.isVisible : true,
         createdAt: row.created_at,
         ...row.data
     };
@@ -299,6 +308,7 @@ export const saveLedgerRecord = async (record: Omit<LedgerRecord, 'id'>): Promis
                 typeLabel: record.typeLabel, 
                 operation: record.operation, 
                 column: record.column,
+                isVisible: record.isVisible,
                 sortWeight: (record as any).sortWeight || 0
             }
         }]).select();
@@ -324,6 +334,7 @@ export const updateLedgerRecord = async (id: string, updates: Partial<LedgerReco
                 typeLabel: updates.typeLabel || existingData.typeLabel, 
                 operation: updates.operation, 
                 column: updates.column,
+                isVisible: updates.isVisible !== undefined ? updates.isVisible : existingData.isVisible,
                 sortWeight: (updates as any).sortWeight || 0
             }
         }).eq('id', id);
@@ -480,20 +491,27 @@ const calculateBalanceForRecords = (records: LedgerRecord[], clientCode: string,
             return false;
         });
     }
+
     if (codeUpper === 'C19') {
         const mainRecords = periodRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
         return mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
     }
+
+    // MATCH UI LOGIC: If Panel 1 (col1) has ANY visible records, use Panel 1 balance.
+    // This allows manual entries (payments/notes) in Panel 1 to override Main Ledger sum.
     const col1Records = periodRecords.filter(r => r.column === 'col1' && r.isVisible);
-    const col1HasNonWins = col1Records.some(r => r.typeLabel !== '中');
-    if (col1HasNonWins) {
+    if (col1Records.length > 0) {
+        // Recalculate based on excludeWins flag if needed (though usually we want full balance)
         const recsToSum = excludeWins ? col1Records.filter(r => r.typeLabel !== '中') : col1Records;
         return recsToSum.reduce((acc, r) => acc + getNetAmount(r), 0);
     }
+
     if (codeUpper === 'C06') {
         const col2Records = periodRecords.filter(r => r.column === 'col2' && r.isVisible);
         if (col2Records.length > 0) return col2Records.reduce((acc, r) => acc + getNetAmount(r), 0);
     }
+
+    // Default Fallback: Main Ledger
     const mainRecords = periodRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
     return mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
 };
@@ -524,10 +542,13 @@ export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: 
     clients?.forEach(client => {
         const clientRecs = allRecords.filter(r => r.clientId === client.id);
         const col1Records = clientRecs.filter(r => r.column === 'col1' && r.isVisible);
-        const col1HasNonWins = col1Records.some(r => r.typeLabel !== '中');
+        // "isPanel1" logic here is just to trigger the "zero out main ledger" behavior in DrawReport
+        // If col1 has ANY records, we consider it "Panel 1 active"
+        const col1HasRecords = col1Records.length > 0;
+        
         // CHANGED: excludeWins forced to false to correctly sum winnings into balance
         const amount = calculateBalanceForRecords(clientRecs, (client.code || '').toUpperCase(), false);
-        balances[client.id] = { amount, isPanel1: col1HasNonWins };
+        balances[client.id] = { amount, isPanel1: col1HasRecords };
     });
     return balances;
 };
@@ -556,11 +577,11 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
         let signedAmount = r.operation === 'add' ? r.amount : (r.operation === 'subtract' ? -r.amount : r.amount);
         const { data: dupes } = await supabase.from('financial_journal').select('id').eq('client_id', clientId).eq('entry_date', targetDate).contains('data', { description: r.description, column: 'col1', sortWeight: weightIdx }); 
         if (!dupes || dupes.length === 0) {
-            await supabase.from('financial_journal').insert({ client_id: clientId, entry_date: targetDate, entry_type: 'MANUAL', amount: signedAmount, data: { description: r.description, typeLabel: r.typeLabel, operation: r.operation, column: 'col1', isCarryForward: true, sortWeight: weightIdx } });
+            await supabase.from('financial_journal').insert({ client_id: clientId, entry_date: targetDate, entry_type: 'MANUAL', amount: signedAmount, data: { description: r.description, typeLabel: r.typeLabel, operation: r.operation, column: 'col1', isCarryForward: true, sortWeight: weightIdx, isVisible: true } });
             if (code === 'Z21' && weightIdx === 0) {
                  const { data: dupesP2 } = await supabase.from('financial_journal').select('id').eq('client_id', clientId).eq('entry_date', targetDate).contains('data', { description: r.description, column: 'col2' });
                  if (!dupesP2 || dupesP2.length === 0) {
-                     await supabase.from('financial_journal').insert({ client_id: clientId, entry_date: targetDate, entry_type: 'MANUAL', amount: r.amount, data: { description: r.description, typeLabel: '收', operation: 'add', column: 'col2', isCarryForward: true, sortWeight: 0 } });
+                     await supabase.from('financial_journal').insert({ client_id: clientId, entry_date: targetDate, entry_type: 'MANUAL', amount: r.amount, data: { description: r.description, typeLabel: '收', operation: 'add', column: 'col2', isCarryForward: true, sortWeight: 0, isVisible: true } });
                  }
             }
         }
