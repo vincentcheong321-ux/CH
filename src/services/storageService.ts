@@ -467,7 +467,7 @@ export const saveDrawBalance = async (date: string, clientId: string, balance: n
 
 // --- CORE BALANCE CALCULATION LOGIC ---
 
-const calculateBalanceForRecords = (records: LedgerRecord[], clientCode: string, excludeWins = false): number => {
+const calculateBalanceForRecords = (records: LedgerRecord[], clientCode: string): number => {
     if (records.length === 0) return 0;
     const codeUpper = clientCode.toUpperCase();
     const sorted = [...records].sort((a,b) => b.date.localeCompare(a.date) || (b.createdAt || '').localeCompare(a.createdAt || ''));
@@ -492,26 +492,14 @@ const calculateBalanceForRecords = (records: LedgerRecord[], clientCode: string,
         });
     }
 
-    if (codeUpper === 'C19') {
-        const mainRecords = periodRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
-        return mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
-    }
-
-    // MATCH UI LOGIC: If Panel 1 (col1) has ANY visible records, use Panel 1 balance.
-    // This allows manual entries (payments/notes) in Panel 1 to override Main Ledger sum.
-    const col1Records = periodRecords.filter(r => r.column === 'col1' && r.isVisible);
-    if (col1Records.length > 0) {
-        // Recalculate based on excludeWins flag if needed (though usually we want full balance)
-        const recsToSum = excludeWins ? col1Records.filter(r => r.typeLabel !== '中') : col1Records;
-        return recsToSum.reduce((acc, r) => acc + getNetAmount(r), 0);
-    }
-
+    // SPECIAL RULE: C06 uses Panel 2 (Col2) only.
     if (codeUpper === 'C06') {
         const col2Records = periodRecords.filter(r => r.column === 'col2' && r.isVisible);
         if (col2Records.length > 0) return col2Records.reduce((acc, r) => acc + getNetAmount(r), 0);
     }
 
-    // Default Fallback: Main Ledger
+    // DEFAULT RULE: Use Main Ledger (Main) for everyone else.
+    // This ignores Panel 1 / Panel 2 completely for standard calculations to match user expectation.
     const mainRecords = periodRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
     return mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
 };
@@ -521,7 +509,7 @@ export const fetchClientTotalBalance = async (clientId: string): Promise<number>
     const records = await getLedgerRecords(clientId);
     const clients = await getClients();
     const client = clients.find(c => c.id === clientId);
-    return calculateBalanceForRecords(records, (client?.code || '').toUpperCase(), false);
+    return calculateBalanceForRecords(records, (client?.code || '').toUpperCase());
 };
 
 export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: Client[]): Promise<Record<string, { amount: number, isPanel1: boolean }>> => {
@@ -542,12 +530,12 @@ export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: 
     clients?.forEach(client => {
         const clientRecs = allRecords.filter(r => r.clientId === client.id);
         const col1Records = clientRecs.filter(r => r.column === 'col1' && r.isVisible);
-        // "isPanel1" logic here is just to trigger the "zero out main ledger" behavior in DrawReport
-        // If col1 has ANY records, we consider it "Panel 1 active"
+        
+        // This 'isPanel1' flag is preserved just in case UI needs to know if Panel 1 was active,
+        // but calculateBalanceForRecords will ignore it for balance calculation for standard clients.
         const col1HasRecords = col1Records.length > 0;
         
-        // CHANGED: excludeWins forced to false to correctly sum winnings into balance
-        const amount = calculateBalanceForRecords(clientRecs, (client.code || '').toUpperCase(), false);
+        const amount = calculateBalanceForRecords(clientRecs, (client.code || '').toUpperCase());
         balances[client.id] = { amount, isPanel1: col1HasRecords };
     });
     return balances;
