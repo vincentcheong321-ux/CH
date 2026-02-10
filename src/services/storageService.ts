@@ -77,9 +77,12 @@ const aggregateSalesWeekly = (rows: any[]): LedgerRecord[] => {
     const uniqueSales: Record<string, any> = {};
     saleRows.forEach(row => {
         const key = `${row.client_id}_${row.entry_date}`;
-        // If multiple rows exist for the same day, pick the absolute latest one by ID
-        if (!uniqueSales[key] || row.id > uniqueSales[key].id) {
+        // If multiple rows exist for the same day, pick the latest one by created_at timestamp
+        if (!uniqueSales[key] || (row.created_at && uniqueSales[key].created_at && row.created_at > uniqueSales[key].created_at)) {
             uniqueSales[key] = row;
+        } else if (!uniqueSales[key] && !row.created_at) {
+             // Fallback if no created_at (unlikely with Supabase)
+             uniqueSales[key] = row;
         }
     });
 
@@ -491,7 +494,8 @@ export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: 
         }
         const col1Records = periodRecords.filter(r => r.column === 'col1' && r.isVisible);
         const col1HasNonWins = col1Records.some(r => r.typeLabel !== '中');
-        const amount = calculateBalanceForRecords(clientRecs, (client.code || '').toUpperCase(), true);
+        // CHANGED: excludeWins forced to false to correctly sum winnings into balance
+        const amount = calculateBalanceForRecords(clientRecs, (client.code || '').toUpperCase(), false);
         balances[client.id] = { amount, isPanel1: col1HasNonWins };
     });
     return balances;
