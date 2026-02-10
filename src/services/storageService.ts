@@ -443,13 +443,23 @@ const calculateBalanceForRecords = (records: LedgerRecord[], clientCode: string,
     if (records.length === 0) return 0;
     const codeUpper = clientCode.toUpperCase();
     const sorted = [...records].sort((a,b) => b.date.localeCompare(a.date) || (b.createdAt || '').localeCompare(a.createdAt || ''));
+    
+    // Finds the latest snapshot (draw_ or 上欠) - Opening Balance
     const latestSnapshot = sorted.find(r => (r.id.startsWith('draw_') || r.typeLabel === '上欠') && (r.column === 'main' || !r.column));
     let periodRecords = records;
     if (latestSnapshot) {
         periodRecords = records.filter(r => {
             if (r.id === latestSnapshot.id) return true;
             if (r.date > latestSnapshot.date) return true;
-            if (r.date === latestSnapshot.date && r.createdAt && latestSnapshot.createdAt && r.createdAt > latestSnapshot.createdAt) return true;
+            
+            // Allow ALL transactions on the SAME date as the snapshot, treating '上欠' as the starting point (start of day).
+            if (r.date === latestSnapshot.date) {
+                // If it's a standard transaction (not another draw/snapshot), include it.
+                if (!r.id.startsWith('draw_') && r.typeLabel !== '上欠') {
+                    return true;
+                }
+                return false; 
+            }
             return false;
         });
     }
