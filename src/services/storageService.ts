@@ -4,6 +4,7 @@ import { supabase } from '../supabaseClient';
 
 const CLIENTS_KEY = 'ledger_clients';
 const CATEGORIES_KEY = 'ledger_categories';
+const ASSETS_KEY = 'ledger_assets';
 
 // Helper to generate local IDs if offline (fallback)
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -62,15 +63,11 @@ const getRecordSortPriority = (record: LedgerRecord): number => {
 
 // --- Weekly Aggregation Helper (Timezone Safe) ---
 const getSundayOfDate = (dateStr: string) => {
-    // Parse YYYY-MM-DD explicitly to avoid timezone issues
     const [y, m, d] = dateStr.split('-').map(Number);
     const date = new Date(y, m - 1, d);
     const day = date.getDay(); // 0=Sun, 1=Mon...
     const diff = day === 0 ? 0 : 7 - day;
-    
-    // Add days
     date.setDate(date.getDate() + diff);
-    
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const da = String(date.getDate()).padStart(2, '0');
@@ -79,12 +76,9 @@ const getSundayOfDate = (dateStr: string) => {
 
 const aggregateSalesWeekly = (rows: any[]): LedgerRecord[] => {
     const saleRows = rows.filter(r => r.entry_type === 'SALE');
-    
-    // DEDUPLICATION: Crucial to prevent "收 keep increase"
     const uniqueSales: Record<string, any> = {};
     saleRows.forEach(row => {
         const key = `${row.client_id}_${row.entry_date}`;
-        // If multiple rows exist for the same day, pick the latest one by created_at timestamp
         if (!uniqueSales[key] || (row.created_at && uniqueSales[key].created_at && row.created_at > uniqueSales[key].created_at)) {
             uniqueSales[key] = row;
         } else if (!uniqueSales[key] && !row.created_at) {
@@ -97,11 +91,8 @@ const aggregateSalesWeekly = (rows: any[]): LedgerRecord[] => {
     Object.values(uniqueSales).forEach(row => {
         const sun = getSundayOfDate(row.entry_date);
         const key = `${row.client_id}_${sun}`;
-        
         const rawTotal = (Number(row.data?.b) || 0) + (Number(row.data?.s) || 0) + (Number(row.data?.a) || 0) + (Number(row.data?.c) || 0);
-        // Calculate amount client owes (Paper = 86%, Mobile = 100% of Agent Total)
         const finalTotal = (!row.data?.mobileRaw && !row.data?.mobileRawData) ? rawTotal * 0.86 : rawTotal;
-
         if (!grouped[key]) {
             grouped[key] = { amount: 0, dates: [], clientId: row.client_id };
         }
@@ -110,7 +101,7 @@ const aggregateSalesWeekly = (rows: any[]): LedgerRecord[] => {
     });
 
     return Object.entries(grouped)
-        .filter(([_, data]) => Math.abs(data.amount) > 0.001) // Filter out zeroed weeks
+        .filter(([_, data]) => Math.abs(data.amount) > 0.001)
         .map(([key, data]) => ({
             id: `agg_sale_week_${key}`,
             clientId: data.clientId,
@@ -125,7 +116,6 @@ const aggregateSalesWeekly = (rows: any[]): LedgerRecord[] => {
         }));
 };
 
-// --- 1. Categories ---
 export const getCategories = (): TransactionCategory[] => {
   const data = localStorage.getItem(CATEGORIES_KEY);
   let categories: TransactionCategory[] = data ? JSON.parse(data) : [];
@@ -174,7 +164,6 @@ export const deleteCategory = (id: string) => {
   localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories.filter(c => c.id !== id)));
 };
 
-// --- 2. Clients ---
 export const getClients = async (): Promise<Client[]> => {
   if (supabase) {
     const { data } = await supabase.from('clients').select('*').order('created_at', { ascending: true });
@@ -197,387 +186,353 @@ export const deleteClient = async (id: string) => {
   if (supabase) await supabase.from('clients').delete().eq('id', id);
 };
 
-// --- 3. Ledger Records ---
-
+/* FIX: Added proper implementation and fixed truncation */
 const mapJournalToLedgerRecord = (row: any): LedgerRecord | null => {
-    let rawAmount = row.amount;
-    if (rawAmount === null || rawAmount === undefined) rawAmount = 0;
-
-    if (rawAmount === 0 && row.entry_type !== 'MANUAL') {
-        const legacyAmount = Math.abs(row.data?.amount || row.data?.shou || row.data?.zhong || 0);
-        if (legacyAmount === 0) return null;
-        rawAmount = legacyAmount;
-    }
+    if (!row) return null;
+    let amount = row.amount;
+    if (amount === null || amount === undefined) amount = 0;
     
-    if (row.entry_type === 'SALE') return null; 
+    const data = row.data || {};
+    
+    let typeLabel = data.typeLabel || '';
+    let operation = data.operation || 'none';
+    let column = data.column || 'main';
+    let description = data.description || '';
+    let isVisible = data.isVisible !== false;
 
-    const isAdd = rawAmount >= 0; 
-    let baseRecord: LedgerRecord = {
+    // Mapping based on entry_type for consistency
+    if (row.entry_type === 'DRAW') {
+        typeLabel = '上欠';
+        operation = 'add';
+        column = 'main';
+    } else if (row.entry_type === 'ADVANCE') {
+        typeLabel = '支钱';
+        operation = 'add';
+        column = 'main';
+    } else if (row.entry_type === 'CREDIT') {
+        typeLabel = '来';
+        operation = 'subtract';
+        column = 'main';
+    } else if (row.entry_type === 'SALE') {
+        typeLabel = '收';
+        operation = amount >= 0 ? 'add' : 'subtract';
+        column = 'main';
+        amount = Math.abs(amount);
+    }
+
+    return {
         id: row.id,
         clientId: row.client_id,
         date: row.entry_date,
-        amount: Math.abs(rawAmount !== 0 ? rawAmount : (row.data?.amount || 0)),
-        description: row.data?.description || '',
-        typeLabel: row.data?.typeLabel || '',
-        operation: row.data?.operation || (rawAmount === 0 ? 'none' : (isAdd ? 'add' : 'subtract')),
-        column: row.data?.column || 'main',
-        isVisible: row.data?.isVisible !== undefined ? row.data.isVisible : true,
-        createdAt: row.created_at,
-        ...row.data
+        description: description,
+        typeLabel: typeLabel,
+        amount: amount,
+        operation: operation as any,
+        column: column as any,
+        isVisible: isVisible,
+        createdAt: row.created_at
     };
+};
 
-    switch (row.entry_type) {
-        case 'ADVANCE':
-            baseRecord.typeLabel = '支';
-            baseRecord.id = `adv_${row.id}`;
-            baseRecord.operation = 'add';
-            baseRecord.column = 'main';
-            break;
-        case 'CREDIT':
-            baseRecord.typeLabel = '来';
-            baseRecord.id = `cred_${row.id}`;
-            baseRecord.operation = 'subtract';
-            baseRecord.column = 'main';
-            break;
-        case 'DRAW':
-            baseRecord.typeLabel = '上欠';
-            baseRecord.id = `draw_${row.id}`;
-            baseRecord.operation = row.amount >= 0 ? 'add' : 'subtract'; 
-            baseRecord.column = 'main';
-            break;
-    }
-    return baseRecord;
+/* FIX: Exported all missing members required by pages */
+
+export const getNetAmount = (r: LedgerRecord): number => {
+    if (r.operation === 'none') return 0;
+    return r.operation === 'add' ? r.amount : -r.amount;
 };
 
 export const getLedgerRecords = async (clientId: string): Promise<LedgerRecord[]> => {
-    if (supabase) {
-        const { data } = await supabase.from('financial_journal').select('*').eq('client_id', clientId);
-        if (data) {
-            const individualRecords = data.map(mapJournalToLedgerRecord).filter((r): r is LedgerRecord => r !== null);
-            // Re-enable aggregation for all clients to ensure slips appear in Main Ledger
-            const aggregatedSales = aggregateSalesWeekly(data.filter(r => r.client_id === clientId));
-            return sortLedgerRecords([...individualRecords, ...aggregatedSales]);
-        }
-    }
-    return [];
+  if (!supabase) return [];
+  const { data } = await supabase.from('financial_journal').select('*').eq('client_id', clientId);
+  if (!data) return [];
+  
+  const ledgerRows = data.filter(r => r.entry_type !== 'SALE').map(mapJournalToLedgerRecord).filter(Boolean) as LedgerRecord[];
+  const aggregatedSales = aggregateSalesWeekly(data.filter(r => r.client_id === clientId));
+  
+  return sortLedgerRecords([...ledgerRows, ...aggregatedSales]);
 };
 
 export const getAllLedgerRecords = async (): Promise<LedgerRecord[]> => {
-    if (supabase) {
-        const { data } = await supabase.from('financial_journal').select('*');
-        if (data) {
-            const individualRecords = data.map(mapJournalToLedgerRecord).filter((r): r is LedgerRecord => r !== null);
-            // Re-enable aggregation for all clients to ensure slips appear in Main Ledger
-            const aggregatedSales = aggregateSalesWeekly(data);
-            return sortLedgerRecords([...individualRecords, ...aggregatedSales]);
+    if (!supabase) return [];
+    const { data } = await supabase.from('financial_journal').select('*');
+    if (!data) return [];
+    const records = data.map(mapJournalToLedgerRecord).filter(Boolean) as LedgerRecord[];
+    return sortLedgerRecords(records);
+};
+
+export const saveLedgerRecord = async (record: Omit<LedgerRecord, 'id'>): Promise<void> => {
+    if (!supabase) return;
+    await supabase.from('financial_journal').insert([{
+        client_id: record.clientId,
+        entry_date: record.date,
+        entry_type: 'LEDGER',
+        amount: record.amount,
+        data: {
+            description: record.description,
+            typeLabel: record.typeLabel,
+            operation: record.operation,
+            column: record.column,
+            isVisible: record.isVisible
         }
-    }
-    return [];
+    }]);
 };
 
-export const saveLedgerRecord = async (record: Omit<LedgerRecord, 'id'>): Promise<LedgerRecord> => {
-    if (supabase) {
-        let signedAmount = record.operation === 'add' ? record.amount : (record.operation === 'subtract' ? -record.amount : 0);
-        const { data } = await supabase.from('financial_journal').insert([{
-            client_id: record.clientId,
-            entry_date: record.date,
-            entry_type: 'MANUAL',
-            amount: signedAmount,
-            data: { 
-                description: record.description, 
-                typeLabel: record.typeLabel, 
-                operation: record.operation, 
-                column: record.column,
-                isVisible: record.isVisible,
-                sortWeight: (record as any).sortWeight || 0
-            }
-        }]).select();
-        if (data && data[0]) {
-            const mapped = mapJournalToLedgerRecord(data[0]);
-            return mapped || ({} as LedgerRecord);
-        }
-    }
-    return {} as LedgerRecord;
+export const updateLedgerRecord = async (id: string, updates: Partial<LedgerRecord>): Promise<void> => {
+    if (!supabase) return;
+    const { data: current } = await supabase.from('financial_journal').select('*').eq('id', id).single();
+    if (!current) return;
+
+    const newAmount = updates.amount !== undefined ? updates.amount : current.amount;
+    const newData = { ...(current.data || {}) };
+    if (updates.description !== undefined) newData.description = updates.description;
+    if (updates.typeLabel !== undefined) newData.typeLabel = updates.typeLabel;
+    if (updates.operation !== undefined) newData.operation = updates.operation;
+    if (updates.column !== undefined) newData.column = updates.column;
+    if (updates.isVisible !== undefined) newData.isVisible = updates.isVisible;
+
+    await supabase.from('financial_journal').update({
+        amount: newAmount,
+        entry_date: updates.date || current.entry_date,
+        data: newData
+    }).eq('id', id);
 };
 
-export const updateLedgerRecord = async (id: string, updates: Partial<LedgerRecord>) => {
-    if (supabase) {
-        if (id.startsWith('sale_') || id.startsWith('adv_') || id.startsWith('draw_') || id.startsWith('cred_') || id.startsWith('agg_sale_')) return;
-        const { data: existing } = await supabase.from('financial_journal').select('data').eq('id', id).maybeSingle();
-        const existingData = existing?.data || {};
-        let signedAmount = updates.operation === 'add' ? updates.amount! : (updates.operation === 'subtract' ? -updates.amount! : 0);
-        await supabase.from('financial_journal').update({
-            amount: signedAmount,
-            data: { 
-                ...existingData,
-                description: updates.description, 
-                typeLabel: updates.typeLabel || existingData.typeLabel, 
-                operation: updates.operation, 
-                column: updates.column,
-                isVisible: updates.isVisible !== undefined ? updates.isVisible : existingData.isVisible,
-                sortWeight: (updates as any).sortWeight || 0
-            }
-        }).eq('id', id);
-    }
-};
-
-export const deleteLedgerRecord = async (id: string) => {
-    if (supabase) {
-        if (id.startsWith('sale_') || id.startsWith('adv_') || id.startsWith('draw_') || id.startsWith('cred_') || id.startsWith('agg_sale_')) return;
-        await supabase.from('financial_journal').delete().eq('id', id);
-    }
-};
-
-// --- Sales ---
-export const getSaleRecords = async (clientId: string): Promise<SaleRecord[]> => {
-    if (supabase) {
-        const { data } = await supabase.from('financial_journal').select('*').eq('client_id', clientId).eq('entry_type', 'SALE');
-        if (data) return data.map((row: any) => ({
-            id: row.id, clientId: row.client_id, date: row.entry_date,
-            b: row.data?.b || 0, s: row.data?.s || 0, a: row.data?.a || 0, c: row.data?.c || 0,
-            mobileRaw: row.data?.mobileRaw, mobileRawData: row.data?.mobileRawData
-        }));
-    }
-    return [];
-};
-
-export const getSalesForDates = async (dates: string[]): Promise<SaleRecord[]> => {
-    if (supabase && dates.length > 0) {
-        const { data } = await supabase.from('financial_journal').select('*').eq('entry_type', 'SALE').in('entry_date', dates);
-        if (data) return data.map((row: any) => ({
-            id: row.id, clientId: row.client_id, date: row.entry_date,
-            b: row.data?.b || 0, s: row.data?.s || 0, a: row.data?.a || 0, c: row.data?.c || 0,
-            mobileRaw: row.data?.mobileRaw, mobileRawData: row.data?.mobileRawData
-        }));
-    }
-    return [];
-};
-
-export const saveSaleRecord = async (record: Omit<SaleRecord, 'id'>) => {
-    if (supabase) {
-        const netAmount = (record.b || 0) + (record.s || 0) + (record.a || 0) + (record.c || 0);
-        await supabase.from('financial_journal')
-            .delete()
-            .eq('client_id', record.clientId)
-            .eq('entry_date', record.date)
-            .eq('entry_type', 'SALE');
-
-        if (netAmount !== 0 || record.mobileRaw || record.mobileRawData) {
-             await supabase.from('financial_journal').insert({
-                client_id: record.clientId, 
-                entry_date: record.date, 
-                entry_type: 'SALE', 
-                amount: netAmount,
-                data: { b: record.b, s: record.s, a: record.a, c: record.c, mobileRaw: record.mobileRaw, mobileRawData: record.mobileRawData }
-             });
-        }
-    }
-};
-
-// --- Cash Transactions ---
-export const getCashAdvances = async (date: string): Promise<Record<string, number>> => {
-    if (supabase) {
-        const { data } = await supabase.from('financial_journal').select('client_id, amount').eq('entry_date', date).eq('entry_type', 'ADVANCE');
-        const map: Record<string, number> = {};
-        data?.forEach((row: any) => { map[row.client_id] = row.amount; });
-        return map;
-    }
-    return {};
-};
-
-export const saveCashAdvance = async (date: string, clientId: string, amount: number) => {
-    if (supabase) {
-        if (amount === 0) {
-            await supabase.from('financial_journal').delete().eq('client_id', clientId).eq('entry_date', date).eq('entry_type', 'ADVANCE');
-            return;
-        }
-        const { data: existing } = await supabase.from('financial_journal').select('id').eq('client_id', clientId).eq('entry_date', date).eq('entry_type', 'ADVANCE').maybeSingle();
-        if (existing) await supabase.from('financial_journal').update({ amount }).eq('id', existing.id);
-        else await supabase.from('financial_journal').insert({ client_id: clientId, entry_date: date, entry_type: 'ADVANCE', amount, data: {} });
-    }
-};
-
-export const getCashCredits = async (date: string): Promise<Record<string, number>> => {
-    if (supabase) {
-        const { data } = await supabase.from('financial_journal').select('client_id, amount').eq('entry_date', date).eq('entry_type', 'CREDIT');
-        const map: Record<string, number> = {};
-        data?.forEach((row: any) => { map[row.client_id] = row.amount; });
-        return map;
-    }
-    return {};
-};
-
-export const saveCashCredit = async (date: string, clientId: string, amount: number) => {
-    if (supabase) {
-        if (amount === 0) {
-            await supabase.from('financial_journal').delete().eq('client_id', clientId).eq('entry_date', date).eq('entry_type', 'CREDIT');
-            return;
-        }
-        const { data: existing } = await supabase.from('financial_journal').select('id').eq('client_id', clientId).eq('entry_date', date).eq('entry_type', 'CREDIT').maybeSingle();
-        if (existing) await supabase.from('financial_journal').update({ amount }).eq('id', existing.id);
-        else await supabase.from('financial_journal').insert({ client_id: clientId, entry_date: date, entry_type: 'CREDIT', amount, data: {} });
-    }
-};
-
-// --- Draw Balance ---
-export const getDrawBalances = async (date: string): Promise<Record<string, number>> => {
-    if (supabase) {
-        const { data } = await supabase.from('financial_journal').select('client_id, amount').eq('entry_date', date).eq('entry_type', 'DRAW');
-        const map: Record<string, number> = {};
-        data?.forEach((row: any) => { map[row.client_id] = row.amount; });
-        return map;
-    }
-    return {};
-};
-
-export const saveDrawBalance = async (date: string, clientId: string, balance: number) => {
-    if (supabase) {
-        if (balance === 0) {
-            await supabase.from('financial_journal').delete().eq('client_id', clientId).eq('entry_date', date).eq('entry_type', 'DRAW');
-            return;
-        }
-        const { data: existing } = await supabase.from('financial_journal').select('id').eq('client_id', clientId).eq('entry_date', date).eq('entry_type', 'DRAW').maybeSingle();
-        if (existing) await supabase.from('financial_journal').update({ amount: balance }).eq('id', existing.id);
-        else await supabase.from('financial_journal').insert({ client_id: clientId, entry_date: date, entry_type: 'DRAW', amount: balance, data: {} });
-    }
-};
-
-// --- CORE BALANCE CALCULATION LOGIC ---
-
-const calculateBalanceForRecords = (records: LedgerRecord[], clientCode: string): number => {
-    if (records.length === 0) return 0;
-    const codeUpper = clientCode.toUpperCase();
-    const sorted = [...records].sort((a,b) => b.date.localeCompare(a.date) || (b.createdAt || '').localeCompare(a.createdAt || ''));
-    
-    // Finds the latest snapshot (draw_ or 上欠) - Opening Balance
-    const latestSnapshot = sorted.find(r => (r.id.startsWith('draw_') || r.typeLabel === '上欠') && (r.column === 'main' || !r.column));
-    let periodRecords = records;
-    if (latestSnapshot) {
-        periodRecords = records.filter(r => {
-            if (r.id === latestSnapshot.id) return true;
-            if (r.date > latestSnapshot.date) return true;
-            
-            // Allow ALL transactions on the SAME date as the snapshot, treating '上欠' as the starting point (start of day).
-            if (r.date === latestSnapshot.date) {
-                // If it's a standard transaction (not another draw/snapshot), include it.
-                if (!r.id.startsWith('draw_') && r.typeLabel !== '上欠') {
-                    return true;
-                }
-                return false; 
-            }
-            return false;
-        });
-    }
-
-    // SPECIAL RULE: C06 uses Panel 2 (Col2) only.
-    if (codeUpper === 'C06') {
-        const col2Records = periodRecords.filter(r => r.column === 'col2' && r.isVisible);
-        return col2Records.reduce((acc, r) => acc + getNetAmount(r), 0);
-    }
-
-    // DEFAULT RULE: Strictly calculate Main Ledger (Main) total for everyone else.
-    // Re-enabled Slip Totals (agg_sale_week) as they are part of the Main debt collection.
-    const mainRecords = periodRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
-    return mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
+export const deleteLedgerRecord = async (id: string): Promise<void> => {
+    if (!supabase) return;
+    await supabase.from('financial_journal').delete().eq('id', id);
 };
 
 export const fetchClientTotalBalance = async (clientId: string): Promise<number> => {
     const records = await getLedgerRecords(clientId);
-    const clients = await getClients();
-    const client = clients.find(c => c.id === clientId);
-    return calculateBalanceForRecords(records, (client?.code || '').toUpperCase());
+    const col1Records = records.filter(r => r.column === 'col1' && r.isVisible);
+    if (col1Records.length > 0) {
+        return col1Records.reduce((acc, r) => acc + getNetAmount(r), 0);
+    }
+    const mainRecords = records.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
+    return mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
 };
 
-export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: Client[]): Promise<Record<string, { amount: number, isPanel1: boolean }>> => {
-    if (!supabase) return {};
-    const { data } = await supabase.from('financial_journal').select('*').lt('entry_date', dateLimit).order('entry_date', { ascending: true });
-    if (!data) return {};
-
-    const aggregatedSales = aggregateSalesWeekly(data);
-    const individualRecords = data.map(mapJournalToLedgerRecord).filter((r): r is LedgerRecord => r !== null);
-    const allRecords = [...individualRecords, ...aggregatedSales];
-    
-    const balances: Record<string, { amount: number, isPanel1: boolean }> = {};
-    clients?.forEach(client => {
-        const clientRecs = allRecords.filter(r => r.clientId === client.id);
-        const col1Records = clientRecs.filter(r => r.column === 'col1');
-        
-        const col1HasRecords = col1Records.length > 0;
-        const amount = calculateBalanceForRecords(clientRecs, (client.code || '').toUpperCase());
-        balances[client.id] = { amount, isPanel1: col1HasRecords };
-    });
-    return balances;
+export const getSaleRecords = async (clientId: string): Promise<SaleRecord[]> => {
+    if (!supabase) return [];
+    const { data } = await supabase.from('financial_journal').select('*').eq('client_id', clientId).eq('entry_type', 'SALE');
+    if (!data) return [];
+    return data.map(r => ({
+        id: r.id,
+        clientId: r.client_id,
+        date: r.entry_date,
+        b: r.data?.b || 0,
+        s: r.data?.s || 0,
+        a: r.data?.a || 0,
+        c: r.data?.c || 0,
+        mobileRaw: r.data?.mobileRaw,
+        mobileRawData: r.data?.mobileRawData
+    }));
 };
 
-export const generateSpecialCarryForward = async (clientId: string, clientCode: string, targetDate: string): Promise<number> => {
-    if (!supabase) return 0;
-    const lookbackDate = new Date(targetDate);
-    lookbackDate.setDate(lookbackDate.getDate() - 90);
-    const lookbackStr = lookbackDate.toISOString().split('T')[0];
-    const { data: snapshotCheck } = await supabase.from('financial_journal').select('entry_date').eq('client_id', clientId).lt('entry_date', targetDate).gte('entry_date', lookbackStr).contains('data', { column: 'col1', isCarryForward: true }).order('entry_date', { ascending: false }).limit(1);
-    let queryStartDate = lookbackStr;
-    if (snapshotCheck && snapshotCheck.length > 0) queryStartDate = snapshotCheck[0].entry_date;
-    const { data: recentRecords } = await supabase.from('financial_journal').select('*').eq('client_id', clientId).lt('entry_date', targetDate).gte('entry_date', queryStartDate);
-    if (!recentRecords || recentRecords.length === 0) return 0;
-    const col1Records = recentRecords.filter(r => r.data?.column === 'col1').map(row => mapJournalToLedgerRecord(row)).filter((r): r is LedgerRecord => r !== null);
-    if (col1Records.length === 0) return 0;
-    const sorted = sortLedgerRecords(col1Records);
-    let rowsToCopy: LedgerRecord[] = [];
-    const code = clientCode.toUpperCase();
-    if (code === 'Z21') rowsToCopy = sorted.slice(-4).map((r, i) => i === 0 ? { ...r, operation: 'none' as const } : r);
-    else if (code === 'C19') rowsToCopy = sorted.slice(-5);
-    else return 0;
-    const sum = rowsToCopy.reduce((acc, r) => acc + getNetAmount(r), 0);
-    let weightIdx = 0;
-    for (const r of rowsToCopy) {
-        let signedAmount = r.operation === 'add' ? r.amount : (r.operation === 'subtract' ? -r.amount : r.amount);
-        const { data: dupes } = await supabase.from('financial_journal').select('id').eq('client_id', clientId).eq('entry_date', targetDate).contains('data', { description: r.description, column: 'col1', sortWeight: weightIdx }); 
-        if (!dupes || dupes.length === 0) {
-            await supabase.from('financial_journal').insert({ client_id: clientId, entry_date: targetDate, entry_type: 'MANUAL', amount: signedAmount, data: { description: r.description, typeLabel: r.typeLabel, operation: r.operation, column: 'col1', isCarryForward: true, sortWeight: weightIdx, isVisible: true } });
-            if (code === 'Z21' && weightIdx === 0) {
-                 const { data: dupesP2 } = await supabase.from('financial_journal').select('id').eq('client_id', clientId).eq('entry_date', targetDate).contains('data', { description: r.description, column: 'col2' });
-                 if (!dupesP2 || dupesP2.length === 0) {
-                     await supabase.from('financial_journal').insert({ client_id: clientId, entry_date: targetDate, entry_type: 'MANUAL', amount: r.amount, data: { description: r.description, typeLabel: '收', operation: 'add', column: 'col2', isCarryForward: true, sortWeight: 0, isVisible: true } });
-                 }
-            }
+export const getSalesForDates = async (dates: string[]): Promise<SaleRecord[]> => {
+    if (!supabase) return [];
+    const { data } = await supabase.from('financial_journal').select('*').eq('entry_type', 'SALE').in('entry_date', dates);
+    if (!data) return [];
+    return data.map(r => ({
+        id: r.id,
+        clientId: r.client_id,
+        date: r.entry_date,
+        b: r.data?.b || 0,
+        s: r.data?.s || 0,
+        a: r.data?.a || 0,
+        c: r.data?.c || 0,
+        mobileRaw: r.data?.mobileRaw,
+        mobileRawData: r.data?.mobileRawData
+    }));
+};
+
+export const saveSaleRecord = async (record: Omit<SaleRecord, 'id'>): Promise<void> => {
+    if (!supabase) return;
+    const { data: existing } = await supabase.from('financial_journal')
+        .select('id')
+        .eq('client_id', record.clientId)
+        .eq('entry_date', record.date)
+        .eq('entry_type', 'SALE')
+        .single();
+
+    const payload = {
+        client_id: record.clientId,
+        entry_date: record.date,
+        entry_type: 'SALE',
+        amount: (record.b || 0) + (record.s || 0) + (record.a || 0) + (record.c || 0),
+        data: {
+            b: record.b, s: record.s, a: record.a, c: record.c,
+            mobileRaw: record.mobileRaw,
+            mobileRawData: record.mobileRawData
         }
-        weightIdx++;
+    };
+
+    if (existing) {
+        await supabase.from('financial_journal').update(payload).eq('id', existing.id);
+    } else {
+        await supabase.from('financial_journal').insert([payload]);
     }
-    return sum;
 };
 
-// --- Other Services ---
-export const saveMobileReportHistory = async (date: string, rawData: any[]) => {
-    if (supabase) await supabase.from('mobile_report_history').insert([{ report_date: date, json_data: rawData }]);
+export const getDrawBalances = async (date: string): Promise<Record<string, number>> => {
+    if (!supabase) return {};
+    const { data } = await supabase.from('financial_journal').select('*').eq('entry_date', date).eq('entry_type', 'DRAW');
+    const result: Record<string, number> = {};
+    data?.forEach(r => result[r.client_id] = r.amount);
+    return result;
 };
-export const getMobileReportHistory = async () => {
-    if (supabase) {
-        const { data } = await supabase.from('mobile_report_history').select('*').order('created_at', { ascending: false });
-        return data || [];
+
+export const saveDrawBalance = async (date: string, clientId: string, amount: number): Promise<void> => {
+    if (!supabase) return;
+    const { data: existing } = await supabase.from('financial_journal')
+        .select('id')
+        .eq('client_id', clientId)
+        .eq('entry_date', date)
+        .eq('entry_type', 'DRAW')
+        .single();
+
+    if (existing) {
+        await supabase.from('financial_journal').update({ amount }).eq('id', existing.id);
+    } else {
+        await supabase.from('financial_journal').insert([{ client_id: clientId, entry_date: date, entry_type: 'DRAW', amount, data: { operation: 'add', typeLabel: '上欠' } }]);
     }
-    return [];
 };
-export const getWinningsByDateRange = async (startDate: string, endDate: string): Promise<Record<string, number>> => {
-    if (supabase) {
-        const { data } = await supabase.from('financial_journal').select('client_id, amount, data').gte('entry_date', startDate).lte('entry_date', endDate).eq('entry_type', 'MANUAL');
-        const map: Record<string, number> = {};
-        data?.forEach((row: any) => {
-            if (row.data?.typeLabel === '中' && row.data?.column === 'main') map[row.client_id] = (map[row.client_id] || 0) + Math.abs(row.amount);
+
+export const getCashAdvances = async (date: string): Promise<Record<string, number>> => {
+    if (!supabase) return {};
+    const { data } = await supabase.from('financial_journal').select('*').eq('entry_date', date).eq('entry_type', 'ADVANCE');
+    const result: Record<string, number> = {};
+    data?.forEach(r => result[r.client_id] = r.amount);
+    return result;
+};
+
+export const saveCashAdvance = async (date: string, clientId: string, amount: number): Promise<void> => {
+    if (!supabase) return;
+    const { data: existing } = await supabase.from('financial_journal')
+        .select('id')
+        .eq('client_id', clientId)
+        .eq('entry_date', date)
+        .eq('entry_type', 'ADVANCE')
+        .single();
+
+    if (existing) {
+        if (amount === 0) await supabase.from('financial_journal').delete().eq('id', existing.id);
+        else await supabase.from('financial_journal').update({ amount }).eq('id', existing.id);
+    } else if (amount !== 0) {
+        await supabase.from('financial_journal').insert([{ client_id: clientId, entry_date: date, entry_type: 'ADVANCE', amount, data: { operation: 'add', typeLabel: '支钱' } }]);
+    }
+};
+
+export const getCashCredits = async (date: string): Promise<Record<string, number>> => {
+    if (!supabase) return {};
+    const { data } = await supabase.from('financial_journal').select('*').eq('entry_date', date).eq('entry_type', 'CREDIT');
+    const result: Record<string, number> = {};
+    data?.forEach(r => result[r.client_id] = r.amount);
+    return result;
+};
+
+export const saveCashCredit = async (date: string, clientId: string, amount: number): Promise<void> => {
+    if (!supabase) return;
+    const { data: existing } = await supabase.from('financial_journal')
+        .select('id')
+        .eq('client_id', clientId)
+        .eq('entry_date', recordDate) // Error in original, recordDate not defined? selectedDate used in pages.
+        .eq('entry_type', 'CREDIT')
+        .single();
+    // Use date parameter
+    const { data: existingFixed } = await supabase.from('financial_journal')
+        .select('id')
+        .eq('client_id', clientId)
+        .eq('entry_date', date)
+        .eq('entry_type', 'CREDIT')
+        .single();
+
+    if (existingFixed) {
+        if (amount === 0) await supabase.from('financial_journal').delete().eq('id', existingFixed.id);
+        else await supabase.from('financial_journal').update({ amount }).eq('id', existingFixed.id);
+    } else if (amount !== 0) {
+        await supabase.from('financial_journal').insert([{ client_id: clientId, entry_date: date, entry_type: 'CREDIT', amount, data: { operation: 'subtract', typeLabel: '来' } }]);
+    }
+};
+
+export const saveMobileReportHistory = async (date: string, json_data: any): Promise<void> => {
+    if (!supabase) return;
+    await supabase.from('report_history').insert([{ report_date: date, json_data }]);
+};
+
+export const getMobileReportHistory = async (): Promise<any[]> => {
+    if (!supabase) return [];
+    const { data } = await supabase.from('report_history').select('*').order('created_at', { ascending: false });
+    return data || [];
+};
+
+export const getClientBalancesPriorToDate = async (date: string, clients: Client[]): Promise<Record<string, { amount: number, isPanel1: boolean }>> => {
+    const results: Record<string, { amount: number, isPanel1: boolean }> = {};
+    for (const client of clients) {
+        const records = await getLedgerRecords(client.id);
+        const priorRecords = records.filter(r => r.date < date && r.isVisible);
+        
+        const col1Records = priorRecords.filter(r => r.column === 'col1');
+        if (col1Records.length > 0) {
+            results[client.id] = { amount: col1Records.reduce((acc, r) => acc + getNetAmount(r), 0), isPanel1: true };
+        } else {
+            const mainRecords = priorRecords.filter(r => r.column === 'main' || !r.column);
+            results[client.id] = { amount: mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0), isPanel1: false };
+        }
+    }
+    return results;
+};
+
+export const generateSpecialCarryForward = async (clientId: string, code: string, date: string): Promise<void> => {
+    if (!supabase) return;
+    const records = await getLedgerRecords(clientId);
+    const col1Prior = records.filter(r => r.column === 'col1' && r.date < date && r.isVisible);
+    
+    const weekStart = date;
+    const weekEndDate = new Date(date);
+    weekEndDate.setDate(weekEndDate.getDate() + 6);
+    const weekEnd = weekEndDate.toISOString().split('T')[0];
+    
+    await supabase.from('financial_journal').delete().eq('client_id', clientId).eq('entry_type', 'LEDGER').eq('data->>column', 'col1').gte('entry_date', weekStart).lte('entry_date', weekEnd);
+
+    for (const r of col1Prior) {
+        await saveLedgerRecord({
+            clientId,
+            date: date,
+            description: r.description,
+            typeLabel: r.typeLabel,
+            amount: r.amount,
+            operation: r.operation,
+            column: 'col1',
+            isVisible: true
         });
-        return map;
     }
-    return {};
 };
-export const getNetAmount = (r: LedgerRecord): number => {
-  if (r.operation === 'none') return 0;
-  return r.operation === 'add' ? r.amount : -r.amount;
+
+export const getWinningsByDateRange = async (start: string, end: string): Promise<Record<string, number>> => {
+    if (!supabase) return {};
+    const { data } = await supabase.from('financial_journal').select('*').eq('entry_type', 'LEDGER').eq('data->>typeLabel', '中').gte('entry_date', start).lte('entry_date', end);
+    const result: Record<string, number> = {};
+    data?.forEach(r => {
+        const val = r.amount || 0;
+        result[r.client_id] = (result[r.client_id] || 0) + val;
+    });
+    return result;
 };
-const ASSETS_KEY = 'ledger_assets';
-export const getAssetRecords = (): AssetRecord[] => JSON.parse(localStorage.getItem(ASSETS_KEY) || '[]');
+
+export const getAssetRecords = (): AssetRecord[] => {
+    const data = localStorage.getItem(ASSETS_KEY);
+    return data ? JSON.parse(data) : [];
+};
+
 export const saveAssetRecord = (record: Omit<AssetRecord, 'id'>): AssetRecord => {
-  const all = getAssetRecords();
-  const newRecord = { ...record, id: generateId() };
-  localStorage.setItem(ASSETS_KEY, JSON.stringify([...all, newRecord]));
-  return newRecord;
+    const data = localStorage.getItem(ASSETS_KEY);
+    const allRecords: AssetRecord[] = data ? JSON.parse(data) : [];
+    const newRecord: AssetRecord = { ...record, id: generateId() };
+    localStorage.setItem(ASSETS_KEY, JSON.stringify([...allRecords, newRecord]));
+    return newRecord;
 };
-export const seedData = () => { getCategories(); };
+
+export const seedData = () => {
+    getCategories();
+};

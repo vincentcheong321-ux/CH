@@ -158,8 +158,9 @@ const CashAdvanceCredit: React.FC = () => {
         const [advData, credData] = await Promise.all([getCashAdvances(selectedDate), getCashCredits(selectedDate)]);
         const mapA: Record<string, string> = {};
         const mapC: Record<string, string> = {};
-        Object.entries(advData).forEach(([cid, val]) => { if(val !== 0) mapA[cid] = val.toFixed(2); });
-        Object.entries(credData).forEach(([cid, val]) => { if(val !== 0) mapC[cid] = val.toFixed(2); });
+        /* FIX: Cast val to number to fix toFixed error */
+        Object.entries(advData).forEach(([cid, val]) => { if(val !== 0) mapA[cid] = (val as number).toFixed(2); });
+        Object.entries(credData).forEach(([cid, val]) => { if(val !== 0) mapC[cid] = (val as number).toFixed(2); });
         setAdvances(mapA); setCredits(mapC);
         setLoading(false);
     };
