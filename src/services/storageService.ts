@@ -328,8 +328,10 @@ export const getClientBalancesPriorToDate = async (dateLimit: string, clients: C
     for (const client of clients) {
         const clientRecs = allRecords.filter(r => r.clientId === client.id);
         const col1Records = clientRecs.filter(r => r.column === 'col1' && r.isVisible);
-        // REVISE: We want the effective running balance carried forward, so we use priority rules (mainOnly=false).
-        const amount = calculateBalanceForRecords(clientRecs, (client.code || '').toUpperCase(), false);
+        
+        // REVISE: Strictly use Main Ledger final amount for carry forward, as requested.
+        const amount = calculateBalanceForRecords(clientRecs, (client.code || '').toUpperCase(), true);
+        
         results[client.id] = { amount, isPanel1: col1Records.length > 0 };
     }
     return results;
