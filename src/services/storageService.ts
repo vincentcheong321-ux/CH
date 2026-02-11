@@ -200,30 +200,25 @@ export const deleteClient = async (id: string) => {
 // --- 3. Ledger Records ---
 
 const mapJournalToLedgerRecord = (row: any): LedgerRecord | null => {
-    // Robust amount extraction: handle potential nulls from DB
     let rawAmount = row.amount;
     if (rawAmount === null || rawAmount === undefined) rawAmount = 0;
 
     if (rawAmount === 0 && row.entry_type !== 'MANUAL') {
-        // Fallback checks for legacy data structure in 'data' column if 'amount' is 0
-        // We only return null if it's NOT manual. Manual records with 0 amount (notes) should be kept.
         const legacyAmount = Math.abs(row.data?.amount || row.data?.shou || row.data?.zhong || 0);
         if (legacyAmount === 0) return null;
         rawAmount = legacyAmount;
     }
     
-    if (row.entry_type === 'SALE') return null; // Handled by weekly aggregation
+    if (row.entry_type === 'SALE') return null; 
 
     const isAdd = rawAmount >= 0; 
     let baseRecord: LedgerRecord = {
         id: row.id,
         clientId: row.client_id,
         date: row.entry_date,
-        // Ensure amount is positive for LedgerRecord structure
         amount: Math.abs(rawAmount !== 0 ? rawAmount : (row.data?.amount || 0)),
         description: row.data?.description || '',
         typeLabel: row.data?.typeLabel || '',
-        // If data.operation is present, use it. Otherwise derive from raw amount sign.
         operation: row.data?.operation || (rawAmount === 0 ? 'none' : (isAdd ? 'add' : 'subtract')),
         column: row.data?.column || 'main',
         isVisible: row.data?.isVisible !== undefined ? row.data.isVisible : true,
@@ -256,20 +251,16 @@ const mapJournalToLedgerRecord = (row: any): LedgerRecord | null => {
 
 export const getLedgerRecords = async (clientId: string): Promise<LedgerRecord[]> => {
     if (supabase) {
-        // Fetch client category to determine if sales should be aggregated
         const { data: clientData } = await supabase.from('clients').select('category').eq('id', clientId).single();
         const isPaper = (clientData?.category || 'paper') === 'paper';
 
         const { data } = await supabase.from('financial_journal').select('*').eq('client_id', clientId);
         if (data) {
             const individualRecords = data.map(mapJournalToLedgerRecord).filter((r): r is LedgerRecord => r !== null);
-            
-            // Only aggregate sales if NOT paper (Paper clients don't use auto-sales in ledger calculation usually)
             let aggregatedSales: LedgerRecord[] = [];
             if (!isPaper) {
                  aggregatedSales = aggregateSalesWeekly(data.filter(r => r.client_id === clientId));
             }
-            
             return sortLedgerRecords([...individualRecords, ...aggregatedSales]);
         }
     }
@@ -284,11 +275,8 @@ export const getAllLedgerRecords = async (): Promise<LedgerRecord[]> => {
 
         if (data) {
             const individualRecords = data.map(mapJournalToLedgerRecord).filter((r): r is LedgerRecord => r !== null);
-            
-            // Only aggregate sales for NON-PAPER clients
             const salesRows = data.filter(r => !paperClientIds.has(r.client_id));
             const aggregatedSales = aggregateSalesWeekly(salesRows);
-            
             return sortLedgerRecords([...individualRecords, ...aggregatedSales]);
         }
     }
@@ -376,15 +364,12 @@ export const getSalesForDates = async (dates: string[]): Promise<SaleRecord[]> =
 export const saveSaleRecord = async (record: Omit<SaleRecord, 'id'>) => {
     if (supabase) {
         const netAmount = (record.b || 0) + (record.s || 0) + (record.a || 0) + (record.c || 0);
-        
-        // 1. DEDUPLICATION: Delete all existing sale records for this client/date first
         await supabase.from('financial_journal')
             .delete()
             .eq('client_id', record.clientId)
             .eq('entry_date', record.date)
             .eq('entry_type', 'SALE');
 
-        // 2. Insert new record only if it has a non-zero amount or metadata
         if (netAmount !== 0 || record.mobileRaw || record.mobileRawData) {
              await supabase.from('financial_journal').insert({
                 client_id: record.clientId, 
@@ -492,28 +477,19 @@ const calculateBalanceForRecords = (records: LedgerRecord[], clientCode: string)
         });
     }
 
-    // 1. Check Panel 1 (Col1) Priority
-    // If Panel 1 has ANY records (even hidden ones), assume Panel 1 Mode is active.
-    // Sum only the VISIBLE records for the actual balance calculation.
-    const allCol1Records = periodRecords.filter(r => r.column === 'col1');
-    if (allCol1Records.length > 0) {
-        return allCol1Records.filter(r => r.isVisible).reduce((acc, r) => acc + getNetAmount(r), 0);
-    }
-
-    // 2. Special Case C06 (Panel 2)
+    // SPECIAL RULE: C06 uses Panel 2 (Col2) only.
     if (codeUpper === 'C06') {
         const col2Records = periodRecords.filter(r => r.column === 'col2' && r.isVisible);
-        if (col2Records.length > 0) return col2Records.reduce((acc, r) => acc + getNetAmount(r), 0);
+        return col2Records.reduce((acc, r) => acc + getNetAmount(r), 0);
     }
 
-    // 3. Fallback to Main Ledger
-    // Use Main Ledger (Main) for everyone else if Panel 1 is unused.
+    // DEFAULT RULE: Strictly calculate Main Ledger (Main) total for everyone else.
+    // This addresses the issue where clients like c15 were getting incorrect balances.
     const mainRecords = periodRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
     return mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
 };
 
 export const fetchClientTotalBalance = async (clientId: string): Promise<number> => {
-    // getLedgerRecords now handles paper client filtering
     const records = await getLedgerRecords(clientId);
     const clients = await getClients();
     const client = clients.find(c => c.id === clientId);
@@ -525,8 +501,6 @@ export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: 
     const { data } = await supabase.from('financial_journal').select('*').lt('entry_date', dateLimit).order('entry_date', { ascending: true });
     if (!data) return {};
 
-    // Special aggregation for calculation
-    // FIX: Filter out sales for PAPER clients from aggregation
     const paperClientIds = new Set(clients?.filter(c => (c.category || 'paper') === 'paper').map(c => c.id));
     const mobileSalesRows = data.filter(r => !paperClientIds.has(r.client_id));
     
@@ -539,10 +513,7 @@ export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: 
         const clientRecs = allRecords.filter(r => r.clientId === client.id);
         const col1Records = clientRecs.filter(r => r.column === 'col1');
         
-        // This 'isPanel1' flag is preserved just in case UI needs to know if Panel 1 was active,
-        // but calculateBalanceForRecords handles logic internally.
         const col1HasRecords = col1Records.length > 0;
-        
         const amount = calculateBalanceForRecords(clientRecs, (client.code || '').toUpperCase());
         balances[client.id] = { amount, isPanel1: col1HasRecords };
     });
