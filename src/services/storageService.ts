@@ -270,10 +270,16 @@ const calculateBalanceForRecords = (records: LedgerRecord[], clientCode: string,
             if (r.id === latestSnapshot.id) return true;
             if (r.date > latestSnapshot.date) return true;
             if (r.date === latestSnapshot.date) {
+                // IMPORTANT FIX:
+                // Draw/Snapshots are generated based on data STRICTLY BEFORE the date.
+                // Therefore, they represent the balance at 00:00 of that day.
+                // ALL transactions on the same day must be included (added) to the snapshot.
+                // We only exclude other Draw records on the same day (duplicates/stale).
                 if (!r.id.startsWith('draw_') && r.typeLabel !== '上欠') {
-                    if (r.createdAt && latestSnapshot.createdAt) return r.createdAt > latestSnapshot.createdAt;
                     return true;
                 }
+                // Exclude other snapshot records on the same day
+                return false;
             }
             return false;
         });
@@ -322,8 +328,8 @@ export const getClientBalancesPriorToDate = async (dateLimit: string, clients: C
     for (const client of clients) {
         const clientRecs = allRecords.filter(r => r.clientId === client.id);
         const col1Records = clientRecs.filter(r => r.column === 'col1' && r.isVisible);
-        // REVISE: For carry-forward, we strictly want the MAIN LEDGER final amount.
-        const amount = calculateBalanceForRecords(clientRecs, (client.code || '').toUpperCase(), true);
+        // REVISE: We want the effective running balance carried forward, so we use priority rules (mainOnly=false).
+        const amount = calculateBalanceForRecords(clientRecs, (client.code || '').toUpperCase(), false);
         results[client.id] = { amount, isPanel1: col1Records.length > 0 };
     }
     return results;
