@@ -251,16 +251,11 @@ const mapJournalToLedgerRecord = (row: any): LedgerRecord | null => {
 
 export const getLedgerRecords = async (clientId: string): Promise<LedgerRecord[]> => {
     if (supabase) {
-        const { data: clientData } = await supabase.from('clients').select('category').eq('id', clientId).single();
-        const isPaper = (clientData?.category || 'paper') === 'paper';
-
         const { data } = await supabase.from('financial_journal').select('*').eq('client_id', clientId);
         if (data) {
             const individualRecords = data.map(mapJournalToLedgerRecord).filter((r): r is LedgerRecord => r !== null);
-            let aggregatedSales: LedgerRecord[] = [];
-            if (!isPaper) {
-                 aggregatedSales = aggregateSalesWeekly(data.filter(r => r.client_id === clientId));
-            }
+            // Re-enable aggregation for all clients to ensure slips appear in Main Ledger
+            const aggregatedSales = aggregateSalesWeekly(data.filter(r => r.client_id === clientId));
             return sortLedgerRecords([...individualRecords, ...aggregatedSales]);
         }
     }
@@ -270,13 +265,10 @@ export const getLedgerRecords = async (clientId: string): Promise<LedgerRecord[]
 export const getAllLedgerRecords = async (): Promise<LedgerRecord[]> => {
     if (supabase) {
         const { data } = await supabase.from('financial_journal').select('*');
-        const { data: clientsData } = await supabase.from('clients').select('id, category');
-        const paperClientIds = new Set(clientsData?.filter((c: any) => (c.category || 'paper') === 'paper').map((c: any) => c.id));
-
         if (data) {
             const individualRecords = data.map(mapJournalToLedgerRecord).filter((r): r is LedgerRecord => r !== null);
-            const salesRows = data.filter(r => !paperClientIds.has(r.client_id));
-            const aggregatedSales = aggregateSalesWeekly(salesRows);
+            // Re-enable aggregation for all clients to ensure slips appear in Main Ledger
+            const aggregatedSales = aggregateSalesWeekly(data);
             return sortLedgerRecords([...individualRecords, ...aggregatedSales]);
         }
     }
@@ -484,7 +476,7 @@ const calculateBalanceForRecords = (records: LedgerRecord[], clientCode: string)
     }
 
     // DEFAULT RULE: Strictly calculate Main Ledger (Main) total for everyone else.
-    // This addresses the issue where clients like c15 were getting incorrect balances.
+    // Re-enabled Slip Totals (agg_sale_week) as they are part of the Main debt collection.
     const mainRecords = periodRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
     return mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
 };
@@ -501,10 +493,7 @@ export const getClientBalancesPriorToDate = async (dateLimit: string, clients?: 
     const { data } = await supabase.from('financial_journal').select('*').lt('entry_date', dateLimit).order('entry_date', { ascending: true });
     if (!data) return {};
 
-    const paperClientIds = new Set(clients?.filter(c => (c.category || 'paper') === 'paper').map(c => c.id));
-    const mobileSalesRows = data.filter(r => !paperClientIds.has(r.client_id));
-    
-    const aggregatedSales = aggregateSalesWeekly(mobileSalesRows);
+    const aggregatedSales = aggregateSalesWeekly(data);
     const individualRecords = data.map(mapJournalToLedgerRecord).filter((r): r is LedgerRecord => r !== null);
     const allRecords = [...individualRecords, ...aggregatedSales];
     
