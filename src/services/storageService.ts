@@ -248,14 +248,13 @@ export const getAllLedgerRecords = async (): Promise<LedgerRecord[]> => {
     const { data } = await supabase.from('financial_journal').select('*');
     if (!data) return [];
     const ledgerRows = data.map(mapJournalToLedgerRecord).filter(Boolean) as LedgerRecord[];
-    // Include all sales aggregations too for total summary context
     const aggregatedSales = aggregateSalesWeekly(data);
     return sortLedgerRecords([...ledgerRows, ...aggregatedSales]);
 };
 
 // --- CORE BALANCE CALCULATION LOGIC ---
 
-const calculateBalanceForRecords = (records: LedgerRecord[], clientCode: string): number => {
+const calculateBalanceForRecords = (records: LedgerRecord[], clientCode: string, mainOnly = false): number => {
     if (records.length === 0) return 0;
     const codeUpper = clientCode.toUpperCase();
     
@@ -270,7 +269,6 @@ const calculateBalanceForRecords = (records: LedgerRecord[], clientCode: string)
         periodRecords = records.filter(r => {
             if (r.id === latestSnapshot.id) return true;
             if (r.date > latestSnapshot.date) return true;
-            // Include other same-day entries that came AFTER the snapshot
             if (r.date === latestSnapshot.date) {
                 if (!r.id.startsWith('draw_') && r.typeLabel !== '上欠') {
                     if (r.createdAt && latestSnapshot.createdAt) return r.createdAt > latestSnapshot.createdAt;
@@ -281,13 +279,18 @@ const calculateBalanceForRecords = (records: LedgerRecord[], clientCode: string)
         });
     }
 
+    if (mainOnly) {
+        const mainRecords = periodRecords.filter(r => (r.column === 'main' || !r.column) && r.isVisible);
+        return mainRecords.reduce((acc, r) => acc + getNetAmount(r), 0);
+    }
+
     // SPECIAL RULE: C06 uses Panel 2
     if (codeUpper === 'C06') {
         const col2Records = periodRecords.filter(r => r.column === 'col2' && r.isVisible);
         return col2Records.reduce((acc, r) => acc + getNetAmount(r), 0);
     }
 
-    // DEFAULT: Check Panel 1 first for specific clients or if it has any entries in the period
+    // DEFAULT: Check Panel 1 first
     const col1Records = periodRecords.filter(r => r.column === 'col1' && r.isVisible);
     if (col1Records.length > 0) {
         return col1Records.reduce((acc, r) => acc + getNetAmount(r), 0);
@@ -312,7 +315,6 @@ export const getClientBalancesPriorToDate = async (dateLimit: string, clients: C
     const { data } = await supabase.from('financial_journal').select('*').lt('entry_date', dateLimit);
     if (!data) return results;
 
-    // Process all aggregations once
     const aggregatedSales = aggregateSalesWeekly(data);
     const individualRecords = data.map(mapJournalToLedgerRecord).filter(Boolean) as LedgerRecord[];
     const allRecords = [...individualRecords, ...aggregatedSales];
@@ -320,7 +322,8 @@ export const getClientBalancesPriorToDate = async (dateLimit: string, clients: C
     for (const client of clients) {
         const clientRecs = allRecords.filter(r => r.clientId === client.id);
         const col1Records = clientRecs.filter(r => r.column === 'col1' && r.isVisible);
-        const amount = calculateBalanceForRecords(clientRecs, (client.code || '').toUpperCase());
+        // REVISE: For carry-forward, we strictly want the MAIN LEDGER final amount.
+        const amount = calculateBalanceForRecords(clientRecs, (client.code || '').toUpperCase(), true);
         results[client.id] = { amount, isPanel1: col1Records.length > 0 };
     }
     return results;
@@ -330,32 +333,18 @@ export const generateSpecialCarryForward = async (clientId: string, clientCode: 
     if (!supabase) return;
     const records = await getLedgerRecords(clientId);
     const col1Prior = records.filter(r => r.column === 'col1' && r.date < targetDate && r.isVisible);
-    
-    // Sort to get relative order
     const sorted = sortLedgerRecords([...col1Prior]);
     
-    // Select subset to copy based on client
     let toCopy: LedgerRecord[] = [];
     if (clientCode === 'Z21') toCopy = sorted.slice(-4);
     else if (clientCode === 'C19') toCopy = sorted.slice(-5);
     
-    // Clear target week first for these specific entries to prevent duplicates
-    await supabase.from('financial_journal')
-        .delete()
-        .eq('client_id', clientId)
-        .eq('entry_date', targetDate)
-        .eq('data->>column', 'col1');
+    await supabase.from('financial_journal').delete().eq('client_id', clientId).eq('entry_date', targetDate).eq('data->>column', 'col1');
 
     for (const r of toCopy) {
         await saveLedgerRecord({
-            clientId,
-            date: targetDate,
-            description: r.description,
-            typeLabel: r.typeLabel,
-            amount: r.amount,
-            operation: r.operation,
-            column: 'col1',
-            isVisible: true
+            clientId, date: targetDate, description: r.description, typeLabel: r.typeLabel, 
+            amount: r.amount, operation: r.operation, column: 'col1', isVisible: true
         });
     }
 };
@@ -364,23 +353,14 @@ export const saveLedgerRecord = async (record: Omit<LedgerRecord, 'id'>): Promis
     if (!supabase) return;
     let signedAmount = record.operation === 'subtract' ? -record.amount : record.amount;
     await supabase.from('financial_journal').insert([{
-        client_id: record.clientId,
-        entry_date: record.date,
-        entry_type: 'LEDGER',
-        amount: signedAmount,
-        data: {
-            description: record.description,
-            typeLabel: record.typeLabel,
-            operation: record.operation,
-            column: record.column,
-            isVisible: record.isVisible
-        }
+        client_id: record.clientId, entry_date: record.date, entry_type: 'LEDGER', amount: signedAmount,
+        data: { description: record.description, typeLabel: record.typeLabel, operation: record.operation, column: record.column, isVisible: record.isVisible }
     }]);
 };
 
 export const updateLedgerRecord = async (id: string, updates: Partial<LedgerRecord>): Promise<void> => {
     if (!supabase) return;
-    const { data: current } = await supabase.from('financial_journal').select('*').eq('id', id).single();
+    const { data: current } = await supabase.from('financial_journal').select('*').eq('id', id).maybeSingle();
     if (!current) return;
 
     const operation = updates.operation || current.data?.operation || 'add';
@@ -394,11 +374,7 @@ export const updateLedgerRecord = async (id: string, updates: Partial<LedgerReco
     if (updates.column !== undefined) newData.column = updates.column;
     if (updates.isVisible !== undefined) newData.isVisible = updates.isVisible;
 
-    await supabase.from('financial_journal').update({
-        amount: signedAmount,
-        entry_date: updates.date || current.entry_date,
-        data: newData
-    }).eq('id', id);
+    await supabase.from('financial_journal').update({ amount: signedAmount, entry_date: updates.date || current.entry_date, data: newData }).eq('id', id);
 };
 
 export const deleteLedgerRecord = async (id: string): Promise<void> => {
@@ -406,15 +382,12 @@ export const deleteLedgerRecord = async (id: string): Promise<void> => {
     await supabase.from('financial_journal').delete().eq('id', id);
 };
 
-// --- Sales ---
-
 export const getSaleRecords = async (clientId: string): Promise<SaleRecord[]> => {
     if (!supabase) return [];
     const { data } = await supabase.from('financial_journal').select('*').eq('client_id', clientId).eq('entry_type', 'SALE');
     if (!data) return [];
     return data.map(r => ({
-        id: r.id, clientId: r.client_id, date: r.entry_date,
-        b: r.data?.b || 0, s: r.data?.s || 0, a: r.data?.a || 0, c: r.data?.c || 0,
+        id: r.id, clientId: r.client_id, date: r.entry_date, b: r.data?.b || 0, s: r.data?.s || 0, a: r.data?.a || 0, c: r.data?.c || 0,
         mobileRaw: r.data?.mobileRaw, mobileRawData: r.data?.mobileRawData
     }));
 };
@@ -424,38 +397,19 @@ export const getSalesForDates = async (dates: string[]): Promise<SaleRecord[]> =
     const { data } = await supabase.from('financial_journal').select('*').eq('entry_type', 'SALE').in('entry_date', dates);
     if (!data) return [];
     return data.map(r => ({
-        id: r.id, clientId: r.client_id, date: r.entry_date,
-        b: r.data?.b || 0, s: r.data?.s || 0, a: r.data?.a || 0, c: r.data?.c || 0,
+        id: r.id, clientId: r.client_id, date: r.entry_date, b: r.data?.b || 0, s: r.data?.s || 0, a: r.data?.a || 0, c: r.data?.c || 0,
         mobileRaw: r.data?.mobileRaw, mobileRawData: r.data?.mobileRawData
     }));
 };
 
 export const saveSaleRecord = async (record: Omit<SaleRecord, 'id'>): Promise<void> => {
     if (!supabase) return;
-    const { data: existing } = await supabase.from('financial_journal')
-        .select('id')
-        .eq('client_id', record.clientId)
-        .eq('entry_date', record.date)
-        .eq('entry_type', 'SALE')
-        .maybeSingle();
-
+    const { data: existing } = await supabase.from('financial_journal').select('id').eq('client_id', record.clientId).eq('entry_date', record.date).eq('entry_type', 'SALE').maybeSingle();
     const netAmount = (record.b || 0) + (record.s || 0) + (record.a || 0) + (record.c || 0);
-    const payload = {
-        client_id: record.clientId,
-        entry_date: record.date,
-        entry_type: 'SALE',
-        amount: netAmount,
-        data: {
-            b: record.b, s: record.s, a: record.a, c: record.c,
-            mobileRaw: record.mobileRaw, mobileRawData: record.mobileRawData
-        }
-    };
-
+    const payload = { client_id: record.clientId, entry_date: record.date, entry_type: 'SALE', amount: netAmount, data: { b: record.b, s: record.s, a: record.a, c: record.c, mobileRaw: record.mobileRaw, mobileRawData: record.mobileRawData } };
     if (existing) await supabase.from('financial_journal').update(payload).eq('id', existing.id);
     else await supabase.from('financial_journal').insert([payload]);
 };
-
-// --- Cash & Snapshots ---
 
 export const getDrawBalances = async (date: string): Promise<Record<string, number>> => {
     if (!supabase) return {};
@@ -467,13 +421,7 @@ export const getDrawBalances = async (date: string): Promise<Record<string, numb
 
 export const saveDrawBalance = async (date: string, clientId: string, amount: number): Promise<void> => {
     if (!supabase) return;
-    const { data: existing } = await supabase.from('financial_journal')
-        .select('id')
-        .eq('client_id', clientId)
-        .eq('entry_date', date)
-        .eq('entry_type', 'DRAW')
-        .maybeSingle();
-
+    const { data: existing } = await supabase.from('financial_journal').select('id').eq('client_id', clientId).eq('entry_date', date).eq('entry_type', 'DRAW').maybeSingle();
     if (existing) await supabase.from('financial_journal').update({ amount }).eq('id', existing.id);
     else await supabase.from('financial_journal').insert([{ client_id: clientId, entry_date: date, entry_type: 'DRAW', amount, data: { operation: 'add', typeLabel: '上欠', column: 'main' } }]);
 };
@@ -488,13 +436,7 @@ export const getCashAdvances = async (date: string): Promise<Record<string, numb
 
 export const saveCashAdvance = async (date: string, clientId: string, amount: number): Promise<void> => {
     if (!supabase) return;
-    const { data: existing } = await supabase.from('financial_journal')
-        .select('id')
-        .eq('client_id', clientId)
-        .eq('entry_date', date)
-        .eq('entry_type', 'ADVANCE')
-        .maybeSingle();
-
+    const { data: existing } = await supabase.from('financial_journal').select('id').eq('client_id', clientId).eq('entry_date', date).eq('entry_type', 'ADVANCE').maybeSingle();
     if (existing) {
         if (amount === 0) await supabase.from('financial_journal').delete().eq('id', existing.id);
         else await supabase.from('financial_journal').update({ amount }).eq('id', existing.id);
@@ -513,13 +455,7 @@ export const getCashCredits = async (date: string): Promise<Record<string, numbe
 
 export const saveCashCredit = async (date: string, clientId: string, amount: number): Promise<void> => {
     if (!supabase) return;
-    const { data: existing } = await supabase.from('financial_journal')
-        .select('id')
-        .eq('client_id', clientId)
-        .eq('entry_date', date)
-        .eq('entry_type', 'CREDIT')
-        .maybeSingle();
-
+    const { data: existing } = await supabase.from('financial_journal').select('id').eq('client_id', clientId).eq('entry_date', date).eq('entry_type', 'CREDIT').maybeSingle();
     if (existing) {
         if (amount === 0) await supabase.from('financial_journal').delete().eq('id', existing.id);
         else await supabase.from('financial_journal').update({ amount }).eq('id', existing.id);
@@ -543,14 +479,9 @@ export const getWinningsByDateRange = async (start: string, end: string): Promis
     if (!supabase) return {};
     const { data } = await supabase.from('financial_journal').select('*').eq('entry_type', 'LEDGER').eq('data->>typeLabel', '中').gte('entry_date', start).lte('entry_date', end);
     const result: Record<string, number> = {};
-    data?.forEach(r => {
-        const val = Math.abs(r.amount) || 0;
-        result[r.client_id] = (result[r.client_id] || 0) + val;
-    });
+    data?.forEach(r => { result[r.client_id] = (result[r.client_id] || 0) + Math.abs(r.amount); });
     return result;
 };
-
-// --- Assets ---
 
 export const getAssetRecords = (): AssetRecord[] => {
     const data = localStorage.getItem(ASSETS_KEY);
@@ -565,6 +496,4 @@ export const saveAssetRecord = (record: Omit<AssetRecord, 'id'>): AssetRecord =>
     return newRecord;
 };
 
-export const seedData = () => {
-    getCategories();
-};
+export const seedData = () => { getCategories(); };

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { getClients, getDrawBalances, saveDrawBalance, getClientBalancesPriorToDate, generateSpecialCarryForward, getLedgerRecords, getNetAmount } from '../services/storageService';
 import { Client, LedgerRecord } from '../types';
@@ -241,12 +240,12 @@ const DrawReport: React.FC = () => {
       const errors: string[] = [];
 
       try {
-          // Returns object { amount: number, isPanel1: boolean }
+          // getClientBalancesPriorToDate is now updated to strictly return Main Ledger totals.
           const prevBalances = await getClientBalancesPriorToDate(selectedDate, clients);
           
           const newBalances: Record<string, string> = {};
           let processed = 0;
-          const total = clients.length;
+          const totalCount = clients.length;
           
           for (const client of clients) {
               try {
@@ -256,24 +255,14 @@ const DrawReport: React.FC = () => {
                   // Special Logic for Z21 and C19 (Row Copying)
                   if (codeUpper === 'Z21' || codeUpper === 'C19') {
                       await generateSpecialCarryForward(client.id, codeUpper, selectedDate);
-                      
-                      // C19/Z21: Always set Main Ledger Draw Balance to 0
-                      newBalances[client.id] = '0.00';
-                      await saveDrawBalance(selectedDate, client.id, 0);
-                  } else {
-                      // Standard Client Logic
-                      if (clientData.isPanel1) {
-                          // Requirement: If Panel 1 has details, do NOT bring balance to 上欠 (Draw Balance).
-                          // This effectively zeroes out the Main Ledger opening balance for this client for this week.
-                          newBalances[client.id] = '0.00';
-                          await saveDrawBalance(selectedDate, client.id, 0);
-                      } else {
-                          // Standard: Main Ledger carry forward
-                          const bal = clientData.amount;
-                          newBalances[client.id] = bal.toFixed(2);
-                          await saveDrawBalance(selectedDate, client.id, bal);
-                      }
-                  }
+                  } 
+                  
+                  // REVISED: Always set the Main Ledger Opening Balance (Draw Balance) 
+                  // to the final Main Ledger amount from previous periods.
+                  const bal = clientData.amount;
+                  newBalances[client.id] = bal.toFixed(2);
+                  await saveDrawBalance(selectedDate, client.id, bal);
+                  
               } catch (err: any) {
                   const msg = `${client.name}: ${err.message || 'Error processing'}`;
                   console.error(msg);
@@ -281,7 +270,7 @@ const DrawReport: React.FC = () => {
                   setErrorLog(prev => [...prev, msg]);
               }
               processed++;
-              setProgress(Math.round((processed / total) * 100));
+              setProgress(Math.round((processed / totalCount) * 100));
           }
           
           setClientBalances(newBalances);
