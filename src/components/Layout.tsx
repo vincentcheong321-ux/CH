@@ -12,7 +12,8 @@ import {
   Calendar,
   FileText,
   Repeat,
-  Calculator
+  Calculator,
+  Link2
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -34,6 +35,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
     { path: '/calculator', label: 'Win Calculator', icon: Calculator, chineseChar: '中' },
     { path: '/cashflow', label: 'Company Cash Flow', icon: ArrowRightLeft },
     { path: '/summary', label: 'Total Balance Summary', icon: PieChart },
+    { path: '/link-generator', label: 'Link Generator', icon: Link2 },
   ];
 
   const handleLogout = () => {

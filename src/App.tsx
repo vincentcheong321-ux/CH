@@ -13,6 +13,8 @@ import SalesIndex from './pages/SalesIndex';
 import ClientSales from './pages/ClientSales';
 import MobileReport from './pages/MobileReport';
 import WinCalculator from './pages/WinCalculator';
+import LinkGenerator from './pages/LinkGenerator';
+import Redirect from './pages/Redirect';
 import Login from './pages/Login';
 import { seedData } from './services/storageService';
 import { GlobalStateProvider } from './context/GlobalStateContext';
@@ -133,6 +135,16 @@ const App: React.FC = () => {
               </Layout>
             ) : <Navigate to="/login" />
           } />
+
+          <Route path="/link-generator" element={
+            isAuthenticated ? (
+              <Layout onLogout={handleLogout}>
+                <LinkGenerator />
+              </Layout>
+            ) : <Navigate to="/login" />
+          } />
+
+          <Route path="/redirect" element={<Redirect />} />
 
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
