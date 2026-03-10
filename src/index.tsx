@@ -1,6 +1,11 @@
+import 'core-js/stable';
+import 'abortcontroller-polyfill/dist/abortcontroller-polyfill-only';
+import 'promise-polyfill/src/polyfill';
+import 'whatwg-fetch';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import './index.css';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

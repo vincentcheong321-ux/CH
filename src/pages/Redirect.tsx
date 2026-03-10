@@ -1,7 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
-import { AlertCircle, Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 
 const Redirect: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -51,62 +50,75 @@ const Redirect: React.FC = () => {
     }
   }, [searchParams]);
 
+  // Basic styling for older devices
+  const containerStyle: React.CSSProperties = {
+    fontFamily: 'Arial, sans-serif',
+    padding: '40px 20px',
+    textAlign: 'center',
+    backgroundColor: '#f4f4f4',
+    minHeight: '100vh'
+  };
+
+  const cardStyle: React.CSSProperties = {
+    backgroundColor: '#ffffff',
+    border: '1px solid #cccccc',
+    padding: '30px',
+    maxWidth: '400px',
+    margin: '0 auto',
+    borderRadius: '8px',
+    boxShadow: '0 2px 5px rgba(0,0,0,0.1)'
+  };
+
+  const buttonStyle: React.CSSProperties = {
+    display: 'inline-block',
+    padding: '10px 20px',
+    backgroundColor: '#007bff',
+    color: '#ffffff',
+    textDecoration: 'none',
+    borderRadius: '4px',
+    marginTop: '20px',
+    fontWeight: 'bold'
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
-      <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-10 border border-black/5">
-        <div className="flex flex-col items-center text-center">
-          {status === 'loading' && (
-            <>
-              <div className="p-4 bg-indigo-50 rounded-full mb-6">
-                <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
-              </div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">Verifying Link...</h1>
-              <p className="text-gray-500">Please wait while we check the link's validity.</p>
-            </>
-          )}
+    <div style={containerStyle}>
+      <div style={cardStyle}>
+        {status === 'loading' && (
+          <div>
+            <h1 style={{ fontSize: '24px', margin: '0 0 10px 0' }}>Verifying Link...</h1>
+            <p style={{ color: '#666666' }}>Please wait while we check the link's validity.</p>
+          </div>
+        )}
 
-          {status === 'success' && (
-            <>
-              <div className="p-4 bg-green-50 rounded-full mb-6">
-                <CheckCircle2 className="w-10 h-10 text-green-600" />
-              </div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">Redirecting...</h1>
-              <p className="text-gray-500 mb-6">
-                The link is valid. You will be redirected in <span className="font-bold text-indigo-600">{countdown}</span> seconds.
-              </p>
-              <a
-                href={targetUrl}
-                className="w-full py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors shadow-sm"
-              >
-                Click here if not redirected
-              </a>
-            </>
-          )}
+        {status === 'success' && (
+          <div>
+            <h1 style={{ fontSize: '24px', margin: '0 0 10px 0', color: '#28a745' }}>Redirecting...</h1>
+            <p style={{ color: '#666666', marginBottom: '15px' }}>
+              The link is valid. You will be redirected in <b>{countdown}</b> seconds.
+            </p>
+            <a href={targetUrl} style={buttonStyle}>
+              Click here if not redirected
+            </a>
+          </div>
+        )}
 
-          {status === 'expired' && (
-            <>
-              <div className="p-4 bg-orange-50 rounded-full mb-6">
-                <Clock className="w-10 h-10 text-orange-600" />
-              </div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">Link Expired</h1>
-              <p className="text-gray-500 mb-2">
-                Sorry, this link has expired and is no longer valid.
-              </p>
-            </>
-          )}
+        {status === 'expired' && (
+          <div>
+            <h1 style={{ fontSize: '24px', margin: '0 0 10px 0', color: '#dc3545' }}>Link Expired</h1>
+            <p style={{ color: '#666666' }}>
+              Sorry, this link has expired and is no longer valid.
+            </p>
+          </div>
+        )}
 
-          {status === 'invalid' && (
-            <>
-              <div className="p-4 bg-red-50 rounded-full mb-6">
-                <XCircle className="w-10 h-10 text-red-600" />
-              </div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">Invalid Link</h1>
-              <p className="text-gray-500 mb-2">
-                The link you followed is invalid or broken.
-              </p>
-            </>
-          )}
-        </div>
+        {status === 'invalid' && (
+          <div>
+            <h1 style={{ fontSize: '24px', margin: '0 0 10px 0', color: '#dc3545' }}>Invalid Link</h1>
+            <p style={{ color: '#666666' }}>
+              The link you followed is invalid or broken.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -33,71 +33,68 @@ const LinkGenerator: React.FC = () => {
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-6 bg-white rounded-2xl shadow-sm border border-black/5 mt-10">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="p-3 bg-indigo-50 rounded-xl">
-          <LinkIcon className="w-6 h-6 text-indigo-600" />
+    <div className="max-w-2xl mx-auto p-4 md:p-6 bg-white rounded-2xl shadow-sm border border-black/5 mt-4">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="p-2 bg-indigo-50 rounded-xl">
+          <LinkIcon className="w-5 h-5 text-indigo-600" />
         </div>
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Expiring Link Generator</h1>
-          <p className="text-sm text-gray-500">Generate a temporary redirect link for the APK</p>
+          <h1 className="text-xl font-bold text-gray-900">Link Generator</h1>
+          <p className="text-xs text-gray-500">Generate temporary download links</p>
         </div>
       </div>
 
-      <div className="space-y-6">
+      <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-            <Clock className="w-4 h-4" />
-            Expiration Time (minutes)
+          <label className="block text-xs font-bold text-gray-700 mb-1 flex items-center gap-2 uppercase tracking-wider">
+            <Clock className="w-3 h-3" />
+            Expiry (minutes)
           </label>
           <input
             type="number"
             value={expiryMinutes}
             onChange={(e) => setExpiryMinutes(parseInt(e.target.value) || 0)}
-            className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
-            placeholder="Enter minutes..."
+            className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-sm"
+            placeholder="Minutes..."
           />
-          <p className="mt-2 text-xs text-gray-400">
-            The link will be valid for {expiryMinutes} minutes from the moment of generation.
-          </p>
         </div>
 
         <button
           onClick={generateLink}
-          className="w-full py-3 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors shadow-sm"
+          className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md active:scale-[0.98]"
         >
           Generate Link
         </button>
 
         {generatedLink && (
-          <div className="mt-8 p-4 bg-gray-50 rounded-xl border border-gray-100">
-            <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+          <div className="mt-6 p-4 bg-slate-50 rounded-xl border border-slate-100">
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
               Generated Link
             </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
+            <div className="flex flex-col gap-2">
+              <textarea
                 readOnly
                 value={generatedLink}
-                className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-mono text-gray-600"
+                rows={3}
+                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-[10px] font-mono text-slate-600 resize-none"
               />
               <button
                 onClick={copyToClipboard}
-                className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-all ${
-                  copied ? 'bg-green-100 text-green-700' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+                className={`w-full py-3 rounded-xl flex items-center justify-center gap-2 font-bold transition-all ${
+                  copied ? 'bg-green-500 text-white' : 'bg-slate-800 text-white hover:bg-slate-900'
                 }`}
               >
                 {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                {copied ? 'Copied!' : 'Copy'}
+                {copied ? 'Copied!' : 'Copy Link'}
               </button>
             </div>
           </div>
         )}
       </div>
 
-      <div className="mt-10 pt-6 border-t border-gray-100">
-        <h3 className="text-sm font-semibold text-gray-900 mb-2">Target URL:</h3>
-        <code className="block p-3 bg-gray-50 rounded-lg text-xs break-all text-gray-500 font-mono">
+      <div className="mt-6 pt-4 border-t border-gray-100">
+        <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Target APK:</h3>
+        <code className="block p-2 bg-gray-50 rounded-lg text-[10px] break-all text-gray-400 font-mono">
           {TARGET_URL}
         </code>
       </div>
