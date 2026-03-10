@@ -9,13 +9,7 @@
       // Fix for "Cannot set property fetch of #<Window> which has only a getter"
       (function() {
         try {
-          var target = window;
-          var descriptor = Object.getOwnPropertyDescriptor(target, 'fetch');
-          if (!descriptor && window.fetch) {
-            target = Object.getPrototypeOf(window);
-            descriptor = Object.getOwnPropertyDescriptor(target, 'fetch');
-          }
-          if (descriptor && descriptor.get && !descriptor.set && descriptor.configurable) {
+          if (typeof window.fetch === 'function') {
             var originalFetch = window.fetch;
             Object.defineProperty(window, 'fetch', {
               value: originalFetch,
