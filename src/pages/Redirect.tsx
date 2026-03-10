@@ -89,15 +89,9 @@ const Redirect: React.FC = () => {
                 <Clock className="w-10 h-10 text-orange-600" />
               </div>
               <h1 className="text-2xl font-bold text-gray-900 mb-2">Link Expired</h1>
-              <p className="text-gray-500 mb-6">
+              <p className="text-gray-500 mb-2">
                 Sorry, this link has expired and is no longer valid.
               </p>
-              <button
-                onClick={() => window.location.href = '/'}
-                className="w-full py-3 bg-gray-100 text-gray-600 rounded-xl font-medium hover:bg-gray-200 transition-colors"
-              >
-                Go to Dashboard
-              </button>
             </>
           )}
 
@@ -107,15 +101,9 @@ const Redirect: React.FC = () => {
                 <XCircle className="w-10 h-10 text-red-600" />
               </div>
               <h1 className="text-2xl font-bold text-gray-900 mb-2">Invalid Link</h1>
-              <p className="text-gray-500 mb-6">
+              <p className="text-gray-500 mb-2">
                 The link you followed is invalid or broken.
               </p>
-              <button
-                onClick={() => window.location.href = '/'}
-                className="w-full py-3 bg-gray-100 text-gray-600 rounded-xl font-medium hover:bg-gray-200 transition-colors"
-              >
-                Go to Dashboard
-              </button>
             </>
           )}
         </div>
