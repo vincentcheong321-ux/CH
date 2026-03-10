@@ -15,7 +15,6 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: 'index.html',
-        redirect: 'redirect.html'
       }
     }
   }
