@@ -9,31 +9,27 @@
       // Fix for "Cannot set property fetch of #<Window> which has only a getter"
       (function() {
         try {
-          console.log('Starting fetch fix check...');
-          const descriptor = Object.getOwnPropertyDescriptor(window, 'fetch');
-          if (window.fetch && descriptor && descriptor.get && !descriptor.set && descriptor.configurable) {
-            console.log('Applying fetch fix...');
-            const originalFetch = window.fetch;
+          var target = window;
+          var descriptor = Object.getOwnPropertyDescriptor(target, 'fetch');
+          if (!descriptor) {
+            target = Object.getPrototypeOf(window);
+            descriptor = Object.getOwnPropertyDescriptor(target, 'fetch');
+          }
+          if (window.fetch && descriptor && descriptor.get && !descriptor.set) {
+            var originalFetch = window.fetch;
             Object.defineProperty(window, 'fetch', {
               value: originalFetch,
               writable: true,
               configurable: true,
               enumerable: true
             });
-          } else if (!window.fetch) {
-            console.warn('window.fetch is missing, polyfill will be loaded later.');
           }
         } catch (e) {
           console.warn('Failed to apply fetch fix:', e);
         }
       })();
-      
-      window.onerror = function(msg, url, line, col, error) {
-        console.error('GLOBAL ERROR:', msg, 'at', url, ':', line, ':', col, error);
-        // Alert only if we are in a debug mode or if it's a critical failure
-        // alert('Error: ' + msg + '\nAt: ' + url + ':' + line);
-      };
     </script>
+    <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap" rel="stylesheet">
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -137,13 +133,27 @@
         }
       }
     </style>
-  </head>
+  <script type="importmap">
+{
+  "imports": {
+    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.9.6",
+    "react-dom/client": "https://aistudiocdn.com/react-dom@^19.2.0/client",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
+    "recharts": "https://aistudiocdn.com/recharts@^3.5.0",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.7",
+    "vite": "https://aistudiocdn.com/vite@^7.2.6",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1",
+    "html2canvas": "https://esm.sh/html2canvas@1.4.1",
+    "@google/genai": "https://esm.sh/@google/genai@^1.33.0"
+  }
+}
+</script>
+</head>
   <body>
-    <div id="root">
-      <div style="display: flex; justify-content: center; align-items: center; height: 100vh; font-family: sans-serif; color: #666;">
-        <p>Loading CH System...</p>
-      </div>
-    </div>
+    <div id="root"></div>
     <script type="module" src="/src/index.tsx"></script>
   </body>
 </html>
