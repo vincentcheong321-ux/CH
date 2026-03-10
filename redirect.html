@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redirecting...</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 40px 20px;
+            text-align: center;
+            background-color: #f4f4f4;
+            margin: 0;
+        }
+        .card {
+            background-color: #ffffff;
+            border: 1px solid #cccccc;
+            padding: 30px;
+            max-width: 400px;
+            margin: 0 auto;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .button {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: #ffffff;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-top: 20px;
+            font-weight: bold;
+        }
+        h1 { font-size: 24px; margin: 0 0 10px 0; }
+        p { color: #666666; margin: 0 0 15px 0; }
+        .error { color: #dc3545; }
+        .success { color: #28a745; }
+    </style>
+</head>
+<body>
+    <div class="card" id="content">
+        <h1>Verifying Link...</h1>
+        <p>Please wait while we check the link's validity.</p>
+    </div>
+
+    <script>
+        (function() {
+            var content = document.getElementById('content');
+            
+            function getQueryParam(name) {
+                var query = window.location.search.substring(1);
+                var vars = query.split("&");
+                for (var i = 0; i < vars.length; i++) {
+                    var pair = vars[i].split("=");
+                    if (pair[0] == name) { return decodeURIComponent(pair[1]); }
+                }
+                return null;
+            }
+
+            var token = getQueryParam('t');
+            if (!token) {
+                showError('Invalid Link', 'The link you followed is invalid or broken.');
+                return;
+            }
+
+            try {
+                // Basic base64 decode if atob is missing (unlikely but possible on very old devices)
+                var decodedString;
+                if (typeof atob === 'function') {
+                    decodedString = atob(token);
+                } else {
+                    showError('Browser Unsupported', 'Your browser is too old to process this link.');
+                    return;
+                }
+
+                var decoded = JSON.parse(decodedString);
+                var url = decoded.url;
+                var expires = decoded.expires;
+
+                if (!url || !expires) {
+                    showError('Invalid Link', 'The link you followed is invalid or broken.');
+                    return;
+                }
+
+                if (new Date().getTime() > expires) {
+                    showError('Link Expired', 'Sorry, this link has expired and is no longer valid.');
+                    return;
+                }
+
+                showSuccess(url);
+            } catch (e) {
+                showError('Invalid Link', 'The link you followed is invalid or broken.');
+            }
+
+            function showError(title, message) {
+                content.innerHTML = '<h1 class="error">' + title + '</h1><p>' + message + '</p>';
+            }
+
+            function showSuccess(targetUrl) {
+                var countdown = 3;
+                
+                function updateUI() {
+                    content.innerHTML = '<h1 class="success">Redirecting...</h1>' +
+                        '<p>The link is valid. You will be redirected in <b>' + countdown + '</b> seconds.</p>' +
+                        '<a href="' + targetUrl + '" class="button">Click here if not redirected</a>';
+                }
+
+                updateUI();
+
+                var timer = setInterval(function() {
+                    countdown--;
+                    if (countdown <= 0) {
+                        clearInterval(timer);
+                        window.location.href = targetUrl;
+                    } else {
+                        updateUI();
+                    }
+                }, 1000);
+            }
+        })();
+    </script>
+</body>
+</html>
